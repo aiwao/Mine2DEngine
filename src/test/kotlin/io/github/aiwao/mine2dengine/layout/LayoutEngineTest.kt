@@ -1,8 +1,11 @@
 package io.github.aiwao.mine2dengine.layout
 
+import io.github.aiwao.mine2dengine.Mine2DEngine
+import io.github.aiwao.mine2dengine.Mine2DFont
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -11,6 +14,16 @@ class LayoutEngineTest {
         override val lineHeight = 10f
 
         override fun width(text: String): Float = text.length * 5f
+    }
+
+    @Test
+    fun `layout engine requires the font used by Mine2D text rendering`() {
+        assertNotNull(
+            LayoutEngine::class.java.getConstructor(
+                Mine2DEngine::class.java,
+                Mine2DFont::class.java,
+            ),
+        )
     }
 
     @Test

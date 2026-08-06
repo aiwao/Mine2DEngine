@@ -1,8 +1,7 @@
 package io.github.aiwao.mine2dengine.layout
 
 import io.github.aiwao.mine2dengine.Mine2DEngine
-import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.Font
+import io.github.aiwao.mine2dengine.Mine2DFont
 import kotlin.math.roundToInt
 
 /** Supplies the text measurements required by the layout pass. */
@@ -12,9 +11,9 @@ interface UiTextMeasurer {
     fun width(text: String): Float
 }
 
-/** Text measurements backed by Minecraft's active font. */
-class MinecraftTextMeasurer(
-    private val font: Font,
+/** Text measurements backed by a loaded [Mine2DFont]. */
+class Mine2DTextMeasurer(
+    private val font: Mine2DFont,
 ) : UiTextMeasurer {
     override val lineHeight: Float
         get() = font.lineHeight.toFloat()
@@ -26,13 +25,14 @@ class MinecraftTextMeasurer(
  * Measures, positions, and draws a tree of [Div], [Paragraph], and [Button] nodes.
  *
  * [left] and [top] passed to [layout] or [render] are the top-left coordinate of
- * the root's outer box. All backgrounds are rendered through [Mine2DEngine].
+ * the root's outer box. [font] is used for both measurement and drawing and remains
+ * owned by the caller. All backgrounds are rendered through [Mine2DEngine].
  */
-class LayoutEngine @JvmOverloads constructor(
+class LayoutEngine(
     private val renderer: Mine2DEngine,
-    private val font: Font = Minecraft.getInstance().font,
+    private val font: Mine2DFont,
 ) {
-    private val textMeasurer = MinecraftTextMeasurer(font)
+    private val textMeasurer = Mine2DTextMeasurer(font)
 
     /** Calculates the complete UI tree without issuing draw calls. */
     fun layout(root: UiElement, left: Float = 0f, top: Float = 0f): UiLayout =
@@ -82,12 +82,13 @@ class LayoutEngine @JvmOverloads constructor(
                 alignment = style.alignment,
             ) + contentBounds.left
             val y = contentBounds.top + index * textMeasurer.lineHeight
-            renderer.graphics.text(
+            renderer.text(
                 font,
                 line,
                 x.roundToInt(),
                 y.roundToInt(),
                 style.color,
+                dropShadow = true,
             )
         }
     }

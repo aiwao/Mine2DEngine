@@ -37,6 +37,13 @@ class Mine2DFont private constructor(
         },
     )
 
+    /** The vertical distance between consecutive lines in GUI pixels. */
+    val lineHeight: Int
+        get() {
+            checkOpen()
+            return renderer.lineHeight
+        }
+
     /** Returns the rendered width of [text] in GUI pixels. */
     fun width(text: String): Int {
         checkOpen()
