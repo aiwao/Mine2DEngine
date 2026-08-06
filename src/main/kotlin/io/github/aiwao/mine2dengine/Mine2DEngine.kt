@@ -128,6 +128,20 @@ class Mine2DEngine(
         )
     }
 
+    /** Draws [text] with a loaded TrueType [font]. */
+    @JvmOverloads
+    fun text(
+        font: Mine2DFont,
+        text: String,
+        x: Int,
+        y: Int,
+        color: Int,
+        dropShadow: Boolean = false,
+    ) {
+        font.checkOpen()
+        graphics.text(font.renderer, text, x, y, color, dropShadow)
+    }
+
     /**
      * Temporarily changes the default shader. Nested scopes are supported and
      * the previous shader is restored even if [draw] throws.
