@@ -5,6 +5,7 @@ import org.joml.Matrix3x2f
 import org.joml.Vector2fc
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.sin
 import kotlin.require
 
@@ -69,6 +70,37 @@ class Mine2DEngine(
             Mine2DVertex(x + width, y, color),
             Mine2DVertex(x + width, y + height, color),
             Mine2DVertex(x, y + height, color),
+        )
+    }
+
+    /** Draws a line segment of [width] as a filled quadrilateral with butt caps. */
+    fun line(
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+        width: Float,
+        color: Int,
+    ) {
+        require(startX.isFinite() && startY.isFinite() && endX.isFinite() && endY.isFinite()) {
+            "Line coordinates must be finite"
+        }
+        require(width.isFinite() && width > 0f) { "A line width must be finite and positive" }
+
+        val deltaX = endX.toDouble() - startX
+        val deltaY = endY.toDouble() - startY
+        val length = hypot(deltaX, deltaY)
+        require(length > 0.0) { "A line requires distinct start and end points" }
+
+        val offsetScale = width / (2.0 * length)
+        val offsetX = (-deltaY * offsetScale).toFloat()
+        val offsetY = (deltaX * offsetScale).toFloat()
+
+        polygon(
+            Mine2DVertex(startX + offsetX, startY + offsetY, color),
+            Mine2DVertex(endX + offsetX, endY + offsetY, color),
+            Mine2DVertex(endX - offsetX, endY - offsetY, color),
+            Mine2DVertex(startX - offsetX, startY - offsetY, color),
         )
     }
 
