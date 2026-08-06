@@ -1,5 +1,7 @@
 package io.github.aiwao.mine2dengine.layout
 
+import io.github.aiwao.mine2dengine.Mine2DFont
+
 /** The calculated geometry for one UI element. */
 data class UiLayoutNode(
     val element: UiElement,
@@ -10,6 +12,8 @@ data class UiLayoutNode(
     /** The area available to text or children after padding. */
     val contentBounds: UiRect,
     val children: List<UiLayoutNode>,
+    /** The font resolved from this element's style and its ancestors. */
+    val font: Mine2DFont? = null,
 )
 
 /** A layout result that can also dispatch clicks to buttons. */

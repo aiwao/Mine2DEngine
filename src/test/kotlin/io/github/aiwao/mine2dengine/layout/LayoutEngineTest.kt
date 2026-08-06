@@ -1,7 +1,13 @@
 package io.github.aiwao.mine2dengine.layout
 
+import com.mojang.blaze3d.font.GlyphProvider
 import io.github.aiwao.mine2dengine.Mine2DEngine
 import io.github.aiwao.mine2dengine.Mine2DFont
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet
+import net.minecraft.client.gui.font.FontSet
+import net.minecraft.client.gui.font.GlyphStitcher
+import net.minecraft.client.renderer.texture.TextureManager
+import net.minecraft.resources.Identifier
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -17,13 +23,30 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `layout engine requires the font used by Mine2D text rendering`() {
-        assertNotNull(
-            LayoutEngine::class.java.getConstructor(
-                Mine2DEngine::class.java,
-                Mine2DFont::class.java,
-            ),
+    fun `layout engine selects fonts through style`() {
+        assertNotNull(LayoutEngine::class.java.getConstructor(Mine2DEngine::class.java))
+        assertEquals(
+            Mine2DFont::class.java,
+            UiStyle::class.java.getMethod("getFont").returnType,
         )
+    }
+
+    @Test
+    fun `font is inherited and can be overridden by a child style`() {
+        val inheritedFont = fontToken("inherited")
+        val overriddenFont = fontToken("overridden")
+        lateinit var inheritedParagraph: Paragraph
+        lateinit var overriddenParagraph: Paragraph
+        val root = div(UiStyle(font = inheritedFont)) {
+            inheritedParagraph = p("inherited")
+            overriddenParagraph = p("overridden", UiStyle(font = overriddenFont))
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertSame(inheritedFont, layout.root.font)
+        assertSame(inheritedFont, layout.nodeOf(inheritedParagraph)!!.font)
+        assertSame(overriddenFont, layout.nodeOf(overriddenParagraph)!!.font)
     }
 
     @Test
@@ -113,5 +136,25 @@ class LayoutEngineTest {
         val layout = calculateLayout(paragraph, left = 0f, top = 0f, textMeasurer)
 
         assertEquals(UiSize(5f, 20f), layout.size)
+    }
+
+    private fun fontToken(path: String): Mine2DFont {
+        val location = Identifier.fromNamespaceAndPath("test", "$path.ttf")
+        val stitcher = GlyphStitcher::class.java
+            .getConstructor(TextureManager::class.java, Identifier::class.java)
+            .newInstance(null, location)
+        val fontSet = FontSet(stitcher)
+        val glyphProvider = object : GlyphProvider {
+            override fun getSupportedGlyphs() = IntOpenHashSet()
+        }
+        val constructor = Mine2DFont::class.java.getDeclaredConstructor(
+            Identifier::class.java,
+            Float::class.javaPrimitiveType,
+            Float::class.javaPrimitiveType,
+            GlyphProvider::class.java,
+            FontSet::class.java,
+        )
+        constructor.isAccessible = true
+        return constructor.newInstance(location, 11f, 1f, glyphProvider, fontSet)
     }
 }

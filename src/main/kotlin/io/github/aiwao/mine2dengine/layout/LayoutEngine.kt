@@ -25,18 +25,21 @@ class Mine2DTextMeasurer(
  * Measures, positions, and draws a tree of [Div], [Paragraph], and [Button] nodes.
  *
  * [left] and [top] passed to [layout] or [render] are the top-left coordinate of
- * the root's outer box. [font] is used for both measurement and drawing and remains
+ * the root's outer box. Text fonts are selected through [UiStyle.font] and remain
  * owned by the caller. All backgrounds are rendered through [Mine2DEngine].
  */
 class LayoutEngine(
     private val renderer: Mine2DEngine,
-    private val font: Mine2DFont,
 ) {
-    private val textMeasurer = Mine2DTextMeasurer(font)
-
     /** Calculates the complete UI tree without issuing draw calls. */
     fun layout(root: UiElement, left: Float = 0f, top: Float = 0f): UiLayout =
-        calculateLayout(root, left, top, textMeasurer)
+        calculateLayout(root, left, top) { element, font ->
+            Mine2DTextMeasurer(
+                requireNotNull(font) {
+                    "${element.javaClass.simpleName} requires a font in its style or an ancestor style"
+                },
+            )
+        }
 
     /** Calculates and renders a UI tree, then returns its reusable geometry. */
     fun render(root: UiElement, left: Float = 0f, top: Float = 0f): UiLayout {
@@ -66,14 +69,20 @@ class LayoutEngine(
 
         when (val element = node.element) {
             is Div -> Unit
-            is Paragraph -> drawText(element.text, style, node.contentBounds)
-            is Button -> drawText(element.text, style, node.contentBounds)
+            is Paragraph -> drawText(element.text, style, node.contentBounds, requireFont(node))
+            is Button -> drawText(element.text, style, node.contentBounds, requireFont(node))
         }
 
         node.children.forEach(::draw)
     }
 
-    private fun drawText(text: String, style: UiStyle, contentBounds: UiRect) {
+    private fun drawText(
+        text: String,
+        style: UiStyle,
+        contentBounds: UiRect,
+        font: Mine2DFont,
+    ) {
+        val textMeasurer = Mine2DTextMeasurer(font)
         textLines(text).forEachIndexed { index, line ->
             val lineWidth = textMeasurer.width(line)
             val x = alignedLeft(
@@ -92,6 +101,11 @@ class LayoutEngine(
             )
         }
     }
+
+    private fun requireFont(node: UiLayoutNode): Mine2DFont =
+        requireNotNull(node.font) {
+            "${node.element.javaClass.simpleName} requires a font in its style or an ancestor style"
+        }
 }
 
 internal fun calculateLayout(
@@ -100,13 +114,20 @@ internal fun calculateLayout(
     top: Float,
     textMeasurer: UiTextMeasurer,
 ): UiLayout {
+    validateTextMeasurer(textMeasurer)
+    return calculateLayout(root, left, top) { _, _ -> textMeasurer }
+}
+
+private fun calculateLayout(
+    root: UiElement,
+    left: Float,
+    top: Float,
+    textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
+): UiLayout {
     require(left.isFinite()) { "Left must be finite: $left" }
     require(top.isFinite()) { "Top must be finite: $top" }
-    require(textMeasurer.lineHeight.isFinite() && textMeasurer.lineHeight >= 0f) {
-        "Text line height must be finite and non-negative: ${textMeasurer.lineHeight}"
-    }
 
-    val measured = measure(root, textMeasurer)
+    val measured = measure(root, inheritedFont = null, textMeasurer)
     return UiLayout(place(measured, left, top))
 }
 
@@ -114,6 +135,7 @@ private data class MeasuredNode(
     val element: UiElement,
     val contentSize: UiSize,
     val children: List<MeasuredNode>,
+    val font: Mine2DFont?,
 ) {
     val boundsSize: UiSize = UiSize(
         width = contentSize.width + element.style.padding.horizontal,
@@ -126,16 +148,21 @@ private data class MeasuredNode(
     )
 }
 
-private fun measure(element: UiElement, textMeasurer: UiTextMeasurer): MeasuredNode {
+private fun measure(
+    element: UiElement,
+    inheritedFont: Mine2DFont?,
+    textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
+): MeasuredNode {
+    val font = element.style.font ?: inheritedFont
     val children = if (element is Div) {
-        element.children.map { child -> measure(child, textMeasurer) }
+        element.children.map { child -> measure(child, font, textMeasurer) }
     } else {
         emptyList()
     }
 
     val textSize = when (element) {
-        is Paragraph -> measureText(element.text, textMeasurer)
-        is Button -> measureText(element.text, textMeasurer)
+        is Paragraph -> measureText(element.text, textMeasurer(element, font))
+        is Button -> measureText(element.text, textMeasurer(element, font))
         is Div -> null
     }
 
@@ -151,10 +178,12 @@ private fun measure(element: UiElement, textMeasurer: UiTextMeasurer): MeasuredN
             height = element.style.height ?: naturalSize.height,
         ),
         children = children,
+        font = font,
     )
 }
 
 private fun measureText(text: String, textMeasurer: UiTextMeasurer): UiSize {
+    validateTextMeasurer(textMeasurer)
     val lines = textLines(text)
     val widths = lines.map(textMeasurer::width)
     require(widths.all { it.isFinite() && it >= 0f }) {
@@ -164,6 +193,12 @@ private fun measureText(text: String, textMeasurer: UiTextMeasurer): UiSize {
         width = widths.maxOrNull() ?: 0f,
         height = lines.size * textMeasurer.lineHeight,
     )
+}
+
+private fun validateTextMeasurer(textMeasurer: UiTextMeasurer) {
+    require(textMeasurer.lineHeight.isFinite() && textMeasurer.lineHeight >= 0f) {
+        "Text line height must be finite and non-negative: ${textMeasurer.lineHeight}"
+    }
 }
 
 private fun measureChildren(children: List<MeasuredNode>, direction: UiDirection): UiSize =
@@ -201,6 +236,7 @@ private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): Ui
         bounds = bounds,
         contentBounds = contentBounds,
         children = children,
+        font = measured.font,
     )
 }
 
