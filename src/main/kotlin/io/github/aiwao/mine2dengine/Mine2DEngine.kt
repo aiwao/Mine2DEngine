@@ -3,6 +3,10 @@ package io.github.aiwao.mine2dengine
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import org.joml.Matrix3x2f
 import org.joml.Vector2fc
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.require
 
 /**
  * Immediate-style 2D drawing API backed by Minecraft's extracted GUI render state.
@@ -65,6 +69,30 @@ class Mine2DEngine(
             Mine2DVertex(x + width, y, color),
             Mine2DVertex(x + width, y + height, color),
             Mine2DVertex(x, y + height, color),
+        )
+    }
+
+    /** Draws a filled circle approximated by a regular polygon using [shader]. */
+    fun circle(
+        centerX: Float,
+        centerY: Float,
+        radius: Float,
+        color: Int,
+        segments: Int,
+    ) {
+        require(centerX.isFinite() && centerY.isFinite()) { "Circle coordinates must be finite" }
+        require(radius.isFinite() && radius > 0f) { "A circle radius must be finite and positive" }
+        require(segments >= 3) { "A circle requires at least three segments" }
+
+        polygon(
+            List(segments) { index ->
+                val angle = 2.0 * PI * index / segments
+                Mine2DVertex(
+                    x = centerX + cos(angle).toFloat() * radius,
+                    y = centerY + sin(angle).toFloat() * radius,
+                    color = color,
+                )
+            }
         )
     }
 
