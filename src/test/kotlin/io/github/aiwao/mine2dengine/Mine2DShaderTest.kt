@@ -9,10 +9,10 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertSame
 
-class Render2DShaderTest {
+class Mine2DShaderTest {
     @Test
     fun `built-in shader has the polygon pipeline contract`() {
-        val pipeline = Render2DShaders.COLOR.pipeline
+        val pipeline = Mine2DShaders.COLOR.pipeline
 
         assertSame(DefaultVertexFormat.POSITION_COLOR, pipeline.getVertexFormatBinding(0))
         assertEquals(PrimitiveTopology.TRIANGLES, pipeline.primitiveTopology)
@@ -22,7 +22,7 @@ class Render2DShaderTest {
     @Test
     fun `rejects a pipeline with an incompatible topology`() {
         assertFailsWith<IllegalArgumentException> {
-            Render2DShader.from(RenderPipelines.GUI)
+            Mine2DShader.from(RenderPipelines.GUI)
         }
     }
 }

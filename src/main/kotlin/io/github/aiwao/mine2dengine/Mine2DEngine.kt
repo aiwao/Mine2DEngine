@@ -18,25 +18,25 @@ class Mine2DEngine(
         /** Registers built-in pipelines. Call once during mod initialization. */
         @JvmStatic
         fun initialize() {
-            Render2DShaders.initialize()
+            Mine2DShaders.initialize()
         }
     }
 
     /** Shader used by polygon calls that do not supply one explicitly. */
-    var shader: Render2DShader = Render2DShaders.COLOR
+    var shader: Mine2DShader = Mine2DShaders.COLOR
 
     /** Draws a convex or concave simple polygon using [shader]. */
-    fun polygon(vertices: Iterable<Render2DVertex>) {
+    fun polygon(vertices: Iterable<Mine2DVertex>) {
         polygon(vertices, shader)
     }
 
     /** Draws a convex or concave simple polygon using [shader]. */
-    fun polygon(vararg vertices: Render2DVertex) {
+    fun polygon(vararg vertices: Mine2DVertex) {
         polygon(vertices.asIterable(), shader)
     }
 
     /** Draws a convex or concave simple polygon with an explicit [shader]. */
-    fun polygon(vertices: Iterable<Render2DVertex>, shader: Render2DShader) {
+    fun polygon(vertices: Iterable<Mine2DVertex>, shader: Mine2DShader) {
         val polygon = PolygonTriangulator.triangulate(vertices)
         graphics.guiRenderState.addGuiElement(
             PolygonRenderState(
@@ -50,7 +50,7 @@ class Mine2DEngine(
 
     /** Convenience overload for a single-color polygon. */
     fun polygon(color: Int, points: Iterable<Vector2fc>) {
-        polygon(points.map { point -> Render2DVertex(point.x(), point.y(), color) })
+        polygon(points.map { point -> Mine2DVertex(point.x(), point.y(), color) })
     }
 
     /** Convenience overload for a single-color polygon. */
@@ -62,7 +62,7 @@ class Mine2DEngine(
      * Temporarily changes the default shader. Nested scopes are supported and
      * the previous shader is restored even if [draw] throws.
      */
-    fun withShader(shader: Render2DShader, draw: Mine2DEngine.() -> Unit) {
+    fun withShader(shader: Mine2DShader, draw: Mine2DEngine.() -> Unit) {
         val previous = this.shader
         this.shader = shader
         try {

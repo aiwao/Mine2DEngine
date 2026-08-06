@@ -3,7 +3,7 @@ package io.github.aiwao.mine2dengine
 import kotlin.math.abs
 
 internal data class TriangulatedPolygon(
-    val vertices: List<Render2DVertex>,
+    val vertices: List<Mine2DVertex>,
     val indices: IntArray,
 )
 
@@ -11,7 +11,7 @@ internal data class TriangulatedPolygon(
 internal object PolygonTriangulator {
     private const val EPSILON = 1.0e-6
 
-    fun triangulate(input: Iterable<Render2DVertex>): TriangulatedPolygon {
+    fun triangulate(input: Iterable<Mine2DVertex>): TriangulatedPolygon {
         val vertices = normalize(input)
         require(vertices.size >= 3) { "A polygon requires at least three distinct vertices" }
         require(!hasSelfIntersection(vertices)) { "A polygon must not intersect itself" }
@@ -63,8 +63,8 @@ internal object PolygonTriangulator {
         return TriangulatedPolygon(vertices, indices.toIntArray())
     }
 
-    private fun normalize(input: Iterable<Render2DVertex>): List<Render2DVertex> {
-        val vertices = ArrayList<Render2DVertex>()
+    private fun normalize(input: Iterable<Mine2DVertex>): List<Mine2DVertex> {
+        val vertices = ArrayList<Mine2DVertex>()
         for (vertex in input) {
             require(vertex.x.isFinite() && vertex.y.isFinite()) { "Polygon coordinates must be finite" }
             if (vertices.isEmpty() || !samePosition(vertices.last(), vertex)) {
@@ -96,7 +96,7 @@ internal object PolygonTriangulator {
         return vertices.toList()
     }
 
-    private fun signedArea(vertices: List<Render2DVertex>): Double {
+    private fun signedArea(vertices: List<Mine2DVertex>): Double {
         var twiceArea = 0.0
         for (index in vertices.indices) {
             val current = vertices[index]
@@ -107,9 +107,9 @@ internal object PolygonTriangulator {
     }
 
     private fun isConvex(
-        previous: Render2DVertex,
-        current: Render2DVertex,
-        next: Render2DVertex,
+        previous: Mine2DVertex,
+        current: Mine2DVertex,
+        next: Mine2DVertex,
         counterClockwise: Boolean,
     ): Boolean {
         val cross = cross(previous, current, next)
@@ -117,10 +117,10 @@ internal object PolygonTriangulator {
     }
 
     private fun pointInTriangle(
-        point: Render2DVertex,
-        a: Render2DVertex,
-        b: Render2DVertex,
-        c: Render2DVertex,
+        point: Mine2DVertex,
+        a: Mine2DVertex,
+        b: Mine2DVertex,
+        c: Mine2DVertex,
     ): Boolean {
         val ab = cross(a, b, point)
         val bc = cross(b, c, point)
@@ -133,7 +133,7 @@ internal object PolygonTriangulator {
     /** GUI quads use clockwise screen-space winding, so polygons do the same. */
     private fun addClockwiseTriangle(
         output: MutableList<Int>,
-        vertices: List<Render2DVertex>,
+        vertices: List<Mine2DVertex>,
         a: Int,
         b: Int,
         c: Int,
@@ -149,7 +149,7 @@ internal object PolygonTriangulator {
         }
     }
 
-    private fun hasSelfIntersection(vertices: List<Render2DVertex>): Boolean {
+    private fun hasSelfIntersection(vertices: List<Mine2DVertex>): Boolean {
         for (first in vertices.indices) {
             val firstNext = (first + 1) % vertices.size
             for (second in first + 1 until vertices.size) {
@@ -174,10 +174,10 @@ internal object PolygonTriangulator {
     }
 
     private fun segmentsIntersect(
-        a: Render2DVertex,
-        b: Render2DVertex,
-        c: Render2DVertex,
-        d: Render2DVertex,
+        a: Mine2DVertex,
+        b: Mine2DVertex,
+        c: Mine2DVertex,
+        d: Mine2DVertex,
     ): Boolean {
         val abC = cross(a, b, c)
         val abD = cross(a, b, d)
@@ -196,16 +196,16 @@ internal object PolygonTriangulator {
             (abs(cdB) <= EPSILON && onSegment(c, d, b))
     }
 
-    private fun onSegment(a: Render2DVertex, b: Render2DVertex, point: Render2DVertex): Boolean =
+    private fun onSegment(a: Mine2DVertex, b: Mine2DVertex, point: Mine2DVertex): Boolean =
         point.x.toDouble() >= minOf(a.x, b.x) - EPSILON &&
             point.x.toDouble() <= maxOf(a.x, b.x) + EPSILON &&
             point.y.toDouble() >= minOf(a.y, b.y) - EPSILON &&
             point.y.toDouble() <= maxOf(a.y, b.y) + EPSILON
 
     private fun isRedundantCollinearVertex(
-        previous: Render2DVertex,
-        current: Render2DVertex,
-        next: Render2DVertex,
+        previous: Mine2DVertex,
+        current: Mine2DVertex,
+        next: Mine2DVertex,
     ): Boolean {
         if (abs(cross(previous, current, next)) > EPSILON) return false
         val first = (current.x - previous.x).toDouble() * (current.x - next.x) +
@@ -213,9 +213,9 @@ internal object PolygonTriangulator {
         return first <= EPSILON
     }
 
-    private fun samePosition(a: Render2DVertex, b: Render2DVertex): Boolean =
+    private fun samePosition(a: Mine2DVertex, b: Mine2DVertex): Boolean =
         abs(a.x.toDouble() - b.x) <= EPSILON && abs(a.y.toDouble() - b.y) <= EPSILON
 
-    private fun cross(a: Render2DVertex, b: Render2DVertex, c: Render2DVertex): Double =
+    private fun cross(a: Mine2DVertex, b: Mine2DVertex, c: Mine2DVertex): Double =
         (b.x - a.x).toDouble() * (c.y - a.y) - (b.y - a.y).toDouble() * (c.x - a.x)
 }

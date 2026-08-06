@@ -5,7 +5,7 @@ package io.github.aiwao.mine2dengine
  *
  * [color] uses Minecraft's ARGB integer format.
  */
-data class Render2DVertex @JvmOverloads constructor(
+data class Mine2DVertex @JvmOverloads constructor(
     val x: Float,
     val y: Float,
     val color: Int = 0xFFFFFFFF.toInt(),

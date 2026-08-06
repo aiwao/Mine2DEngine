@@ -13,7 +13,7 @@ import net.minecraft.resources.Identifier
  * triangle primitive topology. Prefer [register] when creating one so it is
  * included in Minecraft's pipeline registry.
  */
-class Render2DShader private constructor(
+class Mine2DShader private constructor(
     val pipeline: RenderPipeline,
 ) {
     companion object {
@@ -21,18 +21,18 @@ class Render2DShader private constructor(
          * Wraps an already-created compatible pipeline.
          */
         @JvmStatic
-        fun from(pipeline: RenderPipeline): Render2DShader {
+        fun from(pipeline: RenderPipeline): Mine2DShader {
             require(pipeline.getVertexFormatBinding(0) == DefaultVertexFormat.POSITION_COLOR) {
-                "Render2D shaders must use DefaultVertexFormat.POSITION_COLOR at binding 0"
+                "Mine2D shaders must use DefaultVertexFormat.POSITION_COLOR at binding 0"
             }
             require(pipeline.primitiveTopology == PrimitiveTopology.TRIANGLES) {
-                "Render2D shaders must use PrimitiveTopology.TRIANGLES"
+                "Mine2D shaders must use PrimitiveTopology.TRIANGLES"
             }
-            return Render2DShader(pipeline)
+            return Mine2DShader(pipeline)
         }
 
         /**
-         * Creates and registers a Render2D-compatible pipeline.
+         * Creates and registers a Mine2D-compatible pipeline.
          *
          * Call this during mod initialization. Shader identifiers are relative
          * to `assets/<namespace>/shaders/` and omit the `.vsh` / `.fsh` suffix.
@@ -47,7 +47,7 @@ class Render2DShader private constructor(
             vertexShader: Identifier,
             fragmentShader: Identifier,
             configure: RenderPipeline.Builder.() -> Unit = {},
-        ): Render2DShader {
+        ): Mine2DShader {
             val pipeline = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
                 .withLocation(location)
                 .withVertexShader(vertexShader)
@@ -63,12 +63,12 @@ class Render2DShader private constructor(
     }
 }
 
-/** Built-in pipelines supplied by the Render2D engine. */
-object Render2DShaders {
+/** Built-in pipelines supplied by the Mine2D engine. */
+object Mine2DShaders {
     /** The standard Minecraft GUI color shader with alpha blending. */
     @JvmField
-    val COLOR: Render2DShader = Render2DShader.register(
-        location = Identifier.fromNamespaceAndPath("mine2dengine", "pipeline/render2d_color"),
+    val COLOR: Mine2DShader = Mine2DShader.register(
+        location = Identifier.fromNamespaceAndPath("mine2dengine", "pipeline/mine2d_color"),
         vertexShader = Identifier.withDefaultNamespace("core/gui"),
         fragmentShader = Identifier.withDefaultNamespace("core/gui"),
     )

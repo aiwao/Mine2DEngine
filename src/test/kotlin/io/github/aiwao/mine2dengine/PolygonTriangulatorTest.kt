@@ -92,7 +92,7 @@ class PolygonTriangulatorTest {
         assertFailsWith<IllegalArgumentException> {
             PolygonTriangulator.triangulate(
                 listOf(
-                    Render2DVertex(Float.NaN, 0f),
+                    Mine2DVertex(Float.NaN, 0f),
                     vertex(1, 0),
                     vertex(0, 1),
                 ),
@@ -120,8 +120,8 @@ class PolygonTriangulatorTest {
             ) / 2.0
         }
 
-    private fun cross(a: Render2DVertex, b: Render2DVertex, c: Render2DVertex): Double =
+    private fun cross(a: Mine2DVertex, b: Mine2DVertex, c: Mine2DVertex): Double =
         (b.x - a.x).toDouble() * (c.y - a.y) - (b.y - a.y).toDouble() * (c.x - a.x)
 
-    private fun vertex(x: Int, y: Int) = Render2DVertex(x.toFloat(), y.toFloat())
+    private fun vertex(x: Int, y: Int) = Mine2DVertex(x.toFloat(), y.toFloat())
 }

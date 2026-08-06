@@ -11,7 +11,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 internal class PolygonRenderState(
-    private val shader: Render2DShader,
+    private val shader: Mine2DShader,
     private val pose: Matrix3x2fc,
     private val polygon: TriangulatedPolygon,
     private val scissor: ScreenRectangle?,
@@ -38,7 +38,7 @@ internal class PolygonRenderState(
     private companion object {
         fun calculateBounds(
             pose: Matrix3x2fc,
-            vertices: List<Render2DVertex>,
+            vertices: List<Mine2DVertex>,
             scissor: ScreenRectangle?,
         ): ScreenRectangle? {
             var minX = Float.POSITIVE_INFINITY
