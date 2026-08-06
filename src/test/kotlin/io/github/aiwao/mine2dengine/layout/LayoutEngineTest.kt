@@ -32,6 +32,12 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `text shadow is enabled by default and configurable through style`() {
+        assertTrue(UiStyle().dropShadow)
+        assertFalse(UiStyle(dropShadow = false).dropShadow)
+    }
+
+    @Test
     fun `font is inherited and can be overridden by a child style`() {
         val inheritedFont = fontToken("inherited")
         val overriddenFont = fontToken("overridden")

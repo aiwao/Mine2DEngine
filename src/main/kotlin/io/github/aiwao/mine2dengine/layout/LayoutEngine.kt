@@ -97,7 +97,7 @@ class LayoutEngine(
                 x.roundToInt(),
                 y.roundToInt(),
                 style.color,
-                dropShadow = true,
+                dropShadow = style.dropShadow,
             )
         }
     }

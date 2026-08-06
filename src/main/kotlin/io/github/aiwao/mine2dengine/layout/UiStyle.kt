@@ -22,6 +22,7 @@ enum class UiAlignment {
  * background, while margin remains outside it, following the CSS box model.
  * A null size shrinks to the element's text or children. [font] is inherited by
  * descendants; every text element must resolve a font from itself or an ancestor.
+ * [dropShadow] controls the shadow drawn behind text.
  */
 data class UiStyle(
     val color: Int = 0xFFFFFFFF.toInt(),
@@ -33,6 +34,7 @@ data class UiStyle(
     val width: Float? = null,
     val height: Float? = null,
     val font: Mine2DFont? = null,
+    val dropShadow: Boolean = true,
 ) {
     init {
         require(width == null || width.isFinite() && width >= 0f) {
