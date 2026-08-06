@@ -4,7 +4,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     kotlin("jvm") version "2.4.10"
     id("net.fabricmc.fabric-loom") version "1.17-SNAPSHOT"
-    id("maven-publish")
+    id("com.vanniktech.maven.publish") version "0.37.0"
 }
 
 val minecraftVersion = providers.gradleProperty("minecraft_version").get()
@@ -15,7 +15,8 @@ val modVersion = providers.gradleProperty("mod_version").get()
 val mavenGroup = providers.gradleProperty("maven_group").get()
 val archivesBaseName = providers.gradleProperty("archives_base_name").get()
 
-version = modVersion
+version = providers.gradleProperty("mine2DEngineVersion")
+    .getOrElse(modVersion)
 group = mavenGroup
 
 base {
@@ -88,20 +89,58 @@ tasks.jar {
     }
 }
 
-// configure the maven publication
-publishing {
-    publications {
-        create<MavenPublication>("mavenJava") {
-            artifactId = archivesBaseName
-            from(components["java"])
+mavenPublishing {
+    publishToMavenCentral(automaticRelease = true)
+    signAllPublications()
+
+    coordinates(group.toString(), "mine2dengine", version.toString())
+
+    pom {
+        name.set("Mine2DEngine")
+        description.set("A 2D rendering engine for Minecraft Fabric mods.")
+        inceptionYear.set("2026")
+        url.set("https://github.com/aiwao/Mine2DEngine")
+
+        licenses {
+            license {
+                name.set("MIT License")
+                url.set("https://opensource.org/license/mit")
+                distribution.set("repo")
+            }
+        }
+
+        developers {
+            developer {
+                id.set("aiwao")
+                name.set("aiwao")
+                email.set("aiwao@users.noreply.github.com")
+                url.set("https://github.com/aiwao")
+                organization.set("aiwao")
+                organizationUrl.set("https://github.com/aiwao")
+            }
+        }
+
+        scm {
+            url.set("https://github.com/aiwao/Mine2DEngine")
+            connection.set("scm:git:git://github.com/aiwao/Mine2DEngine.git")
+            developerConnection.set("scm:git:ssh://git@github.com/aiwao/Mine2DEngine.git")
         }
     }
+}
 
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
+publishing {
     repositories {
-        // Add repositories to publish to here.
-        // Notice: This block does NOT have the same function as the block in the top level.
-        // The repositories here will be used for publishing your artifact, not for
-        // retrieving dependencies.
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/aiwao/Mine2DEngine")
+            credentials {
+                username = providers.gradleProperty("gpr.user")
+                    .orElse(providers.environmentVariable("GITHUB_ACTOR"))
+                    .orNull
+                password = providers.gradleProperty("gpr.key")
+                    .orElse(providers.environmentVariable("GITHUB_TOKEN"))
+                    .orNull
+            }
+        }
     }
 }
