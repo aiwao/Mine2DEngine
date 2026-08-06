@@ -58,6 +58,17 @@ class Mine2DEngine(
         polygon(color, points.asIterable())
     }
 
+    /** Draws a rectangle with the given bounds using [shader]. */
+    @JvmOverloads
+    fun quad(x: Float, y: Float, width: Float, height: Float, color: Int = 0xFFFFFFFF.toInt()) {
+        polygon(
+            Mine2DVertex(x, y, color),
+            Mine2DVertex(x + width, y, color),
+            Mine2DVertex(x + width, y + height, color),
+            Mine2DVertex(x, y + height, color),
+        )
+    }
+
     /**
      * Temporarily changes the default shader. Nested scopes are supported and
      * the previous shader is restored even if [draw] throws.
