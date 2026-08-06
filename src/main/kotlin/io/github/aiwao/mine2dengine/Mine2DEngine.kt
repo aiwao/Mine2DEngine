@@ -59,8 +59,7 @@ class Mine2DEngine(
     }
 
     /** Draws a rectangle with the given bounds using [shader]. */
-    @JvmOverloads
-    fun quad(x: Float, y: Float, width: Float, height: Float, color: Int = 0xFFFFFFFF.toInt()) {
+    fun quad(x: Float, y: Float, width: Float, height: Float, color: Int) {
         polygon(
             Mine2DVertex(x, y, color),
             Mine2DVertex(x + width, y, color),
