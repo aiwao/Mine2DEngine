@@ -176,26 +176,29 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - `width` と `height` はコンテンツボックスを指定します。`null` の場合は文字列または子要素に合わせて縮みます。
 - パディングは描画される背景の内側、マージンは外側です。
 - `Div` と `Button` は直接の子要素を縦または横に並べます。
-- `alignment` は子要素と文字列を水平方向に配置します。
+- `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
 - `color`、`font`、`dropShadow` は祖先から継承され、子要素で上書きできます。`color` または
   `dropShadow` が `null` の場合は親を継承し、ルートではそれぞれ不透明な白と有効が既定値です。
 - 段落内の改行は複数行になります。
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
-import io.github.aiwao.mine2dengine.layout.UiAlignment
 import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiEdges
+import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
 import io.github.aiwao.mine2dengine.layout.UiStyle
+import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
 
 val root = div(
     UiStyle(
         font = font,
         width = 180f,
+        height = 100f,
         padding = UiEdges(8f),
         backgroundColor = 0xD0202020.toInt(),
-        alignment = UiAlignment.CENTER,
+        horizontalAlignment = UiHorizontalAlignment.CENTER,
+        verticalAlignment = UiVerticalAlignment.CENTER,
     ),
 ) {
     p(

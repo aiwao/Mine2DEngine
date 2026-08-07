@@ -9,10 +9,17 @@ enum class UiDirection {
 }
 
 /** Horizontal alignment inside the content area of an element. */
-enum class UiAlignment {
+enum class UiHorizontalAlignment {
     LEFT,
     CENTER,
     RIGHT,
+}
+
+/** Vertical alignment inside the content area of an element. */
+enum class UiVerticalAlignment {
+    TOP,
+    CENTER,
+    BOTTOM,
 }
 
 /**
@@ -22,6 +29,8 @@ enum class UiAlignment {
  * background, while margin remains outside it, following the CSS box model.
  * [gap] adds space between adjacent direct children without adding space at the
  * edges of the content box.
+ * [horizontalAlignment] and [verticalAlignment] position direct children in a
+ * container and text inside a paragraph's content box.
  * A null size shrinks to the element's text or children. [color], [font], and
  * [dropShadow] are inherited by descendants when null. At the root, color defaults
  * to opaque white and drop shadow defaults to enabled. Every text element must
@@ -33,7 +42,8 @@ data class UiStyle(
     val margin: UiEdges = UiEdges(),
     val padding: UiEdges = UiEdges(),
     val direction: UiDirection = UiDirection.VERTICAL,
-    val alignment: UiAlignment = UiAlignment.LEFT,
+    val horizontalAlignment: UiHorizontalAlignment = UiHorizontalAlignment.LEFT,
+    val verticalAlignment: UiVerticalAlignment = UiVerticalAlignment.TOP,
     val width: Float? = null,
     val height: Float? = null,
     val font: Mine2DFont? = null,

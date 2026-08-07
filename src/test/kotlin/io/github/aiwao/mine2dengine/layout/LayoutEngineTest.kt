@@ -167,14 +167,14 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `vertical layout uses root origin box model and center alignment`() {
+    fun `vertical layout uses root origin box model and horizontal center alignment`() {
         lateinit var paragraph: Paragraph
         val root = div(
             UiStyle(
                 padding = UiEdges(10f),
                 width = 100f,
                 direction = UiDirection.VERTICAL,
-                alignment = UiAlignment.CENTER,
+                horizontalAlignment = UiHorizontalAlignment.CENTER,
             ),
         ) {
             paragraph = p(
@@ -199,7 +199,7 @@ class LayoutEngineTest {
             UiStyle(
                 width = 100f,
                 direction = UiDirection.HORIZONTAL,
-                alignment = UiAlignment.RIGHT,
+                horizontalAlignment = UiHorizontalAlignment.RIGHT,
             ),
         ) {
             first = p("a", UiStyle(width = 20f))
@@ -241,7 +241,7 @@ class LayoutEngineTest {
             UiStyle(
                 width = 100f,
                 direction = UiDirection.HORIZONTAL,
-                alignment = UiAlignment.RIGHT,
+                horizontalAlignment = UiHorizontalAlignment.RIGHT,
                 gap = 7f,
             ),
         ) {
@@ -253,6 +253,48 @@ class LayoutEngineTest {
 
         assertEquals(53f, layout.nodeOf(first)!!.outerBounds.left)
         assertEquals(80f, layout.nodeOf(second)!!.outerBounds.left)
+    }
+
+    @Test
+    fun `vertical layout aligns the whole column to the bottom`() {
+        lateinit var first: Paragraph
+        lateinit var second: Paragraph
+        val root = div(
+            UiStyle(
+                height = 50f,
+                verticalAlignment = UiVerticalAlignment.BOTTOM,
+                gap = 4f,
+            ),
+        ) {
+            first = p("a")
+            second = p("b")
+        }
+
+        val layout = calculateLayout(root, left = 2f, top = 3f, textMeasurer)
+
+        assertEquals(29f, layout.nodeOf(first)!!.outerBounds.top)
+        assertEquals(43f, layout.nodeOf(second)!!.outerBounds.top)
+    }
+
+    @Test
+    fun `horizontal layout aligns each child to the vertical center`() {
+        lateinit var first: Paragraph
+        lateinit var second: Paragraph
+        val root = div(
+            UiStyle(
+                height = 50f,
+                direction = UiDirection.HORIZONTAL,
+                verticalAlignment = UiVerticalAlignment.CENTER,
+            ),
+        ) {
+            first = p("a", UiStyle(height = 10f))
+            second = p("b", UiStyle(height = 20f))
+        }
+
+        val layout = calculateLayout(root, left = 2f, top = 3f, textMeasurer)
+
+        assertEquals(23f, layout.nodeOf(first)!!.outerBounds.top)
+        assertEquals(18f, layout.nodeOf(second)!!.outerBounds.top)
     }
 
     @Test

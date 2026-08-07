@@ -186,12 +186,19 @@ private fun placeChildren(measured: MeasuredNode, contentBounds: UiRect): List<U
     val style = measured.style
     return when (style.direction) {
         UiDirection.VERTICAL -> {
-            var top = contentBounds.top
+            val childrenHeight = measured.children
+                .sumOf { it.outerSize.height.toDouble() }
+                .toFloat() + style.gap * (measured.children.size - 1)
+            var top = contentBounds.top + alignedTop(
+                availableHeight = contentBounds.height,
+                itemHeight = childrenHeight,
+                alignment = style.verticalAlignment,
+            )
             measured.children.map { child ->
                 val left = contentBounds.left + alignedLeft(
                     availableWidth = contentBounds.width,
                     itemWidth = child.outerSize.width,
-                    alignment = style.alignment,
+                    alignment = style.horizontalAlignment,
                 )
                 place(child, left, top).also { top += child.outerSize.height + style.gap }
             }
@@ -204,10 +211,15 @@ private fun placeChildren(measured: MeasuredNode, contentBounds: UiRect): List<U
             var left = contentBounds.left + alignedLeft(
                 availableWidth = contentBounds.width,
                 itemWidth = childrenWidth,
-                alignment = style.alignment,
+                alignment = style.horizontalAlignment,
             )
             measured.children.map { child ->
-                place(child, left, contentBounds.top).also { left += child.outerSize.width + style.gap }
+                val top = contentBounds.top + alignedTop(
+                    availableHeight = contentBounds.height,
+                    itemHeight = child.outerSize.height,
+                    alignment = style.verticalAlignment,
+                )
+                place(child, left, top).also { left += child.outerSize.width + style.gap }
             }
         }
     }
@@ -216,11 +228,21 @@ private fun placeChildren(measured: MeasuredNode, contentBounds: UiRect): List<U
 internal fun alignedLeft(
     availableWidth: Float,
     itemWidth: Float,
-    alignment: UiAlignment,
+    alignment: UiHorizontalAlignment,
 ): Float = when (alignment) {
-    UiAlignment.LEFT -> 0f
-    UiAlignment.CENTER -> (availableWidth - itemWidth) / 2f
-    UiAlignment.RIGHT -> availableWidth - itemWidth
+    UiHorizontalAlignment.LEFT -> 0f
+    UiHorizontalAlignment.CENTER -> (availableWidth - itemWidth) / 2f
+    UiHorizontalAlignment.RIGHT -> availableWidth - itemWidth
+}
+
+internal fun alignedTop(
+    availableHeight: Float,
+    itemHeight: Float,
+    alignment: UiVerticalAlignment,
+): Float = when (alignment) {
+    UiVerticalAlignment.TOP -> 0f
+    UiVerticalAlignment.CENTER -> (availableHeight - itemHeight) / 2f
+    UiVerticalAlignment.BOTTOM -> availableHeight - itemHeight
 }
 
 internal fun textLines(text: String): List<String> =
