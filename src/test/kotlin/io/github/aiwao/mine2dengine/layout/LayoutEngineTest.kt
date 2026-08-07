@@ -292,6 +292,61 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `onMouseMove can be used by every element type`() {
+        val moved = mutableListOf<UiElement>()
+        var receivedCoordinates: Pair<Double, Double>? = null
+        lateinit var paragraph: Paragraph
+        lateinit var innerDiv: Div
+        lateinit var button: Button
+        lateinit var root: Div
+        root = div(
+            style = UiStyle(width = 50f, height = 50f),
+            onMouseMove = { x, y ->
+                moved += root
+                receivedCoordinates = x to y
+            },
+        ) {
+            innerDiv = div(
+                style = UiStyle(width = 30f, height = 30f),
+                onMouseMove = { _, _ -> moved += innerDiv },
+            ) {
+                paragraph = p(
+                    text = "text",
+                    onMouseMove = { x, y ->
+                        moved += paragraph
+                        receivedCoordinates = x to y
+                    },
+                )
+            }
+            button = button(onMouseMove = { _, _ -> moved += button }) {
+                p("Button")
+            }
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertTrue(layout.mouseMove(1.25, 2.5))
+        assertEquals(listOf<UiElement>(paragraph), moved)
+        assertEquals(1.25 to 2.5, receivedCoordinates)
+
+        moved.clear()
+        paragraph.onMouseMove = null
+        assertTrue(layout.mouseMove(1.25, 2.5))
+        assertEquals(listOf<UiElement>(innerDiv), moved)
+
+        moved.clear()
+        innerDiv.onMouseMove = null
+        assertTrue(layout.mouseMove(1.0, 31.0))
+        assertEquals(listOf<UiElement>(button), moved)
+
+        moved.clear()
+        assertTrue(layout.mouseMove(49.0, 49.0))
+        assertEquals(listOf<UiElement>(root), moved)
+
+        root.onMouseMove = null
+        assertFalse(layout.mouseMove(100.0, 100.0))
+    }
+
+    @Test
     fun `button lays out child elements like a div`() {
         lateinit var first: Paragraph
         lateinit var second: Paragraph

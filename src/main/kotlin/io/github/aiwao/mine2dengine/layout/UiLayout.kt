@@ -76,6 +76,26 @@ class UiLayout internal constructor(
         return true
     }
 
+    /**
+     * Invokes the topmost element with an [UiElement.onMouseMove] callback at [x], [y].
+     * Returns true when a matching element was hit.
+     */
+    fun mouseMove(x: Double, y: Double): Boolean {
+        val layoutX = x.toFloat()
+        val layoutY = y.toFloat()
+        val element = nodesInPaintOrder()
+            .asReversed()
+            .firstOrNull { node ->
+                node.element.onMouseMove != null &&
+                    node.bounds.contains(layoutX, layoutY)
+            }
+            ?.element
+            ?: return false
+
+        element.onMouseMove?.invoke(x, y)
+        return true
+    }
+
     fun nodeOf(element: UiElement): UiLayoutNode? =
         nodesInPaintOrder().firstOrNull { it.element === element }
 

@@ -201,6 +201,7 @@ val root = div(
         "Mine2DEngine",
         UiStyle(color = 0xFFFFCC00.toInt()),
         onClick = { event -> println("Title: button=${event.button()}") },
+        onMouseMove = { x, y -> println("Title: x=$x, y=$y") },
     )
     p("A lightweight Fabric UI", UiStyle(dropShadow = false))
 
@@ -222,11 +223,12 @@ val root = div(
 val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
 ```
 
-Every element supports `onClick`, including `div`, `p` / `paragraph`, and `button`. Keep the returned `UiLayout` to perform hit testing or dispatch a click using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the topmost clickable element and the same event is forwarded to its `onClick` callback:
+Every element supports `onClick` and `onMouseMove`, including `div`, `p` / `paragraph`, and `button`. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the topmost clickable element and the same event is forwarded to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to invoke the topmost matching `onMouseMove` callback:
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())
 val handled = layout.click(event)
+val moveHandled = layout.mouseMove(mouseX, mouseY)
 ```
 
 `layout(root)` calculates geometry without drawing. `render(root)` calculates and draws, while `render(existingLayout)` draws previously calculated geometry again. Recalculate the layout after changing text, styles, or children.
