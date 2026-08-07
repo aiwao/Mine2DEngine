@@ -49,6 +49,66 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `dynamic styles receive their elements and react to current state`() {
+        val evaluations = mutableMapOf<String, Int>()
+        fun evaluated(name: String) {
+            evaluations[name] = evaluations.getOrDefault(name, 0) + 1
+        }
+
+        lateinit var innerDiv: Div
+        lateinit var shortParagraph: Paragraph
+        lateinit var longParagraph: Paragraph
+        lateinit var button: Button
+        val root = div(
+            style = { element ->
+                evaluated("root")
+                UiStyle(
+                    color = if (element.hovering) 0xFFFFFFFF.toInt() else 0xFF000000.toInt(),
+                    width = 80f,
+                    height = 80f,
+                )
+            },
+        ) {
+            innerDiv = div(style = { element ->
+                evaluated("div")
+                UiStyle(width = element.children.size.toFloat(), height = 1f)
+            })
+            shortParagraph = p("p", style = { element ->
+                evaluated("p")
+                UiStyle(width = element.text.length.toFloat())
+            })
+            longParagraph = paragraph("paragraph", style = { element ->
+                evaluated("paragraph")
+                UiStyle(width = element.text.length.toFloat())
+            })
+            button = button(style = { element ->
+                evaluated("button")
+                Button.DEFAULT_STYLE.copy(width = element.children.size.toFloat())
+            })
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(
+            mapOf("root" to 1, "div" to 1, "p" to 1, "paragraph" to 1, "button" to 1),
+            evaluations,
+        )
+        assertSame(innerDiv, root.children[0])
+        assertSame(shortParagraph, root.children[1])
+        assertSame(longParagraph, root.children[2])
+        assertSame(button, root.children[3])
+        assertEquals(0xFF000000.toInt(), root.style.color)
+
+        layout.mouseMove(79.0, 79.0)
+        assertTrue(root.hovering)
+        assertEquals(0xFFFFFFFF.toInt(), root.style.color)
+
+        root.style = UiStyle(color = 0xFF123456.toInt())
+        assertEquals(0xFF123456.toInt(), root.style.color)
+        assertEquals(3, evaluations["root"])
+    }
+
+    @Test
     fun `font is inherited and can be overridden by a child style`() {
         val inheritedFont = fontToken("inherited")
         val overriddenFont = fontToken("overridden")
