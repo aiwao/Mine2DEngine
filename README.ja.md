@@ -197,7 +197,11 @@ val root = div(
         alignment = UiAlignment.CENTER,
     ),
 ) {
-    p("Mine2DEngine", UiStyle(color = 0xFFFFCC00.toInt()))
+    p(
+        "Mine2DEngine",
+        UiStyle(color = 0xFFFFCC00.toInt()),
+        onClick = { event -> println("タイトル: button=${event.button()}") },
+    )
     p("軽量な Fabric UI", UiStyle(dropShadow = false))
 
     div(
@@ -218,7 +222,7 @@ val root = div(
 val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
 ```
 
-返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやクリックの通知ができます。Minecraft の `MouseButtonEvent` を `click` に渡すと、イベントの座標でボタンを特定し、そのイベントをボタンの `onClick` に渡します。
+`div`、`p` / `paragraph`、`button` を含むすべての要素で `onClick` を利用できます。返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやクリックの通知ができます。Minecraft の `MouseButtonEvent` を `click` に渡すと、イベントの座標で最前面のクリック可能な要素を特定し、そのイベントを要素の `onClick` に渡します。
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())

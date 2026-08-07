@@ -17,7 +17,7 @@ data class UiLayoutNode(
     val font: Mine2DFont? = null,
 )
 
-/** A layout result that can also dispatch clicks to buttons. */
+/** A layout result that can also dispatch clicks to UI elements. */
 class UiLayout internal constructor(
     root: UiLayoutNode,
 ) {
@@ -56,19 +56,23 @@ class UiLayout internal constructor(
         nodesInPaintOrder().asReversed().firstOrNull { it.bounds.contains(x, y) }?.element
 
     /**
-     * Invokes the topmost button at the GUI coordinate in [event] and passes it to the callback.
-     * Returns true when a button was hit, even when it has no callback.
+     * Invokes the topmost clickable element at the GUI coordinate in [event].
+     * Elements with an [UiElement.onClick] callback are clickable. A [Button] remains clickable
+     * without a callback, preserving its control semantics. Returns true when one was hit.
      */
     fun click(event: MouseButtonEvent): Boolean {
         val x = event.x().toFloat()
         val y = event.y().toFloat()
-        val button = nodesInPaintOrder()
+        val element = nodesInPaintOrder()
             .asReversed()
-            .firstOrNull { it.element is Button && it.bounds.contains(x, y) }
-            ?.element as? Button
+            .firstOrNull { node ->
+                (node.element is Button || node.element.onClick != null) &&
+                    node.bounds.contains(x, y)
+            }
+            ?.element
             ?: return false
 
-        button.onClick?.invoke(event)
+        element.onClick?.invoke(event)
         return true
     }
 

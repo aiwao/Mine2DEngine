@@ -197,7 +197,11 @@ val root = div(
         alignment = UiAlignment.CENTER,
     ),
 ) {
-    p("Mine2DEngine", UiStyle(color = 0xFFFFCC00.toInt()))
+    p(
+        "Mine2DEngine",
+        UiStyle(color = 0xFFFFCC00.toInt()),
+        onClick = { event -> println("Title: button=${event.button()}") },
+    )
     p("A lightweight Fabric UI", UiStyle(dropShadow = false))
 
     div(
@@ -218,7 +222,7 @@ val root = div(
 val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
 ```
 
-Keep the returned `UiLayout` to perform hit testing or dispatch a click using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the button and the same event is forwarded to its `onClick` callback:
+Every element supports `onClick`, including `div`, `p` / `paragraph`, and `button`. Keep the returned `UiLayout` to perform hit testing or dispatch a click using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the topmost clickable element and the same event is forwarded to its `onClick` callback:
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())

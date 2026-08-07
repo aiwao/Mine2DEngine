@@ -244,6 +244,54 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `onClick can be used by every element type`() {
+        val clicked = mutableListOf<UiElement>()
+        lateinit var paragraph: Paragraph
+        lateinit var innerDiv: Div
+        lateinit var root: Div
+        root = div(
+            style = UiStyle(width = 50f, height = 50f),
+            onClick = { clicked += root },
+        ) {
+            innerDiv = div(
+                style = UiStyle(width = 30f, height = 30f),
+                onClick = { clicked += innerDiv },
+            ) {
+                paragraph = p(
+                    text = "text",
+                    onClick = { clicked += paragraph },
+                )
+            }
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertEquals(listOf<UiElement>(paragraph), clicked)
+
+        clicked.clear()
+        paragraph.onClick = null
+        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertEquals(listOf<UiElement>(innerDiv), clicked)
+
+        clicked.clear()
+        innerDiv.onClick = null
+        assertTrue(layout.click(MouseButtonEvent(40.0, 40.0, MouseButtonInfo(0, 0))))
+        assertEquals(listOf<UiElement>(root), clicked)
+    }
+
+    @Test
+    fun `button without onClick still consumes a click`() {
+        val root = div {
+            button {
+                p("Run")
+            }
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+    }
+
+    @Test
     fun `button lays out child elements like a div`() {
         lateinit var first: Paragraph
         lateinit var second: Paragraph
