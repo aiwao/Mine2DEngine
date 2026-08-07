@@ -178,9 +178,11 @@ class LayoutEngineTest {
         var receivedEvent: MouseButtonEvent? = null
         lateinit var button: Button
         val root = div {
-            button = button("Run") { event ->
+            button = button(onClick = { event ->
                 clickCount++
                 receivedEvent = event
+            }) {
+                p("Run")
             }
         }
         val layout = calculateLayout(root, left = 4f, top = 6f, textMeasurer)
@@ -192,6 +194,29 @@ class LayoutEngineTest {
         assertEquals(1, clickCount)
         assertSame(hitEvent, receivedEvent)
         assertFalse(layout.click(missEvent))
+    }
+
+    @Test
+    fun `button lays out child elements like a div`() {
+        lateinit var first: Paragraph
+        lateinit var second: Paragraph
+        val root = div {
+            button(
+                style = Button.DEFAULT_STYLE.copy(
+                    direction = UiDirection.HORIZONTAL,
+                    gap = 2f,
+                ),
+            ) {
+                first = p("a")
+                second = p("bc")
+            }
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(UiSize(29f, 16f), layout.size)
+        assertEquals(6f, layout.nodeOf(first)!!.outerBounds.left)
+        assertEquals(13f, layout.nodeOf(second)!!.outerBounds.left)
     }
 
     @Test

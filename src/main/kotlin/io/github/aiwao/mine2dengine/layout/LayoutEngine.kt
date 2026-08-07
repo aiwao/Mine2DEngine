@@ -68,9 +68,8 @@ class LayoutEngine(
         }
 
         when (val element = node.element) {
-            is Div -> Unit
+            is UiContainer -> Unit
             is Paragraph -> drawText(element.text, style, node.contentBounds, requireFont(node))
-            is Button -> drawText(element.text, style, node.contentBounds, requireFont(node))
         }
 
         node.children.forEach(::draw)
@@ -154,7 +153,7 @@ private fun measure(
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
 ): MeasuredNode {
     val font = element.style.font ?: inheritedFont
-    val children = if (element is Div) {
+    val children = if (element is UiContainer) {
         element.children.map { child -> measure(child, font, textMeasurer) }
     } else {
         emptyList()
@@ -162,13 +161,12 @@ private fun measure(
 
     val textSize = when (element) {
         is Paragraph -> measureText(element.text, textMeasurer(element, font))
-        is Button -> measureText(element.text, textMeasurer(element, font))
-        is Div -> null
+        is UiContainer -> null
     }
 
     val naturalSize = when (element) {
-        is Div -> measureChildren(children, element.style.direction, element.style.gap)
-        is Paragraph, is Button -> checkNotNull(textSize)
+        is UiContainer -> measureChildren(children, element.style.direction, element.style.gap)
+        is Paragraph -> checkNotNull(textSize)
     }
 
     return MeasuredNode(

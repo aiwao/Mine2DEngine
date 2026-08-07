@@ -2,7 +2,7 @@ package io.github.aiwao.mine2dengine.layout
 
 import io.github.aiwao.mine2dengine.Mine2DFont
 
-/** The direction in which a div lays out its direct children. */
+/** The direction in which a container lays out its direct children. */
 enum class UiDirection {
     VERTICAL,
     HORIZONTAL,
