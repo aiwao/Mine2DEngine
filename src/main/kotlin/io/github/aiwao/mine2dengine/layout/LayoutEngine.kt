@@ -1,8 +1,6 @@
 package io.github.aiwao.mine2dengine.layout
 
-import io.github.aiwao.mine2dengine.Mine2DEngine
 import io.github.aiwao.mine2dengine.Mine2DFont
-import kotlin.math.roundToInt
 
 /** Supplies the text measurements required by the layout pass. */
 interface UiTextMeasurer {
@@ -22,11 +20,10 @@ class Mine2DTextMeasurer(
 }
 
 /**
- * Measures, positions, and draws a tree of [Div], [Paragraph], and [Button] nodes.
+ * Measures and positions a tree of [Div], [Paragraph], and [Button] nodes.
  *
- * [left] and [top] passed to [layout] or [render] are the top-left coordinate of
- * the root's outer box. Text fonts are selected through [UiStyle.font] and remain
- * owned by the caller. Drawing is performed through the [Mine2DEngine] passed to [render].
+ * [left] and [top] passed to [layout] are the top-left coordinate of the root's outer box.
+ * Text fonts are selected through [UiStyle.font] and remain owned by the caller.
  */
 class LayoutEngine {
     /** Calculates the complete UI tree without issuing draw calls. */
@@ -37,89 +34,6 @@ class LayoutEngine {
                     "${element.javaClass.simpleName} requires a font in its style or an ancestor style"
                 },
             )
-        }
-
-    /** Calculates and renders a UI tree, then returns its reusable geometry. */
-    fun render(
-        root: UiElement,
-        renderer: Mine2DEngine,
-        left: Float = 0f,
-        top: Float = 0f,
-    ): UiLayout {
-        val layout = layout(root, left, top)
-        render(layout, renderer)
-        return layout
-    }
-
-    /** Renders an existing layout result without recalculating it. */
-    fun render(layout: UiLayout, renderer: Mine2DEngine) {
-        draw(layout.root, renderer)
-    }
-
-    /** Moves an existing layout to [left], [top], then renders it without recalculating its size. */
-    fun render(layout: UiLayout, renderer: Mine2DEngine, left: Float, top: Float) {
-        layout.moveTo(left, top)
-        render(layout, renderer)
-    }
-
-    private fun draw(node: UiLayoutNode, renderer: Mine2DEngine) {
-        val style = node.element.style
-        style.backgroundColor?.let { color ->
-            if (node.bounds.width > 0f && node.bounds.height > 0f) {
-                renderer.quad(
-                    node.bounds.left,
-                    node.bounds.top,
-                    node.bounds.width,
-                    node.bounds.height,
-                    color,
-                )
-            }
-        }
-
-        when (val element = node.element) {
-            is UiContainer -> Unit
-            is Paragraph -> drawText(
-                element.text,
-                style,
-                node.contentBounds,
-                requireFont(node),
-                renderer,
-            )
-        }
-
-        node.children.forEach { child -> draw(child, renderer) }
-    }
-
-    private fun drawText(
-        text: String,
-        style: UiStyle,
-        contentBounds: UiRect,
-        font: Mine2DFont,
-        renderer: Mine2DEngine,
-    ) {
-        val textMeasurer = Mine2DTextMeasurer(font)
-        textLines(text).forEachIndexed { index, line ->
-            val lineWidth = textMeasurer.width(line)
-            val x = alignedLeft(
-                availableWidth = contentBounds.width,
-                itemWidth = lineWidth,
-                alignment = style.alignment,
-            ) + contentBounds.left
-            val y = contentBounds.top + index * textMeasurer.lineHeight
-            renderer.text(
-                font,
-                line,
-                x.roundToInt(),
-                y.roundToInt(),
-                style.color,
-                dropShadow = style.dropShadow,
-            )
-        }
-    }
-
-    private fun requireFont(node: UiLayoutNode): Mine2DFont =
-        requireNotNull(node.font) {
-            "${node.element.javaClass.simpleName} requires a font in its style or an ancestor style"
         }
 }
 

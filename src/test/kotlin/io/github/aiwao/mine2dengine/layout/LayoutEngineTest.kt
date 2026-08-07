@@ -26,28 +26,18 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `layout engine accepts renderer only when rendering`() {
+    fun `layout engine calculates and layouts render themselves`() {
         assertNotNull(LayoutEngine::class.java.getConstructor())
+        assertFalse(LayoutEngine::class.java.methods.any { method -> method.name == "render" })
         assertNotNull(
-            LayoutEngine::class.java.getMethod(
+            UiLayout::class.java.getMethod(
                 "render",
-                UiElement::class.java,
-                Mine2DEngine::class.java,
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType,
-            ),
-        )
-        assertNotNull(
-            LayoutEngine::class.java.getMethod(
-                "render",
-                UiLayout::class.java,
                 Mine2DEngine::class.java,
             ),
         )
         assertNotNull(
-            LayoutEngine::class.java.getMethod(
+            UiLayout::class.java.getMethod(
                 "render",
-                UiLayout::class.java,
                 Mine2DEngine::class.java,
                 Float::class.javaPrimitiveType,
                 Float::class.javaPrimitiveType,
