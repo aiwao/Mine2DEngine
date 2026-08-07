@@ -177,7 +177,9 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
 - Padding is inside the painted background; margin is outside it.
 - `Div` and `Button` place direct children vertically or horizontally.
 - `alignment` aligns children and text horizontally.
-- Fonts are inherited from ancestors and may be overridden by a child.
+- `color`, `font`, and `dropShadow` are inherited from ancestors and may be overridden by a child.
+  A null `color` or `dropShadow` inherits the parent; at the root they default to opaque white and
+  enabled, respectively.
 - Paragraph newlines create multiple lines.
 
 ```kotlin
@@ -253,9 +255,9 @@ hoverableLayout.render(draw)
 ```
 
 Dynamic styles are supported by `div`, `p` / `paragraph`, and `button`. Redrawing an existing
-layout refreshes drawing properties such as colors. Recalculate the layout when the resolved
-style changes sizing, spacing, direction, alignment, or font. Assigning `element.style` replaces
-its dynamic style with that static value.
+layout refreshes drawing properties such as colors, including values inherited by descendants.
+Recalculate the layout when the resolved style changes sizing, spacing, direction, alignment, or
+font. Assigning `element.style` replaces its dynamic style with that static value.
 
 Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div`, `p` / `paragraph`, and `button`. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. A drag continues outside the element's bounds until `release` is called:
 
