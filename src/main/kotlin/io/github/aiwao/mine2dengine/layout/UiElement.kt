@@ -1,5 +1,7 @@
 package io.github.aiwao.mine2dengine.layout
 
+import net.minecraft.client.input.MouseButtonEvent
+
 /** Base type for nodes in a UI tree. */
 sealed class UiElement(
     open var style: UiStyle,
@@ -31,7 +33,7 @@ class Div(
     fun button(
         text: String,
         style: UiStyle = Button.DEFAULT_STYLE,
-        onClick: (() -> Unit)? = null,
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
     ): Button = add(Button(text, style, onClick))
 }
 
@@ -45,7 +47,7 @@ class Paragraph(
 class Button(
     var text: String,
     override var style: UiStyle = DEFAULT_STYLE,
-    var onClick: (() -> Unit)? = null,
+    var onClick: ((MouseButtonEvent) -> Unit)? = null,
 ) : UiElement(style) {
     companion object {
         /** A visible default which can be replaced with any [UiStyle]. */

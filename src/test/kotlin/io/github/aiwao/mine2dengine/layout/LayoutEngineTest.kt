@@ -6,6 +6,8 @@ import io.github.aiwao.mine2dengine.Mine2DFont
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet
 import net.minecraft.client.gui.font.FontSet
 import net.minecraft.client.gui.font.GlyphStitcher
+import net.minecraft.client.input.MouseButtonEvent
+import net.minecraft.client.input.MouseButtonInfo
 import net.minecraft.client.renderer.texture.TextureManager
 import net.minecraft.resources.Identifier
 import kotlin.test.Test
@@ -171,18 +173,25 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `click invokes the topmost button and reports misses`() {
+    fun `click invokes the topmost button with the mouse event and reports misses`() {
         var clickCount = 0
+        var receivedEvent: MouseButtonEvent? = null
         lateinit var button: Button
         val root = div {
-            button = button("Run") { clickCount++ }
+            button = button("Run") { event ->
+                clickCount++
+                receivedEvent = event
+            }
         }
         val layout = calculateLayout(root, left = 4f, top = 6f, textMeasurer)
+        val hitEvent = MouseButtonEvent(5.0, 7.0, MouseButtonInfo(1, 2))
+        val missEvent = MouseButtonEvent(100.0, 100.0, MouseButtonInfo(0, 0))
 
         assertSame(button, layout.elementAt(5f, 7f))
-        assertTrue(layout.click(5f, 7f))
+        assertTrue(layout.click(hitEvent))
         assertEquals(1, clickCount)
-        assertFalse(layout.click(100f, 100f))
+        assertSame(hitEvent, receivedEvent)
+        assertFalse(layout.click(missEvent))
     }
 
     @Test

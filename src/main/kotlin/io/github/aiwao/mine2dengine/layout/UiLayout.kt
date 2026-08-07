@@ -1,6 +1,7 @@
 package io.github.aiwao.mine2dengine.layout
 
 import io.github.aiwao.mine2dengine.Mine2DFont
+import net.minecraft.client.input.MouseButtonEvent
 
 /** The calculated geometry for one UI element. */
 data class UiLayoutNode(
@@ -27,17 +28,19 @@ class UiLayout internal constructor(
         nodesInPaintOrder().asReversed().firstOrNull { it.bounds.contains(x, y) }?.element
 
     /**
-     * Invokes the topmost button at the given GUI coordinate.
+     * Invokes the topmost button at the GUI coordinate in [event] and passes it to the callback.
      * Returns true when a button was hit, even when it has no callback.
      */
-    fun click(x: Float, y: Float): Boolean {
+    fun click(event: MouseButtonEvent): Boolean {
+        val x = event.x().toFloat()
+        val y = event.y().toFloat()
         val button = nodesInPaintOrder()
             .asReversed()
             .firstOrNull { it.element is Button && it.bounds.contains(x, y) }
             ?.element as? Button
             ?: return false
 
-        button.onClick?.invoke()
+        button.onClick?.invoke(event)
         return true
     }
 
