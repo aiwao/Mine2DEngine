@@ -203,6 +203,8 @@ val root = div(
         onClick = { event -> println("Title: button=${event.button()}") },
         onMouseMove = { x, y -> println("Title: x=$x, y=$y") },
         onDrag = { x, y -> println("Dragging title: x=$x, y=$y") },
+        onMouseOver = { println("Pointer entered title") },
+        onMouseOut = { println("Pointer left title") },
     )
     p("A lightweight Fabric UI", UiStyle(dropShadow = false))
 
@@ -224,7 +226,7 @@ val root = div(
 val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
 ```
 
-Every element supports `onClick`, `onMouseMove`, and `onDrag`, including `div`, `p` / `paragraph`, and `button`. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to invoke the topmost matching `onMouseMove` callback and the dragging element's `onDrag` callback. A drag continues outside the element's bounds until `release` is called:
+Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div`, `p` / `paragraph`, and `button`. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. A drag continues outside the element's bounds until `release` is called:
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())

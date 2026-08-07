@@ -392,6 +392,75 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `mouse over and out update hovering state once per boundary crossing`() {
+        val callbacks = mutableListOf<String>()
+        lateinit var paragraph: Paragraph
+        lateinit var root: Div
+        root = div(
+            style = UiStyle(width = 50f, height = 50f),
+            onMouseOver = {
+                assertFalse(root.hovering)
+                callbacks += "root over"
+            },
+            onMouseOut = {
+                assertTrue(root.hovering)
+                callbacks += "root out"
+            },
+        ) {
+            paragraph = p(
+                text = "text",
+                onMouseOver = {
+                    assertFalse(paragraph.hovering)
+                    callbacks += "paragraph over"
+                },
+                onMouseOut = {
+                    assertTrue(paragraph.hovering)
+                    callbacks += "paragraph out"
+                },
+            )
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertTrue(layout.mouseMove(1.0, 1.0))
+        assertTrue(root.hovering)
+        assertTrue(paragraph.hovering)
+        assertEquals(listOf("root over", "paragraph over"), callbacks)
+
+        assertFalse(layout.mouseMove(2.0, 2.0))
+        assertEquals(listOf("root over", "paragraph over"), callbacks)
+
+        assertTrue(layout.mouseMove(30.0, 30.0))
+        assertTrue(root.hovering)
+        assertFalse(paragraph.hovering)
+        assertEquals(listOf("root over", "paragraph over", "paragraph out"), callbacks)
+
+        assertTrue(layout.mouseMove(100.0, 100.0))
+        assertFalse(root.hovering)
+        assertFalse(paragraph.hovering)
+        assertEquals(
+            listOf("root over", "paragraph over", "paragraph out", "root out"),
+            callbacks,
+        )
+    }
+
+    @Test
+    fun `hovering updates even without mouse over or out callbacks`() {
+        lateinit var paragraph: Paragraph
+        val root = div(UiStyle(width = 20f, height = 20f)) {
+            paragraph = p("text")
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertFalse(layout.mouseMove(1.0, 1.0))
+        assertTrue(root.hovering)
+        assertTrue(paragraph.hovering)
+
+        assertFalse(layout.mouseMove(100.0, 100.0))
+        assertFalse(root.hovering)
+        assertFalse(paragraph.hovering)
+    }
+
+    @Test
     fun `button lays out child elements like a div`() {
         lateinit var first: Paragraph
         lateinit var second: Paragraph

@@ -8,9 +8,15 @@ sealed class UiElement(
     open var onClick: ((MouseButtonEvent) -> Unit)? = null,
     open var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     open var onDrag: ((x: Double, y: Double) -> Unit)? = null,
+    open var onMouseOver: (() -> Unit)? = null,
+    open var onMouseOut: (() -> Unit)? = null,
 ) {
     /** Whether this element has been clicked and not yet released. */
     var dragging: Boolean = false
+        internal set
+
+    /** Whether the pointer is currently inside this element's bounds. */
+    var hovering: Boolean = false
         internal set
 }
 
@@ -21,7 +27,9 @@ sealed class UiContainer(
     override var onClick: ((MouseButtonEvent) -> Unit)? = null,
     override var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     override var onDrag: ((x: Double, y: Double) -> Unit)? = null,
-) : UiElement(style, onClick, onMouseMove, onDrag) {
+    override var onMouseOver: (() -> Unit)? = null,
+    override var onMouseOut: (() -> Unit)? = null,
+) : UiElement(style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
     val children: MutableList<UiElement> = children.toMutableList()
 
     fun <T : UiElement> add(element: T): T {
@@ -34,9 +42,18 @@ sealed class UiContainer(
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((x: Double, y: Double) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
         content: Div.() -> Unit = {},
     ): Div = add(
-        Div(style, onClick = onClick, onMouseMove = onMouseMove, onDrag = onDrag).apply(content),
+        Div(
+            style = style,
+            onClick = onClick,
+            onMouseMove = onMouseMove,
+            onDrag = onDrag,
+            onMouseOver = onMouseOver,
+            onMouseOut = onMouseOut,
+        ).apply(content),
     )
 
     fun p(
@@ -45,7 +62,11 @@ sealed class UiContainer(
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((x: Double, y: Double) -> Unit)? = null,
-    ): Paragraph = add(Paragraph(text, style, onClick, onMouseMove, onDrag))
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+    ): Paragraph = add(
+        Paragraph(text, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut),
+    )
 
     fun paragraph(
         text: String,
@@ -53,16 +74,27 @@ sealed class UiContainer(
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((x: Double, y: Double) -> Unit)? = null,
-    ): Paragraph = p(text, style, onClick, onMouseMove, onDrag)
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+    ): Paragraph = p(text, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut)
 
     fun button(
         style: UiStyle = Button.DEFAULT_STYLE,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((x: Double, y: Double) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
         content: Button.() -> Unit = {},
     ): Button = add(
-        Button(style, onClick, onMouseMove = onMouseMove, onDrag = onDrag).apply(content),
+        Button(
+            style = style,
+            onClick = onClick,
+            onMouseMove = onMouseMove,
+            onDrag = onDrag,
+            onMouseOver = onMouseOver,
+            onMouseOut = onMouseOut,
+        ).apply(content),
     )
 }
 
@@ -73,7 +105,9 @@ class Div(
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((x: Double, y: Double) -> Unit)? = null,
-) : UiContainer(style, children, onClick, onMouseMove, onDrag)
+    onMouseOver: (() -> Unit)? = null,
+    onMouseOut: (() -> Unit)? = null,
+) : UiContainer(style, children, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut)
 
 /** A text element corresponding to an HTML p. Newlines create multiple lines. */
 class Paragraph(
@@ -82,7 +116,9 @@ class Paragraph(
     override var onClick: ((MouseButtonEvent) -> Unit)? = null,
     override var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     override var onDrag: ((x: Double, y: Double) -> Unit)? = null,
-) : UiElement(style, onClick, onMouseMove, onDrag)
+    override var onMouseOver: (() -> Unit)? = null,
+    override var onMouseOut: (() -> Unit)? = null,
+) : UiElement(style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut)
 
 /** A clickable container. Invoke it through [UiLayout.click] after rendering or layout. */
 class Button(
@@ -91,7 +127,9 @@ class Button(
     children: Iterable<UiElement> = emptyList(),
     override var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     override var onDrag: ((x: Double, y: Double) -> Unit)? = null,
-) : UiContainer(style, children, onClick, onMouseMove, onDrag) {
+    override var onMouseOver: (() -> Unit)? = null,
+    override var onMouseOut: (() -> Unit)? = null,
+) : UiContainer(style, children, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
     companion object {
         /** A visible default which can be replaced with any [UiStyle]. */
         val DEFAULT_STYLE = UiStyle(
@@ -107,5 +145,14 @@ fun div(
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((x: Double, y: Double) -> Unit)? = null,
+    onMouseOver: (() -> Unit)? = null,
+    onMouseOut: (() -> Unit)? = null,
     content: Div.() -> Unit = {},
-): Div = Div(style, onClick = onClick, onMouseMove = onMouseMove, onDrag = onDrag).apply(content)
+): Div = Div(
+    style = style,
+    onClick = onClick,
+    onMouseMove = onMouseMove,
+    onDrag = onDrag,
+    onMouseOver = onMouseOver,
+    onMouseOut = onMouseOut,
+).apply(content)

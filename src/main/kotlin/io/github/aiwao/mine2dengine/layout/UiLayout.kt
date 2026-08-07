@@ -83,15 +83,35 @@ class UiLayout internal constructor(
     }
 
     /**
-     * Invokes the topmost element with an [UiElement.onMouseMove] callback at [x], [y], then
-     * invokes [UiElement.onDrag] on the dragging element even when the pointer is outside its
-     * bounds. Returns true when at least one callback was invoked.
+     * Updates [UiElement.hovering] and invokes mouse-over or mouse-out callbacks, invokes the
+     * topmost [UiElement.onMouseMove] callback at [x], [y], then invokes [UiElement.onDrag] on the
+     * dragging element even when the pointer is outside its bounds. Returns true when at least
+     * one callback was invoked.
      */
     fun mouseMove(x: Double, y: Double): Boolean {
         val layoutX = x.toFloat()
         val layoutY = y.toFloat()
         val nodes = nodesInPaintOrder()
         var handled = false
+
+        nodes
+            .asReversed()
+            .filter { node -> node.element.hovering && !node.bounds.contains(layoutX, layoutY) }
+            .forEach { node ->
+                val onMouseOut = node.element.onMouseOut
+                onMouseOut?.invoke()
+                handled = handled || onMouseOut != null
+                node.element.hovering = false
+            }
+
+        nodes
+            .filter { node -> !node.element.hovering && node.bounds.contains(layoutX, layoutY) }
+            .forEach { node ->
+                val onMouseOver = node.element.onMouseOver
+                onMouseOver?.invoke()
+                handled = handled || onMouseOver != null
+                node.element.hovering = true
+            }
 
         nodes
             .asReversed()
