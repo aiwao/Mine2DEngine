@@ -223,7 +223,8 @@ val root = div(
     }
 }
 
-val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
+val layout = LayoutEngine().layout(root, left = 12f, top = 12f)
+layout.render(draw)
 ```
 
 `style` can also be a function that receives the concrete element. It is resolved from the
@@ -245,9 +246,10 @@ val hoverable = div(
     },
 )
 
-val hoverableLayout = LayoutEngine(draw).render(hoverable)
+val hoverableLayout = LayoutEngine().layout(hoverable)
+hoverableLayout.render(draw)
 hoverableLayout.mouseMove(mouseX, mouseY)
-LayoutEngine(draw).render(hoverableLayout)
+hoverableLayout.render(draw)
 ```
 
 Dynamic styles are supported by `div`, `p` / `paragraph`, and `button`. Redrawing an existing
@@ -264,17 +266,17 @@ val moveHandled = layout.mouseMove(mouseX, mouseY)
 val releaseHandled = layout.release()
 ```
 
-`layout(root)` calculates geometry without drawing. `render(root)` calculates and draws, while `render(existingLayout)` draws previously calculated geometry again. Recalculate the layout after changing text, styles, or children.
+`LayoutEngine().layout(root)` calculates geometry without drawing. Call `render(renderer)` on the returned layout to draw it. Recalculate the layout after changing text, styles, or children.
 
-To move an already calculated layout, change its `left` / `top`. Every element and hit-test area moves with it. `render(layout, left, top)` moves and redraws it in one call.
+To move an already calculated layout, change its `left` / `top`. Every element and hit-test area moves with it. `layout.render(renderer, left, top)` moves and redraws it in one call.
 
 ```kotlin
 layout.left = 24f
 layout.top = 32f
-LayoutEngine(draw).render(layout)
+layout.render(draw)
 
 // Equivalent shorthand
-LayoutEngine(draw).render(layout, left = 24f, top = 32f)
+layout.render(draw, left = 24f, top = 32f)
 ```
 
 ## Custom shaders

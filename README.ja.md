@@ -223,7 +223,8 @@ val root = div(
     }
 }
 
-val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
+val layout = LayoutEngine().layout(root, left = 12f, top = 12f)
+layout.render(draw)
 ```
 
 `style` には具体的な要素を受け取る関数も指定できます。レイアウトまたは描画で使われるたびに
@@ -245,9 +246,10 @@ val hoverable = div(
     },
 )
 
-val hoverableLayout = LayoutEngine(draw).render(hoverable)
+val hoverableLayout = LayoutEngine().layout(hoverable)
+hoverableLayout.render(draw)
 hoverableLayout.mouseMove(mouseX, mouseY)
-LayoutEngine(draw).render(hoverableLayout)
+hoverableLayout.render(draw)
 ```
 
 動的スタイルは `div`、`p` / `paragraph`、`button` で利用できます。既存レイアウトを再描画すると
@@ -264,17 +266,17 @@ val moveHandled = layout.mouseMove(mouseX, mouseY)
 val releaseHandled = layout.release()
 ```
 
-`layout(root)` は描画せずにジオメトリを計算します。`render(root)` は計算と描画を行い、`render(existingLayout)` は以前に計算したジオメトリを再描画します。文字列、スタイル、子要素を変更した後はレイアウトを再計算してください。
+`LayoutEngine().layout(root)` は描画せずにジオメトリを計算します。返されたレイアウトの `render(renderer)` を呼び出すと描画できます。文字列、スタイル、子要素を変更した後はレイアウトを再計算してください。
 
-計算済みレイアウトの位置だけを変える場合は、`left` / `top` を変更します。すべての要素とヒットテスト領域が一緒に移動します。`render(layout, left, top)` を使うと、移動と再描画を一度に行えます。
+計算済みレイアウトの位置だけを変える場合は、`left` / `top` を変更します。すべての要素とヒットテスト領域が一緒に移動します。`layout.render(renderer, left, top)` を使うと、移動と再描画を一度に行えます。
 
 ```kotlin
 layout.left = 24f
 layout.top = 32f
-LayoutEngine(draw).render(layout)
+layout.render(draw)
 
 // 同等の短縮形
-LayoutEngine(draw).render(layout, left = 24f, top = 32f)
+layout.render(draw, left = 24f, top = 32f)
 ```
 
 ## カスタムシェーダー
