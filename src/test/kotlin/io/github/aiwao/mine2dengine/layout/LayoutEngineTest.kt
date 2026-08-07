@@ -26,12 +26,29 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `layout engine selects fonts through style`() {
-        assertNotNull(LayoutEngine::class.java.getConstructor(Mine2DEngine::class.java))
+    fun `layout engine accepts renderer only when rendering`() {
+        assertNotNull(LayoutEngine::class.java.getConstructor())
+        assertNotNull(
+            LayoutEngine::class.java.getMethod(
+                "render",
+                UiElement::class.java,
+                Mine2DEngine::class.java,
+                Float::class.javaPrimitiveType,
+                Float::class.javaPrimitiveType,
+            ),
+        )
         assertNotNull(
             LayoutEngine::class.java.getMethod(
                 "render",
                 UiLayout::class.java,
+                Mine2DEngine::class.java,
+            ),
+        )
+        assertNotNull(
+            LayoutEngine::class.java.getMethod(
+                "render",
+                UiLayout::class.java,
+                Mine2DEngine::class.java,
                 Float::class.javaPrimitiveType,
                 Float::class.javaPrimitiveType,
             ),

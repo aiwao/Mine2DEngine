@@ -223,7 +223,7 @@ val root = div(
     }
 }
 
-val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
+val layout = LayoutEngine().render(root, draw, left = 12f, top = 12f)
 ```
 
 `style` には具体的な要素を受け取る関数も指定できます。レイアウトまたは描画で使われるたびに
@@ -245,9 +245,9 @@ val hoverable = div(
     },
 )
 
-val hoverableLayout = LayoutEngine(draw).render(hoverable)
+val hoverableLayout = LayoutEngine().render(hoverable, draw)
 hoverableLayout.mouseMove(mouseX, mouseY)
-LayoutEngine(draw).render(hoverableLayout)
+LayoutEngine().render(hoverableLayout, draw)
 ```
 
 動的スタイルは `div`、`p` / `paragraph`、`button` で利用できます。既存レイアウトを再描画すると
@@ -271,10 +271,10 @@ val releaseHandled = layout.release()
 ```kotlin
 layout.left = 24f
 layout.top = 32f
-LayoutEngine(draw).render(layout)
+LayoutEngine().render(layout, draw)
 
 // 同等の短縮形
-LayoutEngine(draw).render(layout, left = 24f, top = 32f)
+LayoutEngine().render(layout, draw, left = 24f, top = 32f)
 ```
 
 ## カスタムシェーダー

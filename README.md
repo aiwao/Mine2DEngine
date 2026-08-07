@@ -223,7 +223,7 @@ val root = div(
     }
 }
 
-val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
+val layout = LayoutEngine().render(root, draw, left = 12f, top = 12f)
 ```
 
 `style` can also be a function that receives the concrete element. It is resolved from the
@@ -245,9 +245,9 @@ val hoverable = div(
     },
 )
 
-val hoverableLayout = LayoutEngine(draw).render(hoverable)
+val hoverableLayout = LayoutEngine().render(hoverable, draw)
 hoverableLayout.mouseMove(mouseX, mouseY)
-LayoutEngine(draw).render(hoverableLayout)
+LayoutEngine().render(hoverableLayout, draw)
 ```
 
 Dynamic styles are supported by `div`, `p` / `paragraph`, and `button`. Redrawing an existing
@@ -271,10 +271,10 @@ To move an already calculated layout, change its `left` / `top`. Every element a
 ```kotlin
 layout.left = 24f
 layout.top = 32f
-LayoutEngine(draw).render(layout)
+LayoutEngine().render(layout, draw)
 
 // Equivalent shorthand
-LayoutEngine(draw).render(layout, left = 24f, top = 32f)
+LayoutEngine().render(layout, draw, left = 24f, top = 32f)
 ```
 
 ## Custom shaders
