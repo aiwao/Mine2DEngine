@@ -7,7 +7,6 @@ import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.GlyphSource
 import net.minecraft.client.gui.font.FontOption
 import net.minecraft.client.gui.font.FontSet
-import net.minecraft.client.gui.font.GlyphStitcher
 import net.minecraft.client.gui.font.glyphs.EffectGlyph
 import net.minecraft.client.gui.font.providers.TrueTypeGlyphProviderDefinition
 import net.minecraft.network.chat.FontDescription
@@ -109,7 +108,7 @@ class Mine2DFont private constructor(
                 "mine2dengine",
                 "dynamic_font/$textureId",
             )
-            val fontSet = FontSet(GlyphStitcher(minecraft.textureManager, texturePrefix))
+            val fontSet = FontSet(LinearGlyphStitcher(minecraft.textureManager, texturePrefix))
 
             try {
                 fontSet.reload(

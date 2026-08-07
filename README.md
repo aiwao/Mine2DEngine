@@ -167,6 +167,8 @@ uiFont?.let { font ->
 
 `Mine2DFont.load`, `width`, and `close` must run on the render thread. Do not load a font once per frame. If you recreate a font during a resource reload, close the previous instance first.
 
+Mine2DEngine applies linear filtering only to glyph atlases created by `Mine2DFont`. Other Minecraft fonts keep their original sampling behavior, while oversampled TrueType glyphs are reduced smoothly.
+
 ## Layout engine
 
 The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follows a CSS-like box model:
