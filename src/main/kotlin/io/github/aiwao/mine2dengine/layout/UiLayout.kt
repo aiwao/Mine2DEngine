@@ -222,14 +222,20 @@ class UiLayout internal constructor(
         renderer: Mine2DEngine,
     ) {
         val textMeasurer = Mine2DTextMeasurer(font)
-        textLines(text).forEachIndexed { index, line ->
+        val lines = textLines(text)
+        val textTop = contentBounds.top + alignedTop(
+            availableHeight = contentBounds.height,
+            itemHeight = lines.size * textMeasurer.lineHeight,
+            alignment = style.verticalAlignment,
+        )
+        lines.forEachIndexed { index, line ->
             val lineWidth = textMeasurer.width(line)
             val x = alignedLeft(
                 availableWidth = contentBounds.width,
                 itemWidth = lineWidth,
-                alignment = style.alignment,
+                alignment = style.horizontalAlignment,
             ) + contentBounds.left
-            val y = contentBounds.top + index * textMeasurer.lineHeight
+            val y = textTop + index * textMeasurer.lineHeight
             renderer.text(
                 font,
                 line,

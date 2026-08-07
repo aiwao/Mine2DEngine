@@ -176,7 +176,7 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
 - `width` and `height` specify the content box. A `null` value shrinks to the text or children.
 - Padding is inside the painted background; margin is outside it.
 - `Div` and `Button` place direct children vertically or horizontally.
-- `alignment` aligns children and text horizontally.
+- `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
 - `color`, `font`, and `dropShadow` are inherited from ancestors and may be overridden by a child.
   A null `color` or `dropShadow` inherits the parent; at the root they default to opaque white and
   enabled, respectively.
@@ -184,19 +184,22 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
-import io.github.aiwao.mine2dengine.layout.UiAlignment
 import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiEdges
+import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
 import io.github.aiwao.mine2dengine.layout.UiStyle
+import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
 
 val root = div(
     UiStyle(
         font = font,
         width = 180f,
+        height = 100f,
         padding = UiEdges(8f),
         backgroundColor = 0xD0202020.toInt(),
-        alignment = UiAlignment.CENTER,
+        horizontalAlignment = UiHorizontalAlignment.CENTER,
+        verticalAlignment = UiVerticalAlignment.CENTER,
     ),
 ) {
     p(
