@@ -138,18 +138,19 @@ private fun calculateLayout(
 
 private data class MeasuredNode(
     val element: UiElement,
+    val style: UiStyle,
     val contentSize: UiSize,
     val children: List<MeasuredNode>,
     val font: Mine2DFont?,
 ) {
     val boundsSize: UiSize = UiSize(
-        width = contentSize.width + element.style.padding.horizontal,
-        height = contentSize.height + element.style.padding.vertical,
+        width = contentSize.width + style.padding.horizontal,
+        height = contentSize.height + style.padding.vertical,
     )
 
     val outerSize: UiSize = UiSize(
-        width = boundsSize.width + element.style.margin.horizontal,
-        height = boundsSize.height + element.style.margin.vertical,
+        width = boundsSize.width + style.margin.horizontal,
+        height = boundsSize.height + style.margin.vertical,
     )
 }
 
@@ -158,7 +159,8 @@ private fun measure(
     inheritedFont: Mine2DFont?,
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
 ): MeasuredNode {
-    val font = element.style.font ?: inheritedFont
+    val style = element.style
+    val font = style.font ?: inheritedFont
     val children = if (element is UiContainer) {
         element.children.map { child -> measure(child, font, textMeasurer) }
     } else {
@@ -171,15 +173,16 @@ private fun measure(
     }
 
     val naturalSize = when (element) {
-        is UiContainer -> measureChildren(children, element.style.direction, element.style.gap)
+        is UiContainer -> measureChildren(children, style.direction, style.gap)
         is Paragraph -> checkNotNull(textSize)
     }
 
     return MeasuredNode(
         element = element,
+        style = style,
         contentSize = UiSize(
-            width = element.style.width ?: naturalSize.width,
-            height = element.style.height ?: naturalSize.height,
+            width = style.width ?: naturalSize.width,
+            height = style.height ?: naturalSize.height,
         ),
         children = children,
         font = font,
@@ -225,7 +228,7 @@ private fun measureChildren(
 }
 
 private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): UiLayoutNode {
-    val style = measured.element.style
+    val style = measured.style
     val bounds = UiRect(
         left = outerLeft + style.margin.left,
         top = outerTop + style.margin.top,
@@ -253,7 +256,7 @@ private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): Ui
 private fun placeChildren(measured: MeasuredNode, contentBounds: UiRect): List<UiLayoutNode> {
     if (measured.children.isEmpty()) return emptyList()
 
-    val style = measured.element.style
+    val style = measured.style
     return when (style.direction) {
         UiDirection.VERTICAL -> {
             var top = contentBounds.top

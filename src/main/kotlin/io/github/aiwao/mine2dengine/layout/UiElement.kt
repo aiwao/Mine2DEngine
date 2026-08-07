@@ -4,13 +4,30 @@ import net.minecraft.client.input.MouseButtonEvent
 
 /** Base type for nodes in a UI tree. */
 sealed class UiElement(
-    open var style: UiStyle,
+    style: UiStyle,
     open var onClick: ((MouseButtonEvent) -> Unit)? = null,
     open var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     open var onDrag: ((x: Double, y: Double) -> Unit)? = null,
     open var onMouseOver: (() -> Unit)? = null,
     open var onMouseOut: (() -> Unit)? = null,
 ) {
+    private var styleProvider: () -> UiStyle = { style }
+
+    /**
+     * The element's current style.
+     *
+     * Assigning a value replaces a dynamic style supplied when this element was created.
+     */
+    var style: UiStyle
+        get() = styleProvider()
+        set(value) {
+            styleProvider = { value }
+        }
+
+    internal fun setStyleProvider(provider: () -> UiStyle) {
+        styleProvider = provider
+    }
+
     /** Whether this element has been clicked and not yet released. */
     var dragging: Boolean = false
         internal set
@@ -22,7 +39,7 @@ sealed class UiElement(
 
 /** Base type for UI elements that arrange child elements. */
 sealed class UiContainer(
-    override var style: UiStyle,
+    style: UiStyle,
     children: Iterable<UiElement> = emptyList(),
     override var onClick: ((MouseButtonEvent) -> Unit)? = null,
     override var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -56,6 +73,25 @@ sealed class UiContainer(
         ).apply(content),
     )
 
+    /** Creates a div whose style is resolved from its current state when used. */
+    fun div(
+        style: (Div) -> UiStyle,
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((x: Double, y: Double) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+        content: Div.() -> Unit = {},
+    ): Div = add(
+        Div(
+            onClick = onClick,
+            onMouseMove = onMouseMove,
+            onDrag = onDrag,
+            onMouseOver = onMouseOver,
+            onMouseOut = onMouseOut,
+        ).withStyleProvider(style).apply(content),
+    )
+
     fun p(
         text: String,
         style: UiStyle = UiStyle(),
@@ -68,9 +104,40 @@ sealed class UiContainer(
         Paragraph(text, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut),
     )
 
+    /** Creates a paragraph whose style is resolved from its current state when used. */
+    fun p(
+        text: String,
+        style: (Paragraph) -> UiStyle,
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((x: Double, y: Double) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+    ): Paragraph = add(
+        Paragraph(
+            text,
+            onClick = onClick,
+            onMouseMove = onMouseMove,
+            onDrag = onDrag,
+            onMouseOver = onMouseOver,
+            onMouseOut = onMouseOut,
+        ).withStyleProvider(style),
+    )
+
     fun paragraph(
         text: String,
         style: UiStyle = UiStyle(),
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((x: Double, y: Double) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+    ): Paragraph = p(text, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut)
+
+    /** Alias of [p] with a dynamic style. */
+    fun paragraph(
+        text: String,
+        style: (Paragraph) -> UiStyle,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((x: Double, y: Double) -> Unit)? = null,
@@ -96,6 +163,25 @@ sealed class UiContainer(
             onMouseOut = onMouseOut,
         ).apply(content),
     )
+
+    /** Creates a button whose style is resolved from its current state when used. */
+    fun button(
+        style: (Button) -> UiStyle,
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((x: Double, y: Double) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+        content: Button.() -> Unit = {},
+    ): Button = add(
+        Button(
+            onClick = onClick,
+            onMouseMove = onMouseMove,
+            onDrag = onDrag,
+            onMouseOver = onMouseOver,
+            onMouseOut = onMouseOut,
+        ).withStyleProvider(style).apply(content),
+    )
 }
 
 /** A container corresponding to an HTML div. */
@@ -112,7 +198,7 @@ class Div(
 /** A text element corresponding to an HTML p. Newlines create multiple lines. */
 class Paragraph(
     var text: String,
-    override var style: UiStyle = UiStyle(),
+    style: UiStyle = UiStyle(),
     override var onClick: ((MouseButtonEvent) -> Unit)? = null,
     override var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     override var onDrag: ((x: Double, y: Double) -> Unit)? = null,
@@ -156,3 +242,24 @@ fun div(
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
 ).apply(content)
+
+/** Creates the root of a UI tree with a style resolved from the div's current state. */
+fun div(
+    style: (Div) -> UiStyle,
+    onClick: ((MouseButtonEvent) -> Unit)? = null,
+    onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+    onDrag: ((x: Double, y: Double) -> Unit)? = null,
+    onMouseOver: (() -> Unit)? = null,
+    onMouseOut: (() -> Unit)? = null,
+    content: Div.() -> Unit = {},
+): Div = Div(
+    onClick = onClick,
+    onMouseMove = onMouseMove,
+    onDrag = onDrag,
+    onMouseOver = onMouseOver,
+    onMouseOut = onMouseOut,
+).withStyleProvider(style).apply(content)
+
+private fun <T : UiElement> T.withStyleProvider(provider: (T) -> UiStyle): T = apply {
+    setStyleProvider { provider(this) }
+}

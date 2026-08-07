@@ -226,6 +226,35 @@ val root = div(
 val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
 ```
 
+`style` can also be a function that receives the concrete element. It is resolved from the
+element's current state whenever layout or rendering uses it, so states such as `hovering` and
+`dragging` can change appearance without callbacks mutating the style:
+
+```kotlin
+val hoverable = div(
+    style = { element ->
+        UiStyle(
+            width = 120f,
+            height = 24f,
+            backgroundColor = if (element.hovering) {
+                0xFFFFFFFF.toInt()
+            } else {
+                0xFF000000.toInt()
+            },
+        )
+    },
+)
+
+val hoverableLayout = LayoutEngine(draw).render(hoverable)
+hoverableLayout.mouseMove(mouseX, mouseY)
+LayoutEngine(draw).render(hoverableLayout)
+```
+
+Dynamic styles are supported by `div`, `p` / `paragraph`, and `button`. Redrawing an existing
+layout refreshes drawing properties such as colors. Recalculate the layout when the resolved
+style changes sizing, spacing, direction, alignment, or font. Assigning `element.style` replaces
+its dynamic style with that static value.
+
 Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div`, `p` / `paragraph`, and `button`. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. A drag continues outside the element's bounds until `release` is called:
 
 ```kotlin

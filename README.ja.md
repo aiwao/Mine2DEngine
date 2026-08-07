@@ -226,6 +226,35 @@ val root = div(
 val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
 ```
 
+`style` には具体的な要素を受け取る関数も指定できます。レイアウトまたは描画で使われるたびに
+要素の現在の状態から解決されるため、コールバックからスタイルを書き換えなくても `hovering` や
+`dragging` に応じて見た目を変えられます。
+
+```kotlin
+val hoverable = div(
+    style = { element ->
+        UiStyle(
+            width = 120f,
+            height = 24f,
+            backgroundColor = if (element.hovering) {
+                0xFFFFFFFF.toInt()
+            } else {
+                0xFF000000.toInt()
+            },
+        )
+    },
+)
+
+val hoverableLayout = LayoutEngine(draw).render(hoverable)
+hoverableLayout.mouseMove(mouseX, mouseY)
+LayoutEngine(draw).render(hoverableLayout)
+```
+
+動的スタイルは `div`、`p` / `paragraph`、`button` で利用できます。既存レイアウトを再描画すると
+色などの描画プロパティが更新されます。解決後のスタイルによってサイズ、余白、方向、配置、フォントが
+変わる場合は、レイアウトを再計算してください。`element.style` に代入すると、動的スタイルはその
+静的な値で置き換えられます。
+
 `div`、`p` / `paragraph`、`button` を含むすべての要素で `onClick`、`onMouseMove`、`onDrag`、`onMouseOver`、`onMouseOut` を利用できます。読み取り専用の `hovering` プロパティで、カーソルが要素内にあるかを確認できます。返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやポインター入力の通知ができます。Minecraft の `MouseButtonEvent` を `click` に渡すと、イベントの座標で最前面のクリック可能な要素を特定してドラッグ状態を開始し、そのイベントを要素の `onClick` に渡します。`mouseMove` にマウス座標を渡すと、`hovering` の更新、境界をまたいだ際のコールバック、座標上で最前面の `onMouseMove`、ドラッグ中の要素の `onDrag` が呼び出されます。ドラッグは要素の領域外でも継続し、`release` を呼ぶと終了します。
 
 ```kotlin
