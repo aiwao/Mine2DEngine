@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "io.github.aiwao.mine2dengine.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "GlyphRenderStateMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
