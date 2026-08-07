@@ -7,9 +7,9 @@ sealed class UiElement(
     open var style: UiStyle,
 )
 
-/** A container corresponding to an HTML div. */
-class Div(
-    override var style: UiStyle = UiStyle(),
+/** Base type for UI elements that arrange child elements. */
+sealed class UiContainer(
+    override var style: UiStyle,
     children: Iterable<UiElement> = emptyList(),
 ) : UiElement(style) {
     val children: MutableList<UiElement> = children.toMutableList()
@@ -31,11 +31,17 @@ class Div(
         p(text, style)
 
     fun button(
-        text: String,
         style: UiStyle = Button.DEFAULT_STYLE,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
-    ): Button = add(Button(text, style, onClick))
+        content: Button.() -> Unit = {},
+    ): Button = add(Button(style, onClick).apply(content))
 }
+
+/** A container corresponding to an HTML div. */
+class Div(
+    style: UiStyle = UiStyle(),
+    children: Iterable<UiElement> = emptyList(),
+) : UiContainer(style, children)
 
 /** A text element corresponding to an HTML p. Newlines create multiple lines. */
 class Paragraph(
@@ -43,12 +49,12 @@ class Paragraph(
     override var style: UiStyle = UiStyle(),
 ) : UiElement(style)
 
-/** A text button. Invoke it through [UiLayout.click] after rendering or layout. */
+/** A clickable container. Invoke it through [UiLayout.click] after rendering or layout. */
 class Button(
-    var text: String,
-    override var style: UiStyle = DEFAULT_STYLE,
+    style: UiStyle = DEFAULT_STYLE,
     var onClick: ((MouseButtonEvent) -> Unit)? = null,
-) : UiElement(style) {
+    children: Iterable<UiElement> = emptyList(),
+) : UiContainer(style, children) {
     companion object {
         /** A visible default which can be replaced with any [UiStyle]. */
         val DEFAULT_STYLE = UiStyle(

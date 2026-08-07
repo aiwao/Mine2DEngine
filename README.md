@@ -175,7 +175,7 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
 
 - `width` and `height` specify the content box. A `null` value shrinks to the text or children.
 - Padding is inside the painted background; margin is outside it.
-- A `Div` places direct children vertically or horizontally.
+- `Div` and `Button` place direct children vertically or horizontally.
 - `alignment` aligns children and text horizontally.
 - Fonts are inherited from ancestors and may be overridden by a child.
 - Paragraph newlines create multiple lines.
@@ -206,8 +206,12 @@ val root = div(
             margin = UiEdges(top = 6f, right = 0f, bottom = 0f, left = 0f),
         ),
     ) {
-        button("OK", onClick = { event -> println("OK: button=${event.button()}") })
-        button("Cancel", onClick = { event -> println("Cancel: button=${event.button()}") })
+        button(onClick = { event -> println("OK: button=${event.button()}") }) {
+            p("OK")
+        }
+        button(onClick = { event -> println("Cancel: button=${event.button()}") }) {
+            p("Cancel")
+        }
     }
 }
 

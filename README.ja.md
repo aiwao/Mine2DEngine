@@ -175,7 +175,7 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 - `width` と `height` はコンテンツボックスを指定します。`null` の場合は文字列または子要素に合わせて縮みます。
 - パディングは描画される背景の内側、マージンは外側です。
-- `Div` は直接の子要素を縦または横に並べます。
+- `Div` と `Button` は直接の子要素を縦または横に並べます。
 - `alignment` は子要素と文字列を水平方向に配置します。
 - フォントは祖先から継承され、子要素で上書きできます。
 - 段落内の改行は複数行になります。
@@ -206,8 +206,12 @@ val root = div(
             margin = UiEdges(top = 6f, right = 0f, bottom = 0f, left = 0f),
         ),
     ) {
-        button("OK", onClick = { event -> println("OK: button=${event.button()}") })
-        button("キャンセル", onClick = { event -> println("キャンセル: button=${event.button()}") })
+        button(onClick = { event -> println("OK: button=${event.button()}") }) {
+            p("OK")
+        }
+        button(onClick = { event -> println("キャンセル: button=${event.button()}") }) {
+            p("キャンセル")
+        }
     }
 }
 
