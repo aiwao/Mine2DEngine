@@ -10,6 +10,7 @@ import net.minecraft.client.renderer.texture.TextureManager
 import net.minecraft.resources.Identifier
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
@@ -101,6 +102,54 @@ class LayoutEngineTest {
         assertEquals(80f, layout.nodeOf(second)!!.outerBounds.left)
         assertEquals(20f, layout.nodeOf(first)!!.outerBounds.top)
         assertEquals(20f, layout.nodeOf(second)!!.outerBounds.top)
+    }
+
+    @Test
+    fun `vertical gap separates children and contributes to automatic size`() {
+        lateinit var first: Paragraph
+        lateinit var second: Paragraph
+        lateinit var third: Paragraph
+        val root = div(UiStyle(gap = 4f)) {
+            first = p("a")
+            second = p("b", UiStyle(margin = UiEdges(vertical = 1f, horizontal = 0f)))
+            third = p("c")
+        }
+
+        val layout = calculateLayout(root, left = 2f, top = 3f, textMeasurer)
+
+        assertEquals(UiSize(5f, 40f), layout.size)
+        assertEquals(3f, layout.nodeOf(first)!!.outerBounds.top)
+        assertEquals(17f, layout.nodeOf(second)!!.outerBounds.top)
+        assertEquals(33f, layout.nodeOf(third)!!.outerBounds.top)
+    }
+
+    @Test
+    fun `horizontal gap is included when aligning the whole row`() {
+        lateinit var first: Paragraph
+        lateinit var second: Paragraph
+        val root = div(
+            UiStyle(
+                width = 100f,
+                direction = UiDirection.HORIZONTAL,
+                alignment = UiAlignment.RIGHT,
+                gap = 7f,
+            ),
+        ) {
+            first = p("a", UiStyle(width = 20f))
+            second = p("b", UiStyle(width = 30f))
+        }
+
+        val layout = calculateLayout(root, left = 10f, top = 20f, textMeasurer)
+
+        assertEquals(53f, layout.nodeOf(first)!!.outerBounds.left)
+        assertEquals(80f, layout.nodeOf(second)!!.outerBounds.left)
+    }
+
+    @Test
+    fun `gap must be finite and non-negative`() {
+        assertFailsWith<IllegalArgumentException> { UiStyle(gap = -1f) }
+        assertFailsWith<IllegalArgumentException> { UiStyle(gap = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { UiStyle(gap = Float.POSITIVE_INFINITY) }
     }
 
     @Test

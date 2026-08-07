@@ -167,7 +167,7 @@ private fun measure(
     }
 
     val naturalSize = when (element) {
-        is Div -> measureChildren(children, element.style.direction)
+        is Div -> measureChildren(children, element.style.direction, element.style.gap)
         is Paragraph, is Button -> checkNotNull(textSize)
     }
 
@@ -201,18 +201,24 @@ private fun validateTextMeasurer(textMeasurer: UiTextMeasurer) {
     }
 }
 
-private fun measureChildren(children: List<MeasuredNode>, direction: UiDirection): UiSize =
-    when (direction) {
+private fun measureChildren(
+    children: List<MeasuredNode>,
+    direction: UiDirection,
+    gap: Float,
+): UiSize {
+    val totalGap = gap * (children.size - 1).coerceAtLeast(0)
+    return when (direction) {
         UiDirection.VERTICAL -> UiSize(
             width = children.maxOfOrNull { it.outerSize.width } ?: 0f,
-            height = children.sumOf { it.outerSize.height.toDouble() }.toFloat(),
+            height = children.sumOf { it.outerSize.height.toDouble() }.toFloat() + totalGap,
         )
 
         UiDirection.HORIZONTAL -> UiSize(
-            width = children.sumOf { it.outerSize.width.toDouble() }.toFloat(),
+            width = children.sumOf { it.outerSize.width.toDouble() }.toFloat() + totalGap,
             height = children.maxOfOrNull { it.outerSize.height } ?: 0f,
         )
     }
+}
 
 private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): UiLayoutNode {
     val style = measured.element.style
@@ -253,21 +259,21 @@ private fun placeChildren(measured: MeasuredNode, contentBounds: UiRect): List<U
                     itemWidth = child.outerSize.width,
                     alignment = style.alignment,
                 )
-                place(child, left, top).also { top += child.outerSize.height }
+                place(child, left, top).also { top += child.outerSize.height + style.gap }
             }
         }
 
         UiDirection.HORIZONTAL -> {
             val childrenWidth = measured.children
                 .sumOf { it.outerSize.width.toDouble() }
-                .toFloat()
+                .toFloat() + style.gap * (measured.children.size - 1)
             var left = contentBounds.left + alignedLeft(
                 availableWidth = contentBounds.width,
                 itemWidth = childrenWidth,
                 alignment = style.alignment,
             )
             measured.children.map { child ->
-                place(child, left, contentBounds.top).also { left += child.outerSize.width }
+                place(child, left, contentBounds.top).also { left += child.outerSize.width + style.gap }
             }
         }
     }

@@ -20,6 +20,8 @@ enum class UiAlignment {
  *
  * [width] and [height] describe the content box. Padding is painted inside the
  * background, while margin remains outside it, following the CSS box model.
+ * [gap] adds space between adjacent direct children without adding space at the
+ * edges of the content box.
  * A null size shrinks to the element's text or children. [font] is inherited by
  * descendants; every text element must resolve a font from itself or an ancestor.
  * [dropShadow] controls the shadow drawn behind text.
@@ -35,6 +37,7 @@ data class UiStyle(
     val height: Float? = null,
     val font: Mine2DFont? = null,
     val dropShadow: Boolean = true,
+    val gap: Float = 0f,
 ) {
     init {
         require(width == null || width.isFinite() && width >= 0f) {
@@ -42,6 +45,9 @@ data class UiStyle(
         }
         require(height == null || height.isFinite() && height >= 0f) {
             "Height must be null or finite and non-negative: $height"
+        }
+        require(gap.isFinite() && gap >= 0f) {
+            "Gap must be finite and non-negative: $gap"
         }
     }
 }
