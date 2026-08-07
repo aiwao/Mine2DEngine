@@ -240,7 +240,224 @@ class LayoutEngineTest {
         assertTrue(layout.click(hitEvent))
         assertEquals(1, clickCount)
         assertSame(hitEvent, receivedEvent)
+        assertTrue(button.dragging)
         assertFalse(layout.click(missEvent))
+        assertTrue(button.dragging)
+        assertTrue(layout.release())
+        assertFalse(button.dragging)
+    }
+
+    @Test
+    fun `onClick can be used by every element type`() {
+        val clicked = mutableListOf<UiElement>()
+        lateinit var paragraph: Paragraph
+        lateinit var innerDiv: Div
+        lateinit var root: Div
+        root = div(
+            style = UiStyle(width = 50f, height = 50f),
+            onClick = { clicked += root },
+        ) {
+            innerDiv = div(
+                style = UiStyle(width = 30f, height = 30f),
+                onClick = { clicked += innerDiv },
+            ) {
+                paragraph = p(
+                    text = "text",
+                    onClick = { clicked += paragraph },
+                )
+            }
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertEquals(listOf<UiElement>(paragraph), clicked)
+
+        clicked.clear()
+        paragraph.onClick = null
+        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertEquals(listOf<UiElement>(innerDiv), clicked)
+
+        clicked.clear()
+        innerDiv.onClick = null
+        assertTrue(layout.click(MouseButtonEvent(40.0, 40.0, MouseButtonInfo(0, 0))))
+        assertEquals(listOf<UiElement>(root), clicked)
+    }
+
+    @Test
+    fun `button without onClick still consumes a click`() {
+        val root = div {
+            button {
+                p("Run")
+            }
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+    }
+
+    @Test
+    fun `onMouseMove can be used by every element type`() {
+        val moved = mutableListOf<UiElement>()
+        var receivedCoordinates: Pair<Double, Double>? = null
+        lateinit var paragraph: Paragraph
+        lateinit var innerDiv: Div
+        lateinit var button: Button
+        lateinit var root: Div
+        root = div(
+            style = UiStyle(width = 50f, height = 50f),
+            onMouseMove = { x, y ->
+                moved += root
+                receivedCoordinates = x to y
+            },
+        ) {
+            innerDiv = div(
+                style = UiStyle(width = 30f, height = 30f),
+                onMouseMove = { _, _ -> moved += innerDiv },
+            ) {
+                paragraph = p(
+                    text = "text",
+                    onMouseMove = { x, y ->
+                        moved += paragraph
+                        receivedCoordinates = x to y
+                    },
+                )
+            }
+            button = button(onMouseMove = { _, _ -> moved += button }) {
+                p("Button")
+            }
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertTrue(layout.mouseMove(1.25, 2.5))
+        assertEquals(listOf<UiElement>(paragraph), moved)
+        assertEquals(1.25 to 2.5, receivedCoordinates)
+
+        moved.clear()
+        paragraph.onMouseMove = null
+        assertTrue(layout.mouseMove(1.25, 2.5))
+        assertEquals(listOf<UiElement>(innerDiv), moved)
+
+        moved.clear()
+        innerDiv.onMouseMove = null
+        assertTrue(layout.mouseMove(1.0, 31.0))
+        assertEquals(listOf<UiElement>(button), moved)
+
+        moved.clear()
+        assertTrue(layout.mouseMove(49.0, 49.0))
+        assertEquals(listOf<UiElement>(root), moved)
+
+        root.onMouseMove = null
+        assertFalse(layout.mouseMove(100.0, 100.0))
+    }
+
+    @Test
+    fun `drag starts on click moves outside bounds and stops on release`() {
+        val dragCoordinates = mutableListOf<Pair<Double, Double>>()
+        lateinit var paragraph: Paragraph
+        val root = div(UiStyle(width = 50f, height = 50f)) {
+            paragraph = p(
+                text = "Drag",
+                onDrag = { x, y -> dragCoordinates += x to y },
+            )
+        }
+        val layout = calculateLayout(root, left = 4f, top = 6f, textMeasurer)
+
+        assertFalse(paragraph.dragging)
+        assertTrue(layout.click(MouseButtonEvent(5.0, 7.0, MouseButtonInfo(0, 0))))
+        assertTrue(paragraph.dragging)
+
+        assertTrue(layout.mouseMove(100.25, 200.5))
+        assertEquals(listOf(100.25 to 200.5), dragCoordinates)
+
+        assertTrue(layout.release())
+        assertFalse(paragraph.dragging)
+        assertFalse(layout.release())
+        assertFalse(layout.mouseMove(100.25, 200.5))
+        assertEquals(listOf(100.25 to 200.5), dragCoordinates)
+    }
+
+    @Test
+    fun `mouse move invokes both hover and drag callbacks while dragging`() {
+        val callbacks = mutableListOf<String>()
+        val root = div(
+            style = UiStyle(width = 20f, height = 20f),
+            onMouseMove = { _, _ -> callbacks += "move" },
+            onDrag = { _, _ -> callbacks += "drag" },
+        )
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertTrue(layout.mouseMove(2.0, 3.0))
+        assertEquals(listOf("move", "drag"), callbacks)
+    }
+
+    @Test
+    fun `mouse over and out update hovering state once per boundary crossing`() {
+        val callbacks = mutableListOf<String>()
+        lateinit var paragraph: Paragraph
+        lateinit var root: Div
+        root = div(
+            style = UiStyle(width = 50f, height = 50f),
+            onMouseOver = {
+                assertFalse(root.hovering)
+                callbacks += "root over"
+            },
+            onMouseOut = {
+                assertTrue(root.hovering)
+                callbacks += "root out"
+            },
+        ) {
+            paragraph = p(
+                text = "text",
+                onMouseOver = {
+                    assertFalse(paragraph.hovering)
+                    callbacks += "paragraph over"
+                },
+                onMouseOut = {
+                    assertTrue(paragraph.hovering)
+                    callbacks += "paragraph out"
+                },
+            )
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertTrue(layout.mouseMove(1.0, 1.0))
+        assertTrue(root.hovering)
+        assertTrue(paragraph.hovering)
+        assertEquals(listOf("root over", "paragraph over"), callbacks)
+
+        assertFalse(layout.mouseMove(2.0, 2.0))
+        assertEquals(listOf("root over", "paragraph over"), callbacks)
+
+        assertTrue(layout.mouseMove(30.0, 30.0))
+        assertTrue(root.hovering)
+        assertFalse(paragraph.hovering)
+        assertEquals(listOf("root over", "paragraph over", "paragraph out"), callbacks)
+
+        assertTrue(layout.mouseMove(100.0, 100.0))
+        assertFalse(root.hovering)
+        assertFalse(paragraph.hovering)
+        assertEquals(
+            listOf("root over", "paragraph over", "paragraph out", "root out"),
+            callbacks,
+        )
+    }
+
+    @Test
+    fun `hovering updates even without mouse over or out callbacks`() {
+        lateinit var paragraph: Paragraph
+        val root = div(UiStyle(width = 20f, height = 20f)) {
+            paragraph = p("text")
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertFalse(layout.mouseMove(1.0, 1.0))
+        assertTrue(root.hovering)
+        assertTrue(paragraph.hovering)
+
+        assertFalse(layout.mouseMove(100.0, 100.0))
+        assertFalse(root.hovering)
+        assertFalse(paragraph.hovering)
     }
 
     @Test

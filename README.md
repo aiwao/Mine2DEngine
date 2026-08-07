@@ -197,7 +197,15 @@ val root = div(
         alignment = UiAlignment.CENTER,
     ),
 ) {
-    p("Mine2DEngine", UiStyle(color = 0xFFFFCC00.toInt()))
+    p(
+        "Mine2DEngine",
+        UiStyle(color = 0xFFFFCC00.toInt()),
+        onClick = { event -> println("Title: button=${event.button()}") },
+        onMouseMove = { x, y -> println("Title: x=$x, y=$y") },
+        onDrag = { x, y -> println("Dragging title: x=$x, y=$y") },
+        onMouseOver = { println("Pointer entered title") },
+        onMouseOut = { println("Pointer left title") },
+    )
     p("A lightweight Fabric UI", UiStyle(dropShadow = false))
 
     div(
@@ -218,11 +226,13 @@ val root = div(
 val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
 ```
 
-Keep the returned `UiLayout` to perform hit testing or dispatch a click using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the button and the same event is forwarded to its `onClick` callback:
+Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div`, `p` / `paragraph`, and `button`. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. A drag continues outside the element's bounds until `release` is called:
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())
 val handled = layout.click(event)
+val moveHandled = layout.mouseMove(mouseX, mouseY)
+val releaseHandled = layout.release()
 ```
 
 `layout(root)` calculates geometry without drawing. `render(root)` calculates and draws, while `render(existingLayout)` draws previously calculated geometry again. Recalculate the layout after changing text, styles, or children.

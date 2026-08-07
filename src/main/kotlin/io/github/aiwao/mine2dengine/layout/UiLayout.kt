@@ -17,7 +17,7 @@ data class UiLayoutNode(
     val font: Mine2DFont? = null,
 )
 
-/** A layout result that can also dispatch clicks to buttons. */
+/** A layout result that can also dispatch clicks to UI elements. */
 class UiLayout internal constructor(
     root: UiLayoutNode,
 ) {
@@ -56,19 +56,98 @@ class UiLayout internal constructor(
         nodesInPaintOrder().asReversed().firstOrNull { it.bounds.contains(x, y) }?.element
 
     /**
-     * Invokes the topmost button at the GUI coordinate in [event] and passes it to the callback.
-     * Returns true when a button was hit, even when it has no callback.
+     * Invokes the topmost clickable element at the GUI coordinate in [event].
+     * Elements with an [UiElement.onClick] or [UiElement.onDrag] callback are clickable. A
+     * [Button] remains clickable without a callback, preserving its control semantics. The hit
+     * element starts dragging until [release] is called. Returns true when one was hit.
      */
     fun click(event: MouseButtonEvent): Boolean {
         val x = event.x().toFloat()
         val y = event.y().toFloat()
-        val button = nodesInPaintOrder()
+        val nodes = nodesInPaintOrder()
+        val element = nodes
             .asReversed()
-            .firstOrNull { it.element is Button && it.bounds.contains(x, y) }
-            ?.element as? Button
+            .firstOrNull { node ->
+                (node.element is Button ||
+                    node.element.onClick != null ||
+                    node.element.onDrag != null) &&
+                    node.bounds.contains(x, y)
+            }
+            ?.element
             ?: return false
 
-        button.onClick?.invoke(event)
+        nodes.forEach { node -> node.element.dragging = false }
+        element.dragging = true
+        element.onClick?.invoke(event)
+        return true
+    }
+
+    /**
+     * Updates [UiElement.hovering] and invokes mouse-over or mouse-out callbacks, invokes the
+     * topmost [UiElement.onMouseMove] callback at [x], [y], then invokes [UiElement.onDrag] on the
+     * dragging element even when the pointer is outside its bounds. Returns true when at least
+     * one callback was invoked.
+     */
+    fun mouseMove(x: Double, y: Double): Boolean {
+        val layoutX = x.toFloat()
+        val layoutY = y.toFloat()
+        val nodes = nodesInPaintOrder()
+        var handled = false
+
+        nodes
+            .asReversed()
+            .filter { node -> node.element.hovering && !node.bounds.contains(layoutX, layoutY) }
+            .forEach { node ->
+                val onMouseOut = node.element.onMouseOut
+                onMouseOut?.invoke()
+                handled = handled || onMouseOut != null
+                node.element.hovering = false
+            }
+
+        nodes
+            .filter { node -> !node.element.hovering && node.bounds.contains(layoutX, layoutY) }
+            .forEach { node ->
+                val onMouseOver = node.element.onMouseOver
+                onMouseOver?.invoke()
+                handled = handled || onMouseOver != null
+                node.element.hovering = true
+            }
+
+        nodes
+            .asReversed()
+            .firstOrNull { node ->
+                node.element.onMouseMove != null &&
+                    node.bounds.contains(layoutX, layoutY)
+            }
+            ?.element
+            ?.onMouseMove
+            ?.let { onMouseMove ->
+                onMouseMove(x, y)
+                handled = true
+            }
+
+        nodes
+            .asReversed()
+            .firstOrNull { node -> node.element.dragging && node.element.onDrag != null }
+            ?.element
+            ?.onDrag
+            ?.let { onDrag ->
+                onDrag(x, y)
+                handled = true
+            }
+
+        return handled
+    }
+
+    /** Stops the current drag. Returns true when an element was dragging. */
+    fun release(): Boolean {
+        val draggingElements = nodesInPaintOrder()
+            .map(UiLayoutNode::element)
+            .filter(UiElement::dragging)
+            .distinct()
+        if (draggingElements.isEmpty()) return false
+
+        draggingElements.forEach { element -> element.dragging = false }
         return true
     }
 
