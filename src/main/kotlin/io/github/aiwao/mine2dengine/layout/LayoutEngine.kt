@@ -53,6 +53,12 @@ class LayoutEngine(
         draw(layout.root)
     }
 
+    /** Moves an existing layout to [left], [top], then renders it without recalculating its size. */
+    fun render(layout: UiLayout, left: Float, top: Float) {
+        layout.moveTo(left, top)
+        render(layout)
+    }
+
     private fun draw(node: UiLayoutNode) {
         val style = node.element.style
         style.backgroundColor?.let { color ->

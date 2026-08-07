@@ -28,6 +28,14 @@ class LayoutEngineTest {
     @Test
     fun `layout engine selects fonts through style`() {
         assertNotNull(LayoutEngine::class.java.getConstructor(Mine2DEngine::class.java))
+        assertNotNull(
+            LayoutEngine::class.java.getMethod(
+                "render",
+                UiLayout::class.java,
+                Float::class.javaPrimitiveType,
+                Float::class.javaPrimitiveType,
+            ),
+        )
         assertEquals(
             Mine2DFont::class.java,
             UiStyle::class.java.getMethod("getFont").returnType,
@@ -145,6 +153,45 @@ class LayoutEngineTest {
 
         assertEquals(53f, layout.nodeOf(first)!!.outerBounds.left)
         assertEquals(80f, layout.nodeOf(second)!!.outerBounds.left)
+    }
+
+    @Test
+    fun `changing layout origin translates every box without changing its size`() {
+        lateinit var paragraph: Paragraph
+        val root = div(
+            UiStyle(
+                margin = UiEdges(2f),
+                padding = UiEdges(3f),
+            ),
+        ) {
+            paragraph = p("move", UiStyle(margin = UiEdges(1f)))
+        }
+        val layout = calculateLayout(root, left = 5f, top = 7f, textMeasurer)
+        val originalSize = layout.size
+
+        layout.left = 25f
+        layout.top = 37f
+
+        assertEquals(25f, layout.left)
+        assertEquals(37f, layout.top)
+        assertEquals(originalSize, layout.size)
+        assertEquals(UiRect(25f, 37f, 32f, 22f), layout.root.outerBounds)
+        assertEquals(UiRect(27f, 39f, 28f, 18f), layout.root.bounds)
+        assertEquals(UiRect(30f, 42f, 22f, 12f), layout.root.contentBounds)
+        assertEquals(UiRect(30f, 42f, 22f, 12f), layout.nodeOf(paragraph)!!.outerBounds)
+        assertEquals(UiRect(31f, 43f, 20f, 10f), layout.nodeOf(paragraph)!!.bounds)
+        assertSame(paragraph, layout.elementAt(31f, 43f))
+        assertEquals(null, layout.elementAt(11f, 13f))
+    }
+
+    @Test
+    fun `layout origin must remain finite`() {
+        val layout = calculateLayout(div(), left = 5f, top = 7f, textMeasurer)
+
+        assertFailsWith<IllegalArgumentException> { layout.left = Float.NaN }
+        assertFailsWith<IllegalArgumentException> { layout.top = Float.POSITIVE_INFINITY }
+        assertEquals(5f, layout.left)
+        assertEquals(7f, layout.top)
     }
 
     @Test

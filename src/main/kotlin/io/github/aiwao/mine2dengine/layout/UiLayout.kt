@@ -19,9 +19,37 @@ data class UiLayoutNode(
 
 /** A layout result that can also dispatch clicks to buttons. */
 class UiLayout internal constructor(
-    val root: UiLayoutNode,
+    root: UiLayoutNode,
 ) {
+    var root: UiLayoutNode = root
+        private set
+
+    /** The left coordinate of the root's outer box. Changing it translates the complete layout. */
+    var left: Float
+        get() = root.outerBounds.left
+        set(value) {
+            moveTo(value, top)
+        }
+
+    /** The top coordinate of the root's outer box. Changing it translates the complete layout. */
+    var top: Float
+        get() = root.outerBounds.top
+        set(value) {
+            moveTo(left, value)
+        }
+
     val size: UiSize = UiSize(root.outerBounds.width, root.outerBounds.height)
+
+    internal fun moveTo(left: Float, top: Float) {
+        require(left.isFinite()) { "Left must be finite: $left" }
+        require(top.isFinite()) { "Top must be finite: $top" }
+
+        val deltaX = left - this.left
+        val deltaY = top - this.top
+        if (deltaX == 0f && deltaY == 0f) return
+
+        root = root.translated(deltaX, deltaY)
+    }
 
     /** Finds the deepest element at the given GUI coordinate. */
     fun elementAt(x: Float, y: Float): UiElement? =
@@ -55,3 +83,15 @@ class UiLayout internal constructor(
         addTree(root)
     }
 }
+
+private fun UiLayoutNode.translated(deltaX: Float, deltaY: Float): UiLayoutNode = copy(
+    outerBounds = outerBounds.translated(deltaX, deltaY),
+    bounds = bounds.translated(deltaX, deltaY),
+    contentBounds = contentBounds.translated(deltaX, deltaY),
+    children = children.map { child -> child.translated(deltaX, deltaY) },
+)
+
+private fun UiRect.translated(deltaX: Float, deltaY: Float): UiRect = copy(
+    left = left + deltaX,
+    top = top + deltaY,
+)

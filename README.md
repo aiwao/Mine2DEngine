@@ -227,6 +227,17 @@ val handled = layout.click(event)
 
 `layout(root)` calculates geometry without drawing. `render(root)` calculates and draws, while `render(existingLayout)` draws previously calculated geometry again. Recalculate the layout after changing text, styles, or children.
 
+To move an already calculated layout, change its `left` / `top`. Every element and hit-test area moves with it. `render(layout, left, top)` moves and redraws it in one call.
+
+```kotlin
+layout.left = 24f
+layout.top = 32f
+LayoutEngine(draw).render(layout)
+
+// Equivalent shorthand
+LayoutEngine(draw).render(layout, left = 24f, top = 32f)
+```
+
 ## Custom shaders
 
 Register custom pipelines during client initialization. Vertex and fragment shader identifiers are relative to `assets/<namespace>/shaders/` and omit the `.vsh` or `.fsh` extension.
