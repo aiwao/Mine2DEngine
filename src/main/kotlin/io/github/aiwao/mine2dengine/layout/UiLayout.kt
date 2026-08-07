@@ -57,42 +57,77 @@ class UiLayout internal constructor(
 
     /**
      * Invokes the topmost clickable element at the GUI coordinate in [event].
-     * Elements with an [UiElement.onClick] callback are clickable. A [Button] remains clickable
-     * without a callback, preserving its control semantics. Returns true when one was hit.
+     * Elements with an [UiElement.onClick] or [UiElement.onDrag] callback are clickable. A
+     * [Button] remains clickable without a callback, preserving its control semantics. The hit
+     * element starts dragging until [release] is called. Returns true when one was hit.
      */
     fun click(event: MouseButtonEvent): Boolean {
         val x = event.x().toFloat()
         val y = event.y().toFloat()
-        val element = nodesInPaintOrder()
+        val nodes = nodesInPaintOrder()
+        val element = nodes
             .asReversed()
             .firstOrNull { node ->
-                (node.element is Button || node.element.onClick != null) &&
+                (node.element is Button ||
+                    node.element.onClick != null ||
+                    node.element.onDrag != null) &&
                     node.bounds.contains(x, y)
             }
             ?.element
             ?: return false
 
+        nodes.forEach { node -> node.element.dragging = false }
+        element.dragging = true
         element.onClick?.invoke(event)
         return true
     }
 
     /**
-     * Invokes the topmost element with an [UiElement.onMouseMove] callback at [x], [y].
-     * Returns true when a matching element was hit.
+     * Invokes the topmost element with an [UiElement.onMouseMove] callback at [x], [y], then
+     * invokes [UiElement.onDrag] on the dragging element even when the pointer is outside its
+     * bounds. Returns true when at least one callback was invoked.
      */
     fun mouseMove(x: Double, y: Double): Boolean {
         val layoutX = x.toFloat()
         val layoutY = y.toFloat()
-        val element = nodesInPaintOrder()
+        val nodes = nodesInPaintOrder()
+        var handled = false
+
+        nodes
             .asReversed()
             .firstOrNull { node ->
                 node.element.onMouseMove != null &&
                     node.bounds.contains(layoutX, layoutY)
             }
             ?.element
-            ?: return false
+            ?.onMouseMove
+            ?.let { onMouseMove ->
+                onMouseMove(x, y)
+                handled = true
+            }
 
-        element.onMouseMove?.invoke(x, y)
+        nodes
+            .asReversed()
+            .firstOrNull { node -> node.element.dragging && node.element.onDrag != null }
+            ?.element
+            ?.onDrag
+            ?.let { onDrag ->
+                onDrag(x, y)
+                handled = true
+            }
+
+        return handled
+    }
+
+    /** Stops the current drag. Returns true when an element was dragging. */
+    fun release(): Boolean {
+        val draggingElements = nodesInPaintOrder()
+            .map(UiLayoutNode::element)
+            .filter(UiElement::dragging)
+            .distinct()
+        if (draggingElements.isEmpty()) return false
+
+        draggingElements.forEach { element -> element.dragging = false }
         return true
     }
 

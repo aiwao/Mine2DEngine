@@ -240,7 +240,11 @@ class LayoutEngineTest {
         assertTrue(layout.click(hitEvent))
         assertEquals(1, clickCount)
         assertSame(hitEvent, receivedEvent)
+        assertTrue(button.dragging)
         assertFalse(layout.click(missEvent))
+        assertTrue(button.dragging)
+        assertTrue(layout.release())
+        assertFalse(button.dragging)
     }
 
     @Test
@@ -344,6 +348,47 @@ class LayoutEngineTest {
 
         root.onMouseMove = null
         assertFalse(layout.mouseMove(100.0, 100.0))
+    }
+
+    @Test
+    fun `drag starts on click moves outside bounds and stops on release`() {
+        val dragCoordinates = mutableListOf<Pair<Double, Double>>()
+        lateinit var paragraph: Paragraph
+        val root = div(UiStyle(width = 50f, height = 50f)) {
+            paragraph = p(
+                text = "Drag",
+                onDrag = { x, y -> dragCoordinates += x to y },
+            )
+        }
+        val layout = calculateLayout(root, left = 4f, top = 6f, textMeasurer)
+
+        assertFalse(paragraph.dragging)
+        assertTrue(layout.click(MouseButtonEvent(5.0, 7.0, MouseButtonInfo(0, 0))))
+        assertTrue(paragraph.dragging)
+
+        assertTrue(layout.mouseMove(100.25, 200.5))
+        assertEquals(listOf(100.25 to 200.5), dragCoordinates)
+
+        assertTrue(layout.release())
+        assertFalse(paragraph.dragging)
+        assertFalse(layout.release())
+        assertFalse(layout.mouseMove(100.25, 200.5))
+        assertEquals(listOf(100.25 to 200.5), dragCoordinates)
+    }
+
+    @Test
+    fun `mouse move invokes both hover and drag callbacks while dragging`() {
+        val callbacks = mutableListOf<String>()
+        val root = div(
+            style = UiStyle(width = 20f, height = 20f),
+            onMouseMove = { _, _ -> callbacks += "move" },
+            onDrag = { _, _ -> callbacks += "drag" },
+        )
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertTrue(layout.mouseMove(2.0, 3.0))
+        assertEquals(listOf("move", "drag"), callbacks)
     }
 
     @Test
