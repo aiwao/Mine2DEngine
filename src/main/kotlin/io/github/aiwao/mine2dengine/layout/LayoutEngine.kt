@@ -25,8 +25,9 @@ class Mine2DTextMeasurer(
  * [left] and [top] passed to [layout] are the top-left coordinate of the root's outer box.
  * Text fonts are selected through [UiStyle.font] and remain owned by the caller.
  */
-class LayoutEngine {
+object LayoutEngine {
     /** Calculates the complete UI tree without issuing draw calls. */
+    @JvmStatic
     fun layout(root: UiElement, left: Float = 0f, top: Float = 0f): UiLayout =
         calculateLayout(root, left, top) { element, font ->
             Mine2DTextMeasurer(

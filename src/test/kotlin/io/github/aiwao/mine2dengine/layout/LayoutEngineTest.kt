@@ -10,6 +10,7 @@ import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.MouseButtonInfo
 import net.minecraft.client.renderer.texture.TextureManager
 import net.minecraft.resources.Identifier
+import java.lang.reflect.Modifier
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -27,8 +28,15 @@ class LayoutEngineTest {
 
     @Test
     fun `layout engine calculates and layouts render themselves`() {
-        assertNotNull(LayoutEngine::class.java.getConstructor())
+        assertTrue(LayoutEngine::class.java.constructors.isEmpty())
         assertFalse(LayoutEngine::class.java.methods.any { method -> method.name == "render" })
+        val layoutMethod = LayoutEngine::class.java.getMethod(
+            "layout",
+            UiElement::class.java,
+            Float::class.javaPrimitiveType,
+            Float::class.javaPrimitiveType,
+        )
+        assertTrue(Modifier.isStatic(layoutMethod.modifiers))
         assertNotNull(
             UiLayout::class.java.getMethod(
                 "render",

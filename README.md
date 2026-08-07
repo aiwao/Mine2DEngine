@@ -225,7 +225,7 @@ val root = div(
     }
 }
 
-val layout = LayoutEngine().layout(root, left = 12f, top = 12f)
+val layout = LayoutEngine.layout(root, left = 12f, top = 12f)
 layout.render(draw)
 ```
 
@@ -248,7 +248,7 @@ val hoverable = div(
     },
 )
 
-val hoverableLayout = LayoutEngine().layout(hoverable)
+val hoverableLayout = LayoutEngine.layout(hoverable)
 hoverableLayout.render(draw)
 hoverableLayout.mouseMove(mouseX, mouseY)
 hoverableLayout.render(draw)
@@ -268,7 +268,7 @@ val moveHandled = layout.mouseMove(mouseX, mouseY)
 val releaseHandled = layout.release()
 ```
 
-`LayoutEngine().layout(root)` calculates geometry without drawing. Call `render(renderer)` on the returned layout to draw it. Recalculate the layout after changing text, styles, or children.
+`LayoutEngine.layout(root)` calculates geometry without drawing. Call `render(renderer)` on the returned layout to draw it. Recalculate the layout after changing text, styles, or children.
 
 To move an already calculated layout, change its `left` / `top`. Every element and hit-test area moves with it. `layout.render(renderer, left, top)` moves and redraws it in one call.
 
