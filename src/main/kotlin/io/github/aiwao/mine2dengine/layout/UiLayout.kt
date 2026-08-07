@@ -17,6 +17,10 @@ data class UiLayoutNode(
     val children: List<UiLayoutNode>,
     /** The font resolved from this element's style and its ancestors. */
     val font: Mine2DFont? = null,
+    /** The text color resolved from this element's style and its ancestors. */
+    val color: Int = UiStyle.DEFAULT_COLOR,
+    /** The text shadow setting resolved from this element's style and its ancestors. */
+    val dropShadow: Boolean = UiStyle.DEFAULT_DROP_SHADOW,
 )
 
 /** A layout result that can render and dispatch pointer input to UI elements. */
@@ -55,7 +59,7 @@ class UiLayout internal constructor(
 
     /** Renders this layout without recalculating its geometry. */
     fun render(renderer: Mine2DEngine) {
-        draw(root, renderer)
+        draw(root, renderer, ResolvedUiTextStyle())
     }
 
     /** Moves this layout to [left], [top], then renders it without recalculating its size. */
@@ -175,8 +179,13 @@ class UiLayout internal constructor(
         addTree(root)
     }
 
-    private fun draw(node: UiLayoutNode, renderer: Mine2DEngine) {
+    private fun draw(
+        node: UiLayoutNode,
+        renderer: Mine2DEngine,
+        inheritedTextStyle: ResolvedUiTextStyle,
+    ) {
         val style = node.element.style
+        val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
         style.backgroundColor?.let { color ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
                 renderer.quad(
@@ -194,18 +203,20 @@ class UiLayout internal constructor(
             is Paragraph -> drawText(
                 element.text,
                 style,
+                resolvedTextStyle,
                 node.contentBounds,
                 requireFont(node),
                 renderer,
             )
         }
 
-        node.children.forEach { child -> draw(child, renderer) }
+        node.children.forEach { child -> draw(child, renderer, resolvedTextStyle) }
     }
 
     private fun drawText(
         text: String,
         style: UiStyle,
+        resolvedTextStyle: ResolvedUiTextStyle,
         contentBounds: UiRect,
         font: Mine2DFont,
         renderer: Mine2DEngine,
@@ -224,8 +235,8 @@ class UiLayout internal constructor(
                 line,
                 x.roundToInt(),
                 y.roundToInt(),
-                style.color,
-                dropShadow = style.dropShadow,
+                resolvedTextStyle.color,
+                dropShadow = resolvedTextStyle.dropShadow,
             )
         }
     }

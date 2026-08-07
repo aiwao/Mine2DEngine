@@ -56,7 +56,7 @@ private fun calculateLayout(
     require(left.isFinite()) { "Left must be finite: $left" }
     require(top.isFinite()) { "Top must be finite: $top" }
 
-    val measured = measure(root, inheritedFont = null, textMeasurer)
+    val measured = measure(root, ResolvedUiTextStyle(), textMeasurer)
     return UiLayout(place(measured, left, top))
 }
 
@@ -65,7 +65,7 @@ private data class MeasuredNode(
     val style: UiStyle,
     val contentSize: UiSize,
     val children: List<MeasuredNode>,
-    val font: Mine2DFont?,
+    val textStyle: ResolvedUiTextStyle,
 ) {
     val boundsSize: UiSize = UiSize(
         width = contentSize.width + style.padding.horizontal,
@@ -80,19 +80,19 @@ private data class MeasuredNode(
 
 private fun measure(
     element: UiElement,
-    inheritedFont: Mine2DFont?,
+    inheritedTextStyle: ResolvedUiTextStyle,
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
 ): MeasuredNode {
     val style = element.style
-    val font = style.font ?: inheritedFont
+    val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
     val children = if (element is UiContainer) {
-        element.children.map { child -> measure(child, font, textMeasurer) }
+        element.children.map { child -> measure(child, resolvedTextStyle, textMeasurer) }
     } else {
         emptyList()
     }
 
     val textSize = when (element) {
-        is Paragraph -> measureText(element.text, textMeasurer(element, font))
+        is Paragraph -> measureText(element.text, textMeasurer(element, resolvedTextStyle.font))
         is UiContainer -> null
     }
 
@@ -109,7 +109,7 @@ private fun measure(
             height = style.height ?: naturalSize.height,
         ),
         children = children,
-        font = font,
+        textStyle = resolvedTextStyle,
     )
 }
 
@@ -173,7 +173,9 @@ private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): Ui
         bounds = bounds,
         contentBounds = contentBounds,
         children = children,
-        font = measured.font,
+        font = measured.textStyle.font,
+        color = measured.textStyle.color,
+        dropShadow = measured.textStyle.dropShadow,
     )
 }
 

@@ -50,9 +50,13 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `text shadow is enabled by default and configurable through style`() {
-        assertTrue(UiStyle().dropShadow)
-        assertFalse(UiStyle(dropShadow = false).dropShadow)
+    fun `root text style uses visible defaults`() {
+        val layout = calculateLayout(Paragraph("default"), left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(null, UiStyle().color)
+        assertEquals(null, UiStyle().dropShadow)
+        assertEquals(UiStyle.DEFAULT_COLOR, layout.root.color)
+        assertTrue(layout.root.dropShadow)
     }
 
     @Test
@@ -116,21 +120,42 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `font is inherited and can be overridden by a child style`() {
+    fun `text style is inherited and can be overridden by a child`() {
         val inheritedFont = fontToken("inherited")
         val overriddenFont = fontToken("overridden")
         lateinit var inheritedParagraph: Paragraph
         lateinit var overriddenParagraph: Paragraph
-        val root = div(UiStyle(font = inheritedFont)) {
-            inheritedParagraph = p("inherited")
-            overriddenParagraph = p("overridden", UiStyle(font = overriddenFont))
+        val root = div(
+            UiStyle(
+                color = 0xFF112233.toInt(),
+                font = inheritedFont,
+                dropShadow = false,
+            ),
+        ) {
+            div {
+                inheritedParagraph = p("inherited", UiStyle(width = 20f))
+                overriddenParagraph = p(
+                    "overridden",
+                    UiStyle(
+                        color = 0xFF445566.toInt(),
+                        font = overriddenFont,
+                        dropShadow = true,
+                    ),
+                )
+            }
         }
 
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+        val inheritedNode = layout.nodeOf(inheritedParagraph)!!
+        val overriddenNode = layout.nodeOf(overriddenParagraph)!!
 
         assertSame(inheritedFont, layout.root.font)
-        assertSame(inheritedFont, layout.nodeOf(inheritedParagraph)!!.font)
-        assertSame(overriddenFont, layout.nodeOf(overriddenParagraph)!!.font)
+        assertSame(inheritedFont, inheritedNode.font)
+        assertEquals(0xFF112233.toInt(), inheritedNode.color)
+        assertFalse(inheritedNode.dropShadow)
+        assertSame(overriddenFont, overriddenNode.font)
+        assertEquals(0xFF445566.toInt(), overriddenNode.color)
+        assertTrue(overriddenNode.dropShadow)
     }
 
     @Test

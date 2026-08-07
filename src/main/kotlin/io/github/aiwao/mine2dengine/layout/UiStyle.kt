@@ -22,12 +22,13 @@ enum class UiAlignment {
  * background, while margin remains outside it, following the CSS box model.
  * [gap] adds space between adjacent direct children without adding space at the
  * edges of the content box.
- * A null size shrinks to the element's text or children. [font] is inherited by
- * descendants; every text element must resolve a font from itself or an ancestor.
- * [dropShadow] controls the shadow drawn behind text.
+ * A null size shrinks to the element's text or children. [color], [font], and
+ * [dropShadow] are inherited by descendants when null. At the root, color defaults
+ * to opaque white and drop shadow defaults to enabled. Every text element must
+ * resolve a font from itself or an ancestor.
  */
 data class UiStyle(
-    val color: Int = 0xFFFFFFFF.toInt(),
+    val color: Int? = null,
     val backgroundColor: Int? = null,
     val margin: UiEdges = UiEdges(),
     val padding: UiEdges = UiEdges(),
@@ -36,9 +37,14 @@ data class UiStyle(
     val width: Float? = null,
     val height: Float? = null,
     val font: Mine2DFont? = null,
-    val dropShadow: Boolean = true,
+    val dropShadow: Boolean? = null,
     val gap: Float = 0f,
 ) {
+    companion object {
+        const val DEFAULT_COLOR: Int = -1
+        const val DEFAULT_DROP_SHADOW: Boolean = true
+    }
+
     init {
         require(width == null || width.isFinite() && width >= 0f) {
             "Width must be null or finite and non-negative: $width"
@@ -51,3 +57,17 @@ data class UiStyle(
         }
     }
 }
+
+/** Text properties after resolving inheritance from ancestor styles. */
+internal data class ResolvedUiTextStyle(
+    val color: Int = UiStyle.DEFAULT_COLOR,
+    val font: Mine2DFont? = null,
+    val dropShadow: Boolean = UiStyle.DEFAULT_DROP_SHADOW,
+)
+
+internal fun UiStyle.resolveTextStyle(parent: ResolvedUiTextStyle): ResolvedUiTextStyle =
+    ResolvedUiTextStyle(
+        color = color ?: parent.color,
+        font = font ?: parent.font,
+        dropShadow = dropShadow ?: parent.dropShadow,
+    )
