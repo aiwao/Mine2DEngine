@@ -227,6 +227,17 @@ val handled = layout.click(event)
 
 `layout(root)` は描画せずにジオメトリを計算します。`render(root)` は計算と描画を行い、`render(existingLayout)` は以前に計算したジオメトリを再描画します。文字列、スタイル、子要素を変更した後はレイアウトを再計算してください。
 
+計算済みレイアウトの位置だけを変える場合は、`left` / `top` を変更します。すべての要素とヒットテスト領域が一緒に移動します。`render(layout, left, top)` を使うと、移動と再描画を一度に行えます。
+
+```kotlin
+layout.left = 24f
+layout.top = 32f
+LayoutEngine(draw).render(layout)
+
+// 同等の短縮形
+LayoutEngine(draw).render(layout, left = 24f, top = 32f)
+```
+
 ## カスタムシェーダー
 
 クライアント初期化時にカスタムパイプラインを登録します。頂点・フラグメントシェーダーの識別子は `assets/<namespace>/shaders/` からの相対位置で、拡張子 `.vsh` または `.fsh` は付けません。
