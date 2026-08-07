@@ -204,19 +204,19 @@ val root = div(
             margin = UiEdges(top = 6f, right = 0f, bottom = 0f, left = 0f),
         ),
     ) {
-        button("OK", onClick = { println("Clicked OK") })
-        button("Cancel", onClick = { println("Clicked Cancel") })
+        button("OK", onClick = { event -> println("OK: button=${event.button()}") })
+        button("Cancel", onClick = { event -> println("Cancel: button=${event.button()}") })
     }
 }
 
 val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
 ```
 
-Keep the returned `UiLayout` to perform hit testing or dispatch a click using the same GUI coordinate system:
+Keep the returned `UiLayout` to perform hit testing or dispatch a click using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the button and the same event is forwarded to its `onClick` callback:
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())
-val handled = layout.click(mouseX.toFloat(), mouseY.toFloat())
+val handled = layout.click(event)
 ```
 
 `layout(root)` calculates geometry without drawing. `render(root)` calculates and draws, while `render(existingLayout)` draws previously calculated geometry again. Recalculate the layout after changing text, styles, or children.

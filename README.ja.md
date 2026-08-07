@@ -204,19 +204,19 @@ val root = div(
             margin = UiEdges(top = 6f, right = 0f, bottom = 0f, left = 0f),
         ),
     ) {
-        button("OK", onClick = { println("OK がクリックされました") })
-        button("キャンセル", onClick = { println("キャンセルされました") })
+        button("OK", onClick = { event -> println("OK: button=${event.button()}") })
+        button("キャンセル", onClick = { event -> println("キャンセル: button=${event.button()}") })
     }
 }
 
 val layout = LayoutEngine(draw).render(root, left = 12f, top = 12f)
 ```
 
-返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやクリックの通知ができます。
+返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやクリックの通知ができます。Minecraft の `MouseButtonEvent` を `click` に渡すと、イベントの座標でボタンを特定し、そのイベントをボタンの `onClick` に渡します。
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())
-val handled = layout.click(mouseX.toFloat(), mouseY.toFloat())
+val handled = layout.click(event)
 ```
 
 `layout(root)` は描画せずにジオメトリを計算します。`render(root)` は計算と描画を行い、`render(existingLayout)` は以前に計算したジオメトリを再描画します。文字列、スタイル、子要素を変更した後はレイアウトを再計算してください。
