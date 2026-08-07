@@ -224,7 +224,7 @@ val root = div(
     }
 }
 
-val layout = LayoutEngine().layout(root, left = 12f, top = 12f)
+val layout = LayoutEngine.layout(root, left = 12f, top = 12f)
 layout.render(draw)
 ```
 
@@ -247,7 +247,7 @@ val hoverable = div(
     },
 )
 
-val hoverableLayout = LayoutEngine().layout(hoverable)
+val hoverableLayout = LayoutEngine.layout(hoverable)
 hoverableLayout.render(draw)
 hoverableLayout.mouseMove(mouseX, mouseY)
 hoverableLayout.render(draw)
@@ -267,7 +267,7 @@ val moveHandled = layout.mouseMove(mouseX, mouseY)
 val releaseHandled = layout.release()
 ```
 
-`LayoutEngine().layout(root)` は描画せずにジオメトリを計算します。返されたレイアウトの `render(renderer)` を呼び出すと描画できます。文字列、スタイル、子要素を変更した後はレイアウトを再計算してください。
+`LayoutEngine.layout(root)` は描画せずにジオメトリを計算します。返されたレイアウトの `render(renderer)` を呼び出すと描画できます。文字列、スタイル、子要素を変更した後はレイアウトを再計算してください。
 
 計算済みレイアウトの位置だけを変える場合は、`left` / `top` を変更します。すべての要素とヒットテスト領域が一緒に移動します。`layout.render(renderer, left, top)` を使うと、移動と再描画を一度に行えます。
 
