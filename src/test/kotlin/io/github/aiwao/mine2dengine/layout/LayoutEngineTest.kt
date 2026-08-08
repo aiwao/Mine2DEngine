@@ -192,6 +192,58 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `child style applies to every descendant but not the container itself`() {
+        val descendantStyle = UiStyle(
+            color = 0xFF112233.toInt(),
+            width = 20f,
+            height = 10f,
+        )
+        val buttonChildStyle = UiStyle(
+            color = 0xFF445566.toInt(),
+            width = 8f,
+        )
+        lateinit var directParagraph: Paragraph
+        lateinit var nestedDiv: Div
+        lateinit var nestedParagraph: Paragraph
+        lateinit var button: Button
+        lateinit var buttonParagraph: Paragraph
+        val root = div(
+            style = UiStyle(width = 80f, height = 60f),
+            childStyle = descendantStyle,
+        ) {
+            directParagraph = p("direct", UiStyle(width = 1f))
+            nestedDiv = div {
+                nestedParagraph = p("nested", UiStyle(width = 2f))
+            }
+            button = button(style = UiStyle(), childStyle = buttonChildStyle) {
+                buttonParagraph = p("button")
+            }
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(UiRect(0f, 0f, 80f, 60f), layout.root.bounds)
+        val expectedSizes = mapOf(
+            directParagraph to UiSize(1f, 10f),
+            nestedDiv to UiSize(20f, 10f),
+            nestedParagraph to UiSize(2f, 10f),
+            button to UiSize(20f, 10f),
+        )
+        expectedSizes.forEach { (descendant, expectedSize) ->
+            val node = layout.nodeOf(descendant)!!
+            assertEquals(expectedSize, UiSize(node.bounds.width, node.bounds.height))
+            assertEquals(0xFF112233.toInt(), node.color)
+        }
+        val buttonParagraphNode = layout.nodeOf(buttonParagraph)!!
+        assertEquals(
+            UiSize(8f, 10f),
+            UiSize(buttonParagraphNode.bounds.width, buttonParagraphNode.bounds.height),
+        )
+        assertEquals(0xFF445566.toInt(), buttonParagraphNode.color)
+        assertEquals(1f, directParagraph.style.width)
+    }
+
+    @Test
     fun `box shadow does not affect layout or pointer bounds`() {
         val root = div(
             UiStyle(

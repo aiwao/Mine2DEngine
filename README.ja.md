@@ -197,6 +197,9 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   alpha形状へ影を付けます。要素内だけの指定であり、レイアウトやヒット領域には影響しません。
 - `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
 - `Div` と `Button` は直接の子要素を縦または横に並べます。
+- `Div` または `Button` の `childStyle` は、CSS の `.parent *` と同様に、1つの
+  `UiStyle` をすべての子孫へ適用します。子孫自身のstyleにあるデフォルト以外の値が優先されます。
+  ネストしたコンテナにnullではない `childStyle` がある場合、その配下では近い指定が優先されます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
 - `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
   親を継承します。ルートではcolorが不透明な白、文字shadowはなしが既定値です。継承したshadowを
@@ -279,6 +282,20 @@ val layout = LayoutEngine.layout(root, left = 12f, top = 12f)
 layout.render(draw)
 ```
 
+たとえば、次の2つの段落には、ネストした `Div` 内の段落も含めて同じ子孫styleが適用されます。
+
+```kotlin
+val labels = div(
+    style = UiStyle(font = font),
+    childStyle = UiStyle(color = 0xFFFFCC00.toInt()),
+) {
+    p("First")
+    div {
+        p("Second")
+    }
+}
+```
+
 `style` には具体的な要素を受け取る関数も指定できます。レイアウトまたは描画で使われるたびに
 要素の現在の状態から解決されるため、コールバックからスタイルを書き換えなくても `hovering` や
 `dragging` に応じて見た目を変えられます。
@@ -308,9 +325,9 @@ hoverableLayout.render(draw)
 
 動的スタイルは `div`、`p` / `paragraph`、`button` で利用できます。既存レイアウトを再描画すると
 継承される文字色やshadow、背景Paint、Materialなどの描画プロパティも更新されます。これらの
-描画プロパティだけを変える場合は再レイアウト不要です。解決後のスタイルによってサイズ、
-余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。`element.style` に
-代入すると、動的スタイルはその静的な値で置き換えられます。
+描画プロパティだけを変える場合は再レイアウト不要です。解決後の `style` または `childStyle` に
+よってサイズ、余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。
+`element.style` に代入すると、動的スタイルはその静的な値で置き換えられます。
 
 `div`、`p` / `paragraph`、`button` を含むすべての要素で `onClick`、`onMouseMove`、`onDrag`、`onMouseOver`、`onMouseOut` を利用できます。要素の `disabled` プロパティを `true` にすると、再び有効にするまで `onClick` コールバックは呼び出されません。読み取り専用の `hovering` プロパティで、カーソルが要素内にあるかを確認できます。返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやポインター入力の通知ができます。Minecraft の `MouseButtonEvent` を `mouseClick` に渡すと、イベントの座標で最前面のクリック可能な要素を特定してドラッグ状態を開始し、そのイベントを要素の `onClick` に渡します。`mouseMove` にマウス座標を渡すと、`hovering` の更新、境界をまたいだ際のコールバック、座標上で最前面の `onMouseMove`、ドラッグ中の要素の `onDrag` が呼び出されます。`onDrag` が受け取る `MouseButtonEvent` の座標は現在のマウス座標で、ボタンと修飾キーの情報はドラッグを開始した `mouseClick` のイベントから引き継がれます。ドラッグは要素の領域外でも継続し、`mouseRelease` を呼ぶと終了します。
 

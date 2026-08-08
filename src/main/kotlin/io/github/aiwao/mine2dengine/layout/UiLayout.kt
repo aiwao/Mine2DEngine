@@ -37,7 +37,9 @@ data class UiLayoutNode(
     val textShadow: UiTextShadow? = null,
     /** Whether this node generated a layout box. */
     internal val displayed: Boolean = true,
-)
+) {
+    internal var styleProvider: () -> UiStyle = { element.style }
+}
 
 /** A layout result that can render and dispatch pointer input to UI elements. */
 class UiLayout internal constructor(
@@ -265,7 +267,7 @@ class UiLayout internal constructor(
     ) {
         if (!node.displayed) return
 
-        val style = node.element.style
+        val style = node.styleProvider()
         val dropShadow = style.dropShadow
         if (dropShadow != null) {
             renderer.withDropShadow(
@@ -401,7 +403,9 @@ private fun UiLayoutNode.translated(deltaX: Float, deltaY: Float): UiLayoutNode 
     bounds = bounds.translated(deltaX, deltaY),
     contentBounds = contentBounds.translated(deltaX, deltaY),
     children = children.map { child -> child.translated(deltaX, deltaY) },
-)
+).also { translated ->
+    translated.styleProvider = styleProvider
+}
 
 private fun UiRect.translated(deltaX: Float, deltaY: Float): UiRect = copy(
     left = left + deltaX,
