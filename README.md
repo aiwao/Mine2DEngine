@@ -333,9 +333,9 @@ rectangle or rounded rectangle; use a custom shader or off-screen mask for an ar
 
 `UiTextShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, and non-negative `blurRadius`.
 It is inherited with other text properties and does not affect layout or hit bounds. Use
-`UiTextShadow.NONE` to explicitly clear an inherited shadow. A zero blur uses one glyph draw; a
-positive blur uses a bounded Gaussian approximation of at most 25 glyph draws per line.
-Use modest blur radii for text rendered many times per frame. Outside the layout engine, call
+`UiTextShadow.NONE` to explicitly clear an inherited shadow. These values correspond to one CSS
+`text-shadow`. Positive blur is sampled from each glyph's alpha by a Gaussian shader in one glyph
+draw instead of repeatedly drawing displaced copies of the text. Outside the layout engine, call
 `Mine2DEngine.textShadow(...)` immediately before the foreground `text(...)` call.
 
 ## Custom shaders

@@ -2,6 +2,7 @@ package io.github.aiwao.mine2dengine.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.mojang.blaze3d.IndexType;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
@@ -13,6 +14,8 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DMaterialRenderState;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DRenderBindings;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DTextureBinding;
+import io.github.aiwao.mine2dengine.internal.render.Mine2DTextShadowContext;
+import io.github.aiwao.mine2dengine.internal.render.Mine2DTextShadowRenderState;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DUniformBinding;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -24,6 +27,7 @@ import net.minecraft.client.gui.render.GuiRenderer;
 import net.minecraft.client.renderer.DynamicUniformStorage;
 import net.minecraft.client.renderer.StagedVertexBuffer;
 import net.minecraft.client.renderer.state.gui.GuiElementRenderState;
+import net.minecraft.client.renderer.state.gui.GuiTextRenderState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -51,6 +55,23 @@ abstract class GuiRendererMixin {
 
     @Unique
     private GpuTextureView mine2dengine$guiBackgroundView;
+
+    @WrapMethod(method = "lambda$prepareText$0")
+    private void mine2dengine$prepareTextShadow(
+        GuiTextRenderState textState,
+        Operation<Void> original
+    ) {
+        float blurRadius = ((Mine2DTextShadowRenderState) (Object) textState)
+            .mine2dengineBlurRadius();
+        if (Float.isNaN(blurRadius)) {
+            original.call(textState);
+            return;
+        }
+
+        try (Mine2DTextShadowContext.Scope ignored = Mine2DTextShadowContext.begin(blurRadius)) {
+            original.call(textState);
+        }
+    }
 
     @Inject(method = "addElementToMesh", at = @At("HEAD"))
     private void mine2dengine$beginMaterialDraw(

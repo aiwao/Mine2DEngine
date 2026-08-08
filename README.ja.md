@@ -333,9 +333,9 @@ scissorが適用されます。Layout外で単独利用する場合は、前景b
 
 `UiTextShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius` を
 指定できます。他の文字プロパティと同様に子孫へ継承され、レイアウトやヒット領域には影響しません。
-継承したshadowを明示的に解除するには`UiTextShadow.NONE`を指定します。blurが0ならglyph描画は1回、
-正のblurでは1行あたり最大25回のglyph描画による上限付きGaussian近似を使います。
-毎フレーム多数描画する文字では小さなblurを推奨します。Layout外では、前景の`text(...)`の直前に
+継承したshadowを明示的に解除するには`UiTextShadow.NONE`を指定します。各値はCSSの1つの
+`text-shadow`に対応します。正のblurは文字列をずらして何度も描くのではなく、各glyphのalphaを
+Gaussian shaderでサンプリングし、glyphごとに1回で描画します。Layout外では、前景の`text(...)`の直前に
 `Mine2DEngine.textShadow(...)`を呼び出します。
 
 ## カスタムシェーダー

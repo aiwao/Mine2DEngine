@@ -1,12 +1,6 @@
 package io.github.aiwao.mine2dengine
 
-import kotlin.math.PI
-import kotlin.math.ceil
-import kotlin.math.cos
-import kotlin.math.exp
-import kotlin.math.pow
-import kotlin.math.roundToInt
-import kotlin.math.sin
+import kotlin.math.abs
 
 internal fun validateShadowParameters(
     label: String,
@@ -93,69 +87,90 @@ internal fun calculateBoxShadowGeometry(
     )
 }
 
-internal data class Mine2DTextShadowSample(
-    val offsetX: Float,
-    val offsetY: Float,
-    val alpha: Int,
+internal data class Mine2DTextShadowVertex(
+    val x: Float,
+    val y: Float,
+    val z: Float,
+    val color: Int,
+    val u: Float,
+    val v: Float,
+    val light: Int,
 )
 
-internal fun calculateTextShadowSamples(
+internal data class Mine2DTextShadowGlyphGeometry(
+    val vertices: List<Mine2DTextShadowVertex>,
+    val minU: Float,
+    val minV: Float,
+    val maxU: Float,
+    val maxV: Float,
+    val uPerGuiUnit: Float,
+    val vPerGuiUnit: Float,
+)
+
+/** Expands glyph quads while preserving their atlas-to-GUI coordinate mapping for shader blur. */
+internal fun calculateTextShadowGlyphGeometry(
+    vertices: List<Mine2DTextShadowVertex>,
     blurRadius: Float,
-    colorAlpha: Int,
-): List<Mine2DTextShadowSample> {
+): Mine2DTextShadowGlyphGeometry? {
     require(blurRadius.isFinite() && blurRadius >= 0f) {
         "Text shadow blur radius must be finite and non-negative"
     }
-    require(colorAlpha in 0..255) { "Text shadow alpha must be between 0 and 255" }
-    if (colorAlpha == 0) return emptyList()
-    if (blurRadius == 0f) return listOf(Mine2DTextShadowSample(0f, 0f, colorAlpha))
-
-    val ringCount = ceil(blurRadius / 2f).toInt().coerceIn(1, MAX_TEXT_SHADOW_RINGS)
-    val weightedSamples = buildList {
-        add(WeightedTextShadowSample(0f, 0f, 1.0))
-        for (ring in 1..ringCount) {
-            val normalizedRadius = ring.toDouble() / ringCount
-            val radius = blurRadius * normalizedRadius.toFloat()
-            val sampleCount = ring * 4
-            val weight = exp(-2.0 * normalizedRadius * normalizedRadius)
-            val angleOffset = if (ring % 2 == 0) PI / sampleCount else 0.0
-            repeat(sampleCount) { index ->
-                val angle = 2.0 * PI * index / sampleCount + angleOffset
-                add(
-                    WeightedTextShadowSample(
-                        offsetX = cos(angle).toFloat() * radius,
-                        offsetY = sin(angle).toFloat() * radius,
-                        weight = weight,
-                    ),
-                )
-            }
-        }
+    require(vertices.size % TEXT_SHADOW_QUAD_VERTEX_COUNT == 0) {
+        "Text shadow glyph geometry must contain complete quads"
     }
-    val weightSum = weightedSamples.sumOf(WeightedTextShadowSample::weight)
-    // Avoid assigning fully opaque alpha to every displaced sample when the requested alpha is 255.
-    val targetAlpha = minOf(colorAlpha / 255.0, 254.0 / 255.0)
+    if (vertices.isEmpty()) return null
 
-    val samples = weightedSamples.mapNotNull { sample ->
-        val normalizedWeight = sample.weight / weightSum
-        val alpha = ((1.0 - (1.0 - targetAlpha).pow(normalizedWeight)) * 255.0)
-            .roundToInt()
-            .coerceIn(0, 255)
-        if (alpha == 0) {
-            null
-        } else {
-            Mine2DTextShadowSample(sample.offsetX, sample.offsetY, alpha)
-        }
+    val minU = vertices.minOf(Mine2DTextShadowVertex::u)
+    val minV = vertices.minOf(Mine2DTextShadowVertex::v)
+    val maxU = vertices.maxOf(Mine2DTextShadowVertex::u)
+    val maxV = vertices.maxOf(Mine2DTextShadowVertex::v)
+    val firstQuad = vertices.take(TEXT_SHADOW_QUAD_VERTEX_COUNT)
+    val leftX = firstQuad.filter { vertex -> closestToMinimum(vertex.u, minU, maxU) }
+        .map(Mine2DTextShadowVertex::x)
+        .average()
+    val rightX = firstQuad.filterNot { vertex -> closestToMinimum(vertex.u, minU, maxU) }
+        .map(Mine2DTextShadowVertex::x)
+        .average()
+    val topY = firstQuad.filter { vertex -> closestToMinimum(vertex.v, minV, maxV) }
+        .map(Mine2DTextShadowVertex::y)
+        .average()
+    val bottomY = firstQuad.filterNot { vertex -> closestToMinimum(vertex.v, minV, maxV) }
+        .map(Mine2DTextShadowVertex::y)
+        .average()
+    val glyphWidth = abs(rightX - leftX).toFloat()
+    val glyphHeight = abs(bottomY - topY).toFloat()
+    val uRange = maxU - minU
+    val vRange = maxV - minV
+    require(
+        glyphWidth > 0f && glyphHeight > 0f &&
+            uRange.isFinite() && uRange > 0f && vRange.isFinite() && vRange > 0f,
+    ) { "Text shadow glyph must have finite, non-empty position and UV bounds" }
+
+    val uPerGuiUnit = uRange / glyphWidth
+    val vPerGuiUnit = vRange / glyphHeight
+    val expanded = vertices.map { vertex ->
+        val horizontalDirection = if (closestToMinimum(vertex.u, minU, maxU)) -1f else 1f
+        val verticalDirection = if (closestToMinimum(vertex.v, minV, maxV)) -1f else 1f
+        vertex.copy(
+            x = vertex.x + horizontalDirection * blurRadius,
+            y = vertex.y + verticalDirection * blurRadius,
+            u = vertex.u + horizontalDirection * uPerGuiUnit * blurRadius,
+            v = vertex.v + verticalDirection * vPerGuiUnit * blurRadius,
+        )
     }
-    return samples.ifEmpty { listOf(Mine2DTextShadowSample(0f, 0f, colorAlpha)) }
+
+    return Mine2DTextShadowGlyphGeometry(
+        vertices = expanded,
+        minU = minU,
+        minV = minV,
+        maxU = maxU,
+        maxV = maxV,
+        uPerGuiUnit = uPerGuiUnit,
+        vPerGuiUnit = vPerGuiUnit,
+    )
 }
 
-internal fun Int.withAlpha(alpha: Int): Int =
-    (this and 0x00FFFFFF) or (alpha.coerceIn(0, 255) shl 24)
+private fun closestToMinimum(value: Float, minimum: Float, maximum: Float): Boolean =
+    abs(value - minimum) <= abs(value - maximum)
 
-private data class WeightedTextShadowSample(
-    val offsetX: Float,
-    val offsetY: Float,
-    val weight: Double,
-)
-
-private const val MAX_TEXT_SHADOW_RINGS = 3
+private const val TEXT_SHADOW_QUAD_VERTEX_COUNT = 4

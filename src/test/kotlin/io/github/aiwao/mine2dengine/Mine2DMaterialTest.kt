@@ -199,6 +199,27 @@ class Mine2DMaterialTest {
         assertEquals(10f, buffer.getFloat(28))
     }
 
+    @Test
+    fun `built-in text shadow material packs glyph atlas and blur parameters`() {
+        val material = Mine2DMaterials.textShadow(
+            minU = 0.1f,
+            minV = 0.2f,
+            maxU = 0.3f,
+            maxV = 0.4f,
+            uPerGuiUnit = 0.01f,
+            vPerGuiUnit = 0.02f,
+            blurRadius = 6f,
+            grayscale = true,
+        )
+        val data = material.resolveBindings(defaultContext()).uniforms().single().dataUnsafe()
+        val buffer = ByteBuffer.wrap(data).order(ByteOrder.nativeOrder())
+
+        assertFloatSequence(buffer, 0, 0.1f, 0.2f, 0.3f, 0.4f)
+        assertFloatSequence(buffer, 16, 0.01f, 0.02f)
+        assertEquals(6f, buffer.getFloat(24))
+        assertEquals(1, buffer.getInt(28))
+    }
+
     private fun shader(
         uniformBlock: Mine2DUniformBlock?,
         samplers: List<Mine2DSampler> = emptyList(),

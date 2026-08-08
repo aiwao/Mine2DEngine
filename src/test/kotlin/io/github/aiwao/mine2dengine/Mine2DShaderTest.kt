@@ -40,6 +40,28 @@ class Mine2DShaderTest {
     }
 
     @Test
+    fun `built-in text shadow shader uses glyph quads and shared blur binding`() {
+        val shader = Mine2DShaders.TEXT_SHADOW
+        val pipeline = shader.pipeline
+
+        assertSame(DefaultVertexFormat.POSITION_TEX_COLOR, pipeline.getVertexFormatBinding(0))
+        assertEquals(PrimitiveTopology.QUADS, pipeline.primitiveTopology)
+        assertEquals("Mine2DTextShadow", shader.uniformBlock?.name)
+        assertEquals(
+            listOf("UvBounds", "UvPerGuiUnit", "BlurRadius", "Grayscale"),
+            shader.uniformBlock?.uniforms?.map(Mine2DUniform<*>::name),
+        )
+        assertSame(
+            Mine2DShaders.SHADOW_BLUR_RADIUS,
+            shader.uniformBlock?.uniforms?.get(2),
+        )
+        assertSame(
+            Mine2DShaders.SHADOW_BLUR_RADIUS,
+            Mine2DShaders.BOX_SHADOW.uniformBlock?.uniforms?.get(2),
+        )
+    }
+
+    @Test
     fun `rejects a pipeline with an incompatible topology`() {
         assertFailsWith<IllegalArgumentException> {
             Mine2DShader.from(RenderPipelines.GUI)

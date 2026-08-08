@@ -1,5 +1,7 @@
 #version 330
 
+#moj_import <mine2dengine:shadow.glsl>
+
 layout(std140) uniform DynamicTransforms {
     mat4 ModelViewMat;
     vec4 ColorModulator;
@@ -30,9 +32,7 @@ void main() {
     vec2 point = shadowUv * drawSize - halfSize - vec2(BlurRadius);
     float radius = clamp(CornerRadius, 0.0, min(halfSize.x, halfSize.y));
     float distanceToBox = roundedBoxDistance(point, halfSize, radius);
-    float coverage = BlurRadius > 0.0
-        ? 1.0 - smoothstep(-BlurRadius, BlurRadius, distanceToBox)
-        : (distanceToBox <= 0.0 ? 1.0 : 0.0);
+    float coverage = shadowCoverage(distanceToBox, BlurRadius);
 
     vec4 color = ShadowColor * ColorModulator;
     color.a *= coverage;

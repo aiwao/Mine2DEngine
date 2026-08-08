@@ -5,7 +5,9 @@
   "client": [
     "GlyphRenderStateMixin",
     "GuiRendererDrawAccessor",
-    "GuiRendererMixin"
+    "GuiRendererGlyphVisitorMixin",
+    "GuiRendererMixin",
+    "GuiTextRenderStateMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -166,8 +166,27 @@ object Mine2DMaterials {
     ): Mine2DMaterial = Mine2DShaders.BOX_SHADOW.material {
         set(Mine2DShaders.BOX_SHADOW_COLOR, color.toRgbaVector())
         set(Mine2DShaders.BOX_SHADOW_SIZE, Vector2f(width, height))
-        set(Mine2DShaders.BOX_SHADOW_BLUR_RADIUS, blurRadius)
+        set(Mine2DShaders.SHADOW_BLUR_RADIUS, blurRadius)
         set(Mine2DShaders.BOX_SHADOW_CORNER_RADIUS, cornerRadius)
+    }
+
+    internal fun textShadow(
+        minU: Float,
+        minV: Float,
+        maxU: Float,
+        maxV: Float,
+        uPerGuiUnit: Float,
+        vPerGuiUnit: Float,
+        blurRadius: Float,
+        grayscale: Boolean,
+    ): Mine2DMaterial = Mine2DShaders.TEXT_SHADOW.material {
+        set(Mine2DShaders.TEXT_SHADOW_UV_BOUNDS, Vector4f(minU, minV, maxU, maxV))
+        set(
+            Mine2DShaders.TEXT_SHADOW_UV_PER_GUI_UNIT,
+            Vector2f(uPerGuiUnit, vPerGuiUnit),
+        )
+        set(Mine2DShaders.SHADOW_BLUR_RADIUS, blurRadius)
+        set(Mine2DShaders.TEXT_SHADOW_GRAYSCALE, if (grayscale) 1 else 0)
     }
 }
 

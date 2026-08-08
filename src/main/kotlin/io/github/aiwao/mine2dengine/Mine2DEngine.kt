@@ -1,5 +1,6 @@
 package io.github.aiwao.mine2dengine
 
+import io.github.aiwao.mine2dengine.internal.render.Mine2DTextShadowContext
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import org.joml.Matrix3x2f
 import org.joml.Vector2fc
@@ -235,9 +236,10 @@ class Mine2DEngine(
     /**
      * Draws only the shadow of [text], leaving the foreground text to a subsequent [text] call.
      *
-     * A zero [blurRadius] uses one glyph draw. A positive radius uses a bounded set of translucent
-     * glyph samples, preserving predictable GPU and extracted-render-state usage for large radii.
-     * Coordinates, offsets, and blur use GUI units and follow the active pose and scissor rectangle.
+     * The parameters match one CSS `text-shadow`: horizontal and vertical offsets may be negative,
+     * while the optional blur radius must be non-negative. Blur is evaluated from the glyph alpha
+     * by the text-shadow shader rather than by drawing displaced copies of the text. Coordinates,
+     * offsets, and blur use GUI units and follow the active pose and scissor rectangle.
      */
     @JvmOverloads
     fun textShadow(
@@ -255,15 +257,28 @@ class Mine2DEngine(
         val colorAlpha = color ushr 24
         if (text.isEmpty() || colorAlpha == 0) return
 
-        calculateTextShadowSamples(blurRadius, colorAlpha).forEach { sample ->
+        if (blurRadius == 0f) {
             enqueueText(
                 font = font,
                 text = text,
                 x = x,
                 y = y,
-                color = color.withAlpha(sample.alpha),
-                offsetX = offsetX + sample.offsetX,
-                offsetY = offsetY + sample.offsetY,
+                color = color,
+                offsetX = offsetX,
+                offsetY = offsetY,
+            )
+            return
+        }
+
+        Mine2DTextShadowContext.begin(blurRadius).use {
+            enqueueText(
+                font = font,
+                text = text,
+                x = x,
+                y = y,
+                color = color,
+                offsetX = offsetX,
+                offsetY = offsetY,
             )
         }
     }

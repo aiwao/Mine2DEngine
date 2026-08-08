@@ -1,57 +1,77 @@
 package io.github.aiwao.mine2dengine
 
-import kotlin.math.hypot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
+import kotlin.test.assertNull
 
 class Mine2DTextShadowTest {
     @Test
-    fun `zero blur uses one glyph sample with the requested alpha`() {
-        assertEquals(
-            listOf(Mine2DTextShadowSample(0f, 0f, 128)),
-            calculateTextShadowSamples(blurRadius = 0f, colorAlpha = 128),
+    fun `glyph quad expands by blur while preserving atlas scale`() {
+        val geometry = calculateTextShadowGlyphGeometry(glyphQuad(), blurRadius = 2f)!!
+
+        assertEquals(0.25f, geometry.minU)
+        assertEquals(0.4f, geometry.minV)
+        assertEquals(0.35f, geometry.maxU)
+        assertEquals(0.6f, geometry.maxV)
+        assertEquals(0.025f, geometry.uPerGuiUnit, absoluteTolerance = 0.00001f)
+        assertEquals(0.025f, geometry.vPerGuiUnit, absoluteTolerance = 0.00001f)
+        val expected = listOf(
+            vertex(0f, 13f, 0.2f, 0.65f),
+            vertex(0f, 1f, 0.2f, 0.35f),
+            vertex(8f, 1f, 0.4f, 0.35f),
+            vertex(8f, 13f, 0.4f, 0.65f),
         )
-    }
-
-    @Test
-    fun `blur samples stay bounded and preserve combined opacity`() {
-        val samples = calculateTextShadowSamples(blurRadius = 4f, colorAlpha = 128)
-        val combinedOpacity = 1.0 - samples.fold(1.0) { transparency, sample ->
-            transparency * (1.0 - sample.alpha / 255.0)
+        expected.zip(geometry.vertices).forEach { (expectedVertex, actualVertex) ->
+            assertEquals(expectedVertex.x, actualVertex.x)
+            assertEquals(expectedVertex.y, actualVertex.y)
+            assertEquals(expectedVertex.u, actualVertex.u, absoluteTolerance = 0.00001f)
+            assertEquals(expectedVertex.v, actualVertex.v, absoluteTolerance = 0.00001f)
+            assertEquals(expectedVertex.color, actualVertex.color)
+            assertEquals(expectedVertex.light, actualVertex.light)
         }
-
-        assertEquals(13, samples.size)
-        assertTrue(samples.all { sample -> hypot(sample.offsetX, sample.offsetY) <= 4.0001f })
-        assertEquals(128.0 / 255.0, combinedOpacity, absoluteTolerance = 0.03)
     }
 
     @Test
-    fun `large blur has a fixed sample limit and does not make every sample opaque`() {
-        val samples = calculateTextShadowSamples(blurRadius = 100f, colorAlpha = 255)
-
-        assertEquals(25, samples.size)
-        assertTrue(samples.none { sample -> sample.alpha == 255 })
+    fun `empty glyph does not create a shadow quad`() {
+        assertNull(calculateTextShadowGlyphGeometry(emptyList(), blurRadius = 2f))
     }
 
     @Test
-    fun `very low alpha blur keeps at least one visible sample`() {
-        val samples = calculateTextShadowSamples(blurRadius = 4f, colorAlpha = 1)
-
-        assertEquals(listOf(Mine2DTextShadowSample(0f, 0f, 1)), samples)
-    }
-
-    @Test
-    fun `text shadow samples reject invalid inputs`() {
+    fun `glyph shadow geometry rejects invalid inputs`() {
         assertFailsWith<IllegalArgumentException> {
-            calculateTextShadowSamples(blurRadius = -1f, colorAlpha = 128)
+            calculateTextShadowGlyphGeometry(glyphQuad(), blurRadius = -1f)
         }
         assertFailsWith<IllegalArgumentException> {
-            calculateTextShadowSamples(blurRadius = Float.NaN, colorAlpha = 128)
+            calculateTextShadowGlyphGeometry(glyphQuad().dropLast(1), blurRadius = 1f)
         }
         assertFailsWith<IllegalArgumentException> {
-            calculateTextShadowSamples(blurRadius = 1f, colorAlpha = 256)
+            calculateTextShadowGlyphGeometry(
+                List(4) { vertex(2f, 3f, 0.25f, 0.4f) },
+                blurRadius = 1f,
+            )
         }
     }
+
+    private fun glyphQuad(): List<Mine2DTextShadowVertex> = listOf(
+        vertex(2f, 11f, 0.25f, 0.6f),
+        vertex(2f, 3f, 0.25f, 0.4f),
+        vertex(6f, 3f, 0.35f, 0.4f),
+        vertex(6f, 11f, 0.35f, 0.6f),
+    )
+
+    private fun vertex(
+        x: Float,
+        y: Float,
+        u: Float,
+        v: Float,
+    ): Mine2DTextShadowVertex = Mine2DTextShadowVertex(
+        x = x,
+        y = y,
+        z = 0f,
+        color = 0x80402010.toInt(),
+        u = u,
+        v = v,
+        light = 0x00F000F0,
+    )
 }
