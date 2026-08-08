@@ -1,44 +1,96 @@
 package io.github.aiwao.mine2dengine
 
 import com.mojang.blaze3d.PrimitiveTopology
+import com.mojang.blaze3d.pipeline.BindGroupLayout
 import com.mojang.blaze3d.pipeline.RenderPipeline
+import com.mojang.blaze3d.shaders.UniformType
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.resources.Identifier
 
 /**
- * A shader pipeline compatible with [Mine2DEngine]'s polygon vertex format.
+ * An immutable polygon pipeline and its typed material binding schema.
  *
- * Custom pipelines must consume `Position` and `Color` attributes and use the
- * triangle primitive topology. Prefer [register] when creating one so it is
- * included in Minecraft's pipeline registry.
+ * Custom pipelines consume `Position` and `Color` attributes and use triangle topology. A shader
+ * may declare one arbitrary std140 [uniformBlock] and any number of typed [samplers]. Values are
+ * supplied by immutable [Mine2DMaterial] instances.
  */
 class Mine2DShader private constructor(
     val pipeline: RenderPipeline,
+    val uniformBlock: Mine2DUniformBlock?,
+    samplers: Iterable<Mine2DSampler>,
 ) {
+    val samplers: List<Mine2DSampler> = samplers.toList()
+
+    init {
+        val duplicateSamplerNames = this.samplers
+            .groupingBy(Mine2DSampler::name)
+            .eachCount()
+            .filterValues { count -> count > 1 }
+            .keys
+        require(duplicateSamplerNames.isEmpty()) {
+            "Shader contains duplicate sampler names: ${duplicateSamplerNames.joinToString()}"
+        }
+        require(uniformBlock == null || this.samplers.none { it.name == uniformBlock.name }) {
+            "A uniform block and sampler cannot share the name ${uniformBlock?.name}"
+        }
+    }
+
+    /** Creates a validated immutable material for this shader. */
+    @JvmOverloads
+    fun material(configure: Mine2DMaterialBuilder.() -> Unit = {}): Mine2DMaterial =
+        material(base = null, configure)
+
+    internal fun material(
+        base: Mine2DMaterial?,
+        configure: Mine2DMaterialBuilder.() -> Unit,
+    ): Mine2DMaterial = Mine2DMaterialBuilder(this, base).apply(configure).build()
+
     companion object {
-        /**
-         * Wraps an already-created compatible pipeline.
-         */
+        /** Wraps an already-created compatible pipeline and describes its Mine2D bindings. */
         @JvmStatic
-        fun from(pipeline: RenderPipeline): Mine2DShader {
+        @JvmOverloads
+        fun from(
+            pipeline: RenderPipeline,
+            uniformBlock: Mine2DUniformBlock? = null,
+            samplers: List<Mine2DSampler> = emptyList(),
+        ): Mine2DShader {
             require(pipeline.getVertexFormatBinding(0) == DefaultVertexFormat.POSITION_COLOR) {
                 "Mine2D shaders must use DefaultVertexFormat.POSITION_COLOR at binding 0"
             }
             require(pipeline.primitiveTopology == PrimitiveTopology.TRIANGLES) {
                 "Mine2D shaders must use PrimitiveTopology.TRIANGLES"
             }
-            return Mine2DShader(pipeline)
+
+            val uniformDescriptions = BindGroupLayout.flattenUniforms(pipeline.bindGroupLayouts)
+            if (uniformBlock != null) {
+                require(
+                    uniformDescriptions.any { description ->
+                        description.name() == uniformBlock.name &&
+                            description.type() == UniformType.UNIFORM_BUFFER
+                    },
+                ) {
+                    "Pipeline ${pipeline.location} does not declare uniform block ${uniformBlock.name}"
+                }
+            }
+
+            val declaredSamplers = BindGroupLayout.flattenSamplers(pipeline.bindGroupLayouts).toSet()
+            val missingSamplers = samplers.filterNot { sampler -> sampler.name in declaredSamplers }
+            require(missingSamplers.isEmpty()) {
+                "Pipeline ${pipeline.location} does not declare samplers: " +
+                    missingSamplers.joinToString { sampler -> sampler.name }
+            }
+
+            return Mine2DShader(pipeline, uniformBlock, samplers)
         }
 
         /**
          * Creates and registers a Mine2D-compatible pipeline.
          *
-         * Call this during mod initialization. Shader identifiers are relative
-         * to `assets/<namespace>/shaders/` and omit the `.vsh` / `.fsh` suffix.
-         * [configure] can add shader defines or alter blend/depth state; the
-         * vertex format, primitive topology, and culling mode are enforced by
-         * this method.
+         * Shader identifiers are relative to `assets/<namespace>/shaders/` and omit the `.vsh` or
+         * `.fsh` suffix. The uniform block must match a std140 block in the shader sources exactly.
+         * [configure] may alter blend or depth state and add defines or other binding layouts; the
+         * polygon vertex format, topology, and culling mode are enforced afterward.
          */
         @JvmStatic
         @JvmOverloads
@@ -46,26 +98,43 @@ class Mine2DShader private constructor(
             location: Identifier,
             vertexShader: Identifier,
             fragmentShader: Identifier,
+            uniformBlock: Mine2DUniformBlock? = null,
+            samplers: List<Mine2DSampler> = emptyList(),
             configure: RenderPipeline.Builder.() -> Unit = {},
         ): Mine2DShader {
-            val pipeline = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
+            val pipelineBuilder = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
                 .withLocation(location)
                 .withVertexShader(vertexShader)
                 .withFragmentShader(fragmentShader)
                 .apply(configure)
+
+            if (uniformBlock != null || samplers.isNotEmpty()) {
+                val materialBindings = BindGroupLayout.builder()
+                uniformBlock?.let { block ->
+                    materialBindings.withUniform(block.name, UniformType.UNIFORM_BUFFER)
+                }
+                samplers.forEach { sampler -> materialBindings.withSampler(sampler.name) }
+                pipelineBuilder.withBindGroupLayout(materialBindings.build())
+            }
+
+            val pipeline = pipelineBuilder
                 .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
                 .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
                 .withCull(false)
                 .build()
 
-            return from(RenderPipelines.register(pipeline))
+            return from(
+                pipeline = RenderPipelines.register(pipeline),
+                uniformBlock = uniformBlock,
+                samplers = samplers,
+            )
         }
     }
 }
 
-/** Built-in pipelines supplied by the Mine2D engine. */
+/** Built-in pipelines supplied by Mine2D. */
 object Mine2DShaders {
-    /** The standard Minecraft GUI color shader with alpha blending. */
+    /** Standard Minecraft GUI vertex color shader with alpha blending. */
     @JvmField
     val COLOR: Mine2DShader = Mine2DShader.register(
         location = Identifier.fromNamespaceAndPath("mine2dengine", "pipeline/mine2d_color"),
@@ -73,6 +142,6 @@ object Mine2DShaders {
         fragmentShader = Identifier.withDefaultNamespace("core/gui"),
     )
 
-    /** Forces object initialization during the mod initialization phase. */
+    /** Forces object initialization during mod initialization. */
     internal fun initialize() = Unit
 }

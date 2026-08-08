@@ -3,7 +3,9 @@
   "package": "io.github.aiwao.mine2dengine.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
-    "GlyphRenderStateMixin"
+    "GlyphRenderStateMixin",
+    "GuiRendererDrawAccessor",
+    "GuiRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

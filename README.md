@@ -103,7 +103,7 @@ Coordinates are GUI coordinates, and colors are Minecraft ARGB integers (`0xAARR
 | `line(startX, startY, endX, endY, width, color)` | Draws a filled line with butt caps. |
 | `circle(centerX, centerY, radius, color, segments)` | Draws a filled regular-polygon approximation of a circle. More segments produce a smoother edge. |
 | `text(font, text, x, y, color, dropShadow)` | Draws text using a loaded `Mine2DFont`. |
-| `withShader(shader) { ... }` | Temporarily changes the default polygon shader and restores it after the block. |
+| `withMaterial(material) { ... }` | Temporarily changes the default polygon material and restores it after the block. |
 
 Polygon points may use clockwise or counterclockwise order. A polygon must have at least three distinct points, a non-zero area, and no self-intersections. Consecutive duplicate points and redundant collinear points are removed automatically. Lines require different endpoints and a positive width; circles require a positive radius and at least three segments.
 
@@ -191,6 +191,7 @@ import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
+import io.github.aiwao.mine2dengine.layout.UiPaint
 import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
@@ -202,7 +203,7 @@ val root = div(
         height = 100f,
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
-        backgroundColor = 0xD0202020.toInt(),
+        background = UiPaint(color = 0xD0202020.toInt()),
         horizontalAlignment = UiHorizontalAlignment.CENTER,
         verticalAlignment = UiVerticalAlignment.CENTER,
     ),
@@ -249,11 +250,13 @@ val hoverable = div(
         UiStyle(
             width = 120f,
             height = 24f,
-            backgroundColor = if (element.hovering) {
-                0xFFFFFFFF.toInt()
-            } else {
-                0xFF000000.toInt()
-            },
+            background = UiPaint(
+                color = if (element.hovering) {
+                    0xFFFFFFFF.toInt()
+                } else {
+                    0xFF000000.toInt()
+                },
+            ),
         )
     },
 )
@@ -265,9 +268,10 @@ hoverableLayout.render(draw)
 ```
 
 Dynamic styles are supported by `div`, `p` / `paragraph`, and `button`. Redrawing an existing
-layout refreshes drawing properties such as colors, including values inherited by descendants.
-Recalculate the layout when the resolved style changes sizing, spacing, direction, alignment, or
-font. Assigning `element.style` replaces its dynamic style with that static value.
+layout refreshes drawing properties such as inherited text colors, background paint, and materials.
+Drawing-only changes do not require relayout. Recalculate the
+layout when the resolved style changes sizing, spacing, direction, alignment, or font. Assigning
+`element.style` replaces its dynamic style with that static value.
 
 Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div`, `p` / `paragraph`, and `button`. Set an element's `disabled` property to `true` to prevent its `onClick` callback from running until it is enabled again. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `mouseClick`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. The `MouseButtonEvent` passed to `onDrag` uses the current mouse coordinates and retains the button and modifier information from the `mouseClick` event that started the drag. A drag continues outside the element's bounds until `mouseRelease` is called:
 
@@ -293,22 +297,87 @@ layout.render(draw, left = 24f, top = 32f)
 
 ## Custom shaders
 
-Register custom pipelines during client initialization. Vertex and fragment shader identifiers are relative to `assets/<namespace>/shaders/` and omit the `.vsh` or `.fsh` extension.
+A shader defines a pipeline and its bindings. A material is an immutable set of uniform values and textures for that shader. Register custom pipelines during client initialization. Vertex and fragment shader identifiers are relative to `assets/<namespace>/shaders/` and omit the `.vsh` or `.fsh` extension.
 
 ```kotlin
-val accentShader = Mine2DShader.register(
-    location = Identifier.fromNamespaceAndPath("examplemod", "pipeline/accent"),
-    vertexShader = Identifier.fromNamespaceAndPath("examplemod", "core/accent"),
-    fragmentShader = Identifier.fromNamespaceAndPath("examplemod", "core/accent"),
+val elementBounds = Mine2DUniform.elementBounds()
+val radius = Mine2DUniform.float("Radius", defaultValue = 0f)
+val edgeSoftness = Mine2DUniform.float("EdgeSoftness", defaultValue = 1f)
+
+val roundedRectShader = Mine2DShader.register(
+    location = Identifier.fromNamespaceAndPath("examplemod", "pipeline/rounded_rect"),
+    vertexShader = Identifier.fromNamespaceAndPath("examplemod", "core/rounded_rect"),
+    fragmentShader = Identifier.fromNamespaceAndPath("examplemod", "core/rounded_rect"),
+    uniformBlock = Mine2DUniformBlock(
+        "Mine2DMaterial",
+        elementBounds,
+        radius,
+        edgeSoftness,
+    ),
 )
 
-draw.withShader(accentShader) {
+val roundedPanel = roundedRectShader.material {
+    set(radius, 8f)
+    set(edgeSoftness, 0.75f)
+}
+
+draw.withMaterial(roundedPanel) {
     quad(20f, 20f, 80f, 24f, 0xFFFFFFFF.toInt())
     circle(60f, 72f, 20f, 0xFFFFFFFF.toInt(), segments = 32)
 }
 ```
 
-A Mine2D shader must use `DefaultVertexFormat.POSITION_COLOR` at binding 0 and `PrimitiveTopology.TRIANGLES`. `Mine2DShader.register` enforces that vertex format and topology and disables culling. Use `Mine2DShader.from(...)` only for an already-created compatible pipeline.
+Declare a std140 block in the shader sources with names, types, and ordering matching the keys:
+
+```glsl
+layout(std140) uniform Mine2DMaterial {
+    vec4 ElementBounds;
+    float Radius;
+    float EdgeSoftness;
+};
+```
+
+Assign a material to an individual layout background through `UiPaint`. Background paint is not inherited by children. A paint without a material uses the `Mine2DEngine.material` active during rendering. Paragraph text uses Minecraft's text rendering path and is not affected by the background material.
+
+```kotlin
+val panel = div(
+    UiStyle(
+        width = 120f,
+        height = 40f,
+        background = UiPaint(
+            color = 0xFFFFFFFF.toInt(),
+            material = roundedPanel,
+        ),
+    ),
+)
+```
+
+`Mine2DUniform.int`, `float`, `vec2`, `vec3`, `vec4`, and `mat4` create typed material keys. Keys without defaults are required when the material is built. The engine fills these semantic keys for every draw:
+
+- `elementBounds()`: painted `(left, top, width, height)`
+- `contentBounds()`: area inside padding; equal to element bounds for ordinary polygon calls
+- `viewportSize()`: GUI `(width, height)`
+- `timeSeconds()`: monotonic elapsed seconds
+
+For textures, pass `Mine2DSampler` keys to `register(samplers = ...)` and assign every key while building the material. Use `bind(key, textureView, gpuSampler)` for a fixed texture. A shader that needs the scene behind the GUI can use `bindGuiBackground(key)`:
+
+```kotlin
+val backgroundSampler = Mine2DSampler("BackgroundSampler")
+val blurShader = Mine2DShader.register(
+    location = Identifier.fromNamespaceAndPath("examplemod", "pipeline/blur"),
+    vertexShader = Identifier.fromNamespaceAndPath("examplemod", "core/blur"),
+    fragmentShader = Identifier.fromNamespaceAndPath("examplemod", "core/blur"),
+    samplers = listOf(backgroundSampler),
+)
+
+val blur = blurShader.material {
+    bindGuiBackground(backgroundSampler)
+}
+```
+
+The GUI background is copied to a separate full-resolution texture immediately before extracted GUI elements are rendered. All `bindGuiBackground` bindings in that frame share the snapshot. This avoids the invalid feedback loop caused by sampling the main color texture while it is also the active render attachment. Pass a `FilterMode` as the second argument to override the default linear filtering. Uniforms, vectors, matrices, and sampler assignments are validated when the material is built, and immutable binding descriptions are queued for rendering.
+
+A Mine2D shader must use `DefaultVertexFormat.POSITION_COLOR` at binding 0 and `PrimitiveTopology.TRIANGLES`. `Mine2DShader.register` enforces the vertex format and topology and disables culling. Use `Mine2DShader.from(...)` only for a compatible pipeline that already declares the same uniform and sampler bindings. Polygons with material bindings use one draw each so different uniform values remain isolated; the standard material without custom bindings can still be batched normally.
 
 ## Building from source
 

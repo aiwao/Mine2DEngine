@@ -2,6 +2,8 @@ package io.github.aiwao.mine2dengine
 
 import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.vertex.VertexConsumer
+import io.github.aiwao.mine2dengine.internal.render.Mine2DMaterialRenderState
+import io.github.aiwao.mine2dengine.internal.render.Mine2DRenderBindings
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.state.gui.GuiElementRenderState
@@ -12,10 +14,11 @@ import kotlin.math.floor
 
 internal class PolygonRenderState(
     private val shader: Mine2DShader,
+    private val bindings: Mine2DRenderBindings,
     private val pose: Matrix3x2fc,
     private val polygon: TriangulatedPolygon,
     private val scissor: ScreenRectangle?,
-) : GuiElementRenderState {
+) : GuiElementRenderState, Mine2DMaterialRenderState {
     private val bounds = calculateBounds(pose, polygon.vertices, scissor)
 
     override fun buildVertices(vertexConsumer: VertexConsumer) {
@@ -34,6 +37,8 @@ internal class PolygonRenderState(
     override fun scissorArea(): ScreenRectangle? = scissor
 
     override fun bounds(): ScreenRectangle? = bounds
+
+    override fun mine2dengineBindings(): Mine2DRenderBindings = bindings
 
     private companion object {
         fun calculateBounds(

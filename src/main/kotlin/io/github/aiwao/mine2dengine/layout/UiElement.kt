@@ -222,7 +222,7 @@ class Button(
     companion object {
         /** A visible default which can be replaced with any [UiStyle]. */
         val DEFAULT_STYLE = UiStyle(
-            backgroundColor = 0xFF555555.toInt(),
+            background = UiPaint(0xFF555555.toInt()),
             padding = UiEdges(vertical = 3f, horizontal = 6f),
         )
     }
