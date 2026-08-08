@@ -3,7 +3,19 @@ package io.github.aiwao.mine2dengine.layout
 import io.github.aiwao.mine2dengine.Mine2DEngine
 import io.github.aiwao.mine2dengine.Mine2DFont
 import net.minecraft.client.input.MouseButtonEvent
+import java.util.IdentityHashMap
 import kotlin.math.roundToInt
+
+internal data class UiNoneDisplayState(
+    val element: UiElement,
+    val predicate: () -> Boolean,
+    val noneDisplay: Boolean,
+)
+
+internal data class UiLayoutSnapshot(
+    val root: UiLayoutNode,
+    val noneDisplayStates: List<UiNoneDisplayState>,
+)
 
 /** The calculated geometry for one UI element. */
 data class UiLayoutNode(
@@ -21,14 +33,19 @@ data class UiLayoutNode(
     val color: Int = UiStyle.DEFAULT_COLOR,
     /** The text shadow setting resolved from this element's style and its ancestors. */
     val dropShadow: Boolean = UiStyle.DEFAULT_DROP_SHADOW,
+    /** Whether this node generated a layout box. */
+    internal val displayed: Boolean = true,
 )
 
 /** A layout result that can render and dispatch pointer input to UI elements. */
 class UiLayout internal constructor(
-    root: UiLayoutNode,
+    snapshot: UiLayoutSnapshot,
+    private val relayout: (Float, Float, Map<UiElement, Boolean>) -> UiLayoutSnapshot,
 ) {
-    var root: UiLayoutNode = root
+    var root: UiLayoutNode = snapshot.root
         private set
+
+    private var noneDisplayStates: List<UiNoneDisplayState> = snapshot.noneDisplayStates
 
     /** The left coordinate of the root's outer box. Changing it translates the complete layout. */
     var left: Float
@@ -44,7 +61,11 @@ class UiLayout internal constructor(
             moveTo(left, value)
         }
 
-    val size: UiSize = UiSize(root.outerBounds.width, root.outerBounds.height)
+    val size: UiSize
+        get() {
+            refreshNoneDisplay()
+            return UiSize(root.outerBounds.width, root.outerBounds.height)
+        }
 
     internal fun moveTo(left: Float, top: Float) {
         require(left.isFinite()) { "Left must be finite: $left" }
@@ -57,8 +78,9 @@ class UiLayout internal constructor(
         root = root.translated(deltaX, deltaY)
     }
 
-    /** Renders this layout without recalculating its geometry. */
+    /** Renders this layout, recalculating geometry when a none-display value changes. */
     fun render(renderer: Mine2DEngine) {
+        refreshNoneDisplay()
         draw(root, renderer, ResolvedUiTextStyle())
     }
 
@@ -69,8 +91,10 @@ class UiLayout internal constructor(
     }
 
     /** Finds the deepest element at the given GUI coordinate. */
-    fun elementAt(x: Float, y: Float): UiElement? =
-        nodesInPaintOrder().asReversed().firstOrNull { it.bounds.contains(x, y) }?.element
+    fun elementAt(x: Float, y: Float): UiElement? {
+        refreshNoneDisplay()
+        return nodesInPaintOrder().asReversed().firstOrNull { it.bounds.contains(x, y) }?.element
+    }
 
     /**
      * Invokes the topmost clickable element at the GUI coordinate in [event].
@@ -80,6 +104,7 @@ class UiLayout internal constructor(
      * invoked while [UiElement.disabled] is true. Returns true when one was hit.
      */
     fun click(event: MouseButtonEvent): Boolean {
+        refreshNoneDisplay()
         val x = event.x().toFloat()
         val y = event.y().toFloat()
         val nodes = nodesInPaintOrder()
@@ -109,6 +134,7 @@ class UiLayout internal constructor(
      * one callback was invoked.
      */
     fun mouseMove(x: Double, y: Double): Boolean {
+        refreshNoneDisplay()
         val layoutX = x.toFloat()
         val layoutY = y.toFloat()
         val nodes = nodesInPaintOrder()
@@ -161,6 +187,7 @@ class UiLayout internal constructor(
 
     /** Stops the current drag. Returns true when an element was dragging. */
     fun release(): Boolean {
+        refreshNoneDisplay()
         val draggingElements = nodesInPaintOrder()
             .map(UiLayoutNode::element)
             .filter(UiElement::dragging)
@@ -171,8 +198,10 @@ class UiLayout internal constructor(
         return true
     }
 
-    fun nodeOf(element: UiElement): UiLayoutNode? =
-        nodesInPaintOrder().firstOrNull { it.element === element }
+    fun nodeOf(element: UiElement): UiLayoutNode? {
+        refreshNoneDisplay()
+        return nodesInPaintOrder().firstOrNull { it.element === element }
+    }
 
     internal fun nodesInPaintOrder(): List<UiLayoutNode> = buildList {
         fun addTree(node: UiLayoutNode) {
@@ -182,11 +211,43 @@ class UiLayout internal constructor(
         addTree(root)
     }
 
+    private fun refreshNoneDisplay() {
+        val evaluatedNoneDisplays = IdentityHashMap<UiElement, Boolean>()
+        var changed = false
+        noneDisplayStates.forEach { state ->
+            val noneDisplay = state.predicate()
+            evaluatedNoneDisplays[state.element] = noneDisplay
+            changed = changed || noneDisplay != state.noneDisplay
+        }
+        if (!changed) return
+
+        val previousNodes = nodesInPaintOrder()
+        val snapshot = relayout(left, top, evaluatedNoneDisplays)
+        root = snapshot.root
+        noneDisplayStates = snapshot.noneDisplayStates
+
+        val displayedElements = java.util.Collections.newSetFromMap(
+            IdentityHashMap<UiElement, Boolean>(),
+        )
+        nodesInPaintOrder()
+            .filter(UiLayoutNode::displayed)
+            .mapTo(displayedElements, UiLayoutNode::element)
+        previousNodes
+            .map(UiLayoutNode::element)
+            .filterNot(displayedElements::contains)
+            .forEach { element ->
+                element.dragging = false
+                element.hovering = false
+            }
+    }
+
     private fun draw(
         node: UiLayoutNode,
         renderer: Mine2DEngine,
         inheritedTextStyle: ResolvedUiTextStyle,
     ) {
+        if (!node.displayed) return
+
         val style = node.element.style
         val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
         style.backgroundColor?.let { color ->

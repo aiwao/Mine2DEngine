@@ -175,6 +175,7 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
 
 - `width` and `height` specify the content box. A `null` value shrinks to the text or children.
 - Padding is inside the painted background; margin is outside it.
+- When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
 - `Div` and `Button` place direct children vertically or horizontally.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
 - `color`, `font`, and `dropShadow` are inherited from ancestors and may be overridden by a child.
@@ -271,7 +272,7 @@ val moveHandled = layout.mouseMove(mouseX, mouseY)
 val releaseHandled = layout.release()
 ```
 
-`LayoutEngine.layout(root)` calculates geometry without drawing. Call `render(renderer)` on the returned layout to draw it. Recalculate the layout after changing text, styles, or children.
+`LayoutEngine.layout(root)` calculates geometry without drawing. Call `render(renderer)` on the returned layout to draw it. Changes to `noneDisplay` trigger automatic recalculation; recalculate the layout after changing text, other styles, or children.
 
 To move an already calculated layout, change its `left` / `top`. Every element and hit-test area moves with it. `layout.render(renderer, left, top)` moves and redraws it in one call.
 

@@ -57,8 +57,27 @@ private fun calculateLayout(
     require(left.isFinite()) { "Left must be finite: $left" }
     require(top.isFinite()) { "Top must be finite: $top" }
 
-    val measured = measure(root, ResolvedUiTextStyle(), textMeasurer)
-    return UiLayout(place(measured, left, top))
+    fun calculateSnapshot(
+        snapshotLeft: Float,
+        snapshotTop: Float,
+        evaluatedNoneDisplays: Map<UiElement, Boolean>,
+    ): UiLayoutSnapshot {
+        val noneDisplayStates = mutableListOf<UiNoneDisplayState>()
+        val measured = measure(
+            element = root,
+            inheritedTextStyle = ResolvedUiTextStyle(),
+            textMeasurer = textMeasurer,
+            noneDisplayStates = noneDisplayStates,
+            evaluatedNoneDisplays = evaluatedNoneDisplays,
+        )
+        return UiLayoutSnapshot(
+            root = place(measured, snapshotLeft, snapshotTop),
+            noneDisplayStates = noneDisplayStates,
+        )
+    }
+
+    val snapshot = calculateSnapshot(left, top, emptyMap())
+    return UiLayout(snapshot, ::calculateSnapshot)
 }
 
 private data class MeasuredNode(
@@ -67,27 +86,66 @@ private data class MeasuredNode(
     val contentSize: UiSize,
     val children: List<MeasuredNode>,
     val textStyle: ResolvedUiTextStyle,
+    val displayed: Boolean,
 ) {
-    val boundsSize: UiSize = UiSize(
-        width = contentSize.width + style.padding.horizontal,
-        height = contentSize.height + style.padding.vertical,
-    )
+    val boundsSize: UiSize = if (displayed) {
+        UiSize(
+            width = contentSize.width + style.padding.horizontal,
+            height = contentSize.height + style.padding.vertical,
+        )
+    } else {
+        UiSize(0f, 0f)
+    }
 
-    val outerSize: UiSize = UiSize(
-        width = boundsSize.width + style.margin.horizontal,
-        height = boundsSize.height + style.margin.vertical,
-    )
+    val outerSize: UiSize = if (displayed) {
+        UiSize(
+            width = boundsSize.width + style.margin.horizontal,
+            height = boundsSize.height + style.margin.vertical,
+        )
+    } else {
+        UiSize(0f, 0f)
+    }
 }
 
 private fun measure(
     element: UiElement,
     inheritedTextStyle: ResolvedUiTextStyle,
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
+    noneDisplayStates: MutableList<UiNoneDisplayState>,
+    evaluatedNoneDisplays: Map<UiElement, Boolean>,
 ): MeasuredNode {
     val style = element.style
     val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
+    val noneDisplay = evaluatedNoneDisplays[element] ?: style.noneDisplay()
+    noneDisplayStates += UiNoneDisplayState(
+        element = element,
+        predicate = style.noneDisplay,
+        noneDisplay = noneDisplay,
+    )
+
+    if (noneDisplay) {
+        return MeasuredNode(
+            element = element,
+            style = style,
+            contentSize = UiSize(0f, 0f),
+            children = emptyList(),
+            textStyle = resolvedTextStyle,
+            displayed = false,
+        )
+    }
+
     val children = if (element is UiContainer) {
-        element.children.map { child -> measure(child, resolvedTextStyle, textMeasurer) }
+        element.children
+            .map { child ->
+                measure(
+                    element = child,
+                    inheritedTextStyle = resolvedTextStyle,
+                    textMeasurer = textMeasurer,
+                    noneDisplayStates = noneDisplayStates,
+                    evaluatedNoneDisplays = evaluatedNoneDisplays,
+                )
+            }
+            .filter(MeasuredNode::displayed)
     } else {
         emptyList()
     }
@@ -111,6 +169,7 @@ private fun measure(
         ),
         children = children,
         textStyle = resolvedTextStyle,
+        displayed = true,
     )
 }
 
@@ -154,6 +213,21 @@ private fun measureChildren(
 
 private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): UiLayoutNode {
     val style = measured.style
+    if (!measured.displayed) {
+        val emptyBounds = UiRect(outerLeft, outerTop, 0f, 0f)
+        return UiLayoutNode(
+            element = measured.element,
+            outerBounds = emptyBounds,
+            bounds = emptyBounds,
+            contentBounds = emptyBounds,
+            children = emptyList(),
+            font = measured.textStyle.font,
+            color = measured.textStyle.color,
+            dropShadow = measured.textStyle.dropShadow,
+            displayed = false,
+        )
+    }
+
     val bounds = UiRect(
         left = outerLeft + style.margin.left,
         top = outerTop + style.margin.top,
@@ -177,6 +251,7 @@ private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): Ui
         font = measured.textStyle.font,
         color = measured.textStyle.color,
         dropShadow = measured.textStyle.dropShadow,
+        displayed = measured.displayed,
     )
 }
 

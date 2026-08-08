@@ -16,6 +16,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -63,6 +64,7 @@ class LayoutEngineTest {
 
         assertEquals(null, UiStyle().color)
         assertEquals(null, UiStyle().dropShadow)
+        assertFalse(UiStyle().noneDisplay())
         assertEquals(UiStyle.DEFAULT_COLOR, layout.root.color)
         assertTrue(layout.root.dropShadow)
     }
@@ -231,6 +233,120 @@ class LayoutEngineTest {
         assertEquals(3f, layout.nodeOf(first)!!.outerBounds.top)
         assertEquals(17f, layout.nodeOf(second)!!.outerBounds.top)
         assertEquals(33f, layout.nodeOf(third)!!.outerBounds.top)
+    }
+
+    @Test
+    fun `none display removes an element and its descendants from layout`() {
+        lateinit var first: Paragraph
+        lateinit var hidden: Div
+        lateinit var hiddenParagraph: Paragraph
+        lateinit var last: Paragraph
+        val root = div(
+            UiStyle(
+                direction = UiDirection.HORIZONTAL,
+                gap = 4f,
+            ),
+        ) {
+            first = p("a")
+            hidden = div(
+                UiStyle(
+                    width = 100f,
+                    height = 100f,
+                    margin = UiEdges(10f),
+                    padding = UiEdges(10f),
+                    noneDisplay = { true },
+                ),
+            ) {
+                hiddenParagraph = p("hidden")
+            }
+            last = p("bc")
+        }
+
+        val layout = calculateLayout(root, left = 2f, top = 3f, textMeasurer)
+
+        assertEquals(UiSize(19f, 10f), layout.size)
+        assertEquals(2f, layout.nodeOf(first)!!.outerBounds.left)
+        assertEquals(11f, layout.nodeOf(last)!!.outerBounds.left)
+        assertNull(layout.nodeOf(hidden))
+        assertNull(layout.nodeOf(hiddenParagraph))
+    }
+
+    @Test
+    fun `click-driven none display dynamically recalculates an existing layout`() {
+        var opened = true
+        var evaluations = 0
+        lateinit var conditional: Paragraph
+        val root = div(
+            UiStyle(
+                direction = UiDirection.HORIZONTAL,
+                gap = 3f,
+            ),
+        ) {
+            p("a", onClick = { opened = !opened })
+            conditional = p(
+                "bc",
+                UiStyle(
+                    noneDisplay = {
+                        evaluations++
+                        !opened
+                    },
+                ),
+            )
+            p("d")
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(UiSize(26f, 10f), layout.size)
+        assertNotNull(layout.nodeOf(conditional))
+
+        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertFalse(opened)
+        assertEquals(UiSize(13f, 10f), layout.size)
+        assertNull(layout.nodeOf(conditional))
+
+        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertTrue(opened)
+        assertEquals(UiSize(26f, 10f), layout.size)
+        assertNotNull(layout.nodeOf(conditional))
+        assertTrue(evaluations >= 3)
+    }
+
+    @Test
+    fun `none display root has no size and does not measure text or receive input`() {
+        var textMeasured = false
+        var clicked = false
+        val hidden = Paragraph(
+            text = "hidden",
+            style = UiStyle(
+                width = 100f,
+                height = 50f,
+                margin = UiEdges(10f),
+                padding = UiEdges(10f),
+                noneDisplay = { true },
+            ),
+            onClick = { clicked = true },
+        )
+        val failOnTextMeasurement = object : UiTextMeasurer {
+            override val lineHeight = 10f
+
+            override fun width(text: String): Float {
+                textMeasured = true
+                return text.length * 5f
+            }
+        }
+
+        val layout = calculateLayout(hidden, left = 2f, top = 3f, failOnTextMeasurement)
+
+        assertEquals(UiSize(0f, 0f), layout.size)
+        assertEquals(UiRect(2f, 3f, 0f, 0f), layout.root.outerBounds)
+        assertEquals(layout.root.outerBounds, layout.root.bounds)
+        assertEquals(layout.root.outerBounds, layout.root.contentBounds)
+        assertFalse(layout.root.displayed)
+        assertFalse(textMeasured)
+        assertNull(layout.elementAt(2f, 3f))
+        assertFalse(layout.click(MouseButtonEvent(2.0, 3.0, MouseButtonInfo(0, 0))))
+        assertFalse(clicked)
     }
 
     @Test
