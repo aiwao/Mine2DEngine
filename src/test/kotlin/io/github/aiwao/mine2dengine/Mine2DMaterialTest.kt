@@ -200,6 +200,29 @@ class Mine2DMaterialTest {
     }
 
     @Test
+    fun `built-in drop shadow material packs color transform and viewport parameters`() {
+        val material = Mine2DMaterials.dropShadow(
+            color = 0x80402010.toInt(),
+            offsetX = 3f,
+            offsetY = -2f,
+            viewportWidth = 320f,
+            viewportHeight = 180f,
+            blurAxisXx = 6f,
+            blurAxisXy = 1f,
+            blurAxisYx = 2f,
+            blurAxisYy = 7f,
+            blurRadius = 6f,
+        )
+        val data = material.resolveBindings(defaultContext()).uniforms().single().dataUnsafe()
+        val buffer = ByteBuffer.wrap(data).order(ByteOrder.nativeOrder())
+
+        assertFloatSequence(buffer, 0, 64f / 255f, 32f / 255f, 16f / 255f, 128f / 255f)
+        assertFloatSequence(buffer, 16, 3f, -2f, 320f, 180f)
+        assertFloatSequence(buffer, 32, 6f, 1f, 2f, 7f)
+        assertFloatSequence(buffer, 48, 6f, 0f, 0f, 0f)
+    }
+
+    @Test
     fun `built-in text shadow material packs glyph atlas and blur parameters`() {
         val material = Mine2DMaterials.textShadow(
             minU = 0.1f,

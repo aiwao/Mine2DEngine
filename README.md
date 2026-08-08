@@ -192,6 +192,8 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
 - Padding is inside the painted background; margin is outside it.
 - `boxShadow` paints a soft rounded-box shadow behind an element. It is local to that element and
   does not affect layout size or pointer bounds.
+- `dropShadow` follows the composited alpha of an element's background, text, and descendants, like
+  CSS `filter: drop-shadow()`. It is local to that element and does not affect layout or hit bounds.
 - When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
 - `Div` and `Button` place direct children vertically or horizontally.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
@@ -205,6 +207,7 @@ import io.github.aiwao.mine2dengine.layout.LayoutEngine
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
+import io.github.aiwao.mine2dengine.layout.UiDropShadow
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
 import io.github.aiwao.mine2dengine.layout.UiPaint
@@ -238,7 +241,14 @@ val root = div(
 ) {
     p(
         "Mine2DEngine",
-        UiStyle(color = 0xFFFFCC00.toInt()),
+        UiStyle(
+            color = 0xFFFFCC00.toInt(),
+            dropShadow = UiDropShadow(
+                color = 0x60000000,
+                offsetY = 3f,
+                blurRadius = 4f,
+            ),
+        ),
         onClick = { event -> println("Title: button=${event.button()}") },
         onMouseMove = { x, y -> println("Title: x=$x, y=$y") },
         onDrag = { event ->
@@ -330,6 +340,12 @@ paint-only overflow: they do not change the element's geometry or hit area. The 
 current GUI pose and scissor. For a standalone shadow outside the layout engine, call
 `Mine2DEngine.boxShadow(...)` before drawing its foreground box. This built-in effect follows a
 rectangle or rounded rectangle; use a custom shader or off-screen mask for an arbitrary alpha shape.
+
+`UiDropShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, and non-negative `blurRadius`.
+The renderer composites the element's background, text, and complete descendant subtree into a
+temporary alpha mask, then draws one Gaussian-blurred copy behind the original pixels. The property
+is not inherited, supports nested drop shadows, and corresponds to one CSS
+`filter: drop-shadow(offsetX offsetY blurRadius color)` operation.
 
 `UiTextShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, and non-negative `blurRadius`.
 It is inherited with other text properties and does not affect layout or hit bounds. Use

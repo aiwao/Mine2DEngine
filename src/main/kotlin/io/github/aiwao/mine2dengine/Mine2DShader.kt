@@ -198,6 +198,52 @@ object Mine2DShaders {
         ),
     )
 
+    internal const val DROP_SHADOW_SAMPLER_NAME = "DropShadowSampler"
+    internal val DROP_SHADOW_COLOR = Mine2DUniform.vec4(
+        "ShadowColor",
+        Vector4f(0f, 0f, 0f, 0.5f),
+    )
+    internal val DROP_SHADOW_OFFSET_VIEWPORT = Mine2DUniform.vec4("OffsetAndViewport")
+    internal val DROP_SHADOW_BLUR_AXES = Mine2DUniform.vec4("BlurAxes")
+    internal val DROP_SHADOW_PARAMETERS = Mine2DUniform.vec4("ShadowParameters")
+    private val DROP_SHADOW_UNIFORM_BLOCK = Mine2DUniformBlock(
+        "Mine2DDropShadow",
+        DROP_SHADOW_COLOR,
+        DROP_SHADOW_OFFSET_VIEWPORT,
+        DROP_SHADOW_BLUR_AXES,
+        DROP_SHADOW_PARAMETERS,
+    )
+
+    /** Composites a Gaussian-blurred alpha mask for CSS-compatible drop shadows. */
+    internal val DROP_SHADOW: Mine2DShader = Mine2DShader.from(
+        pipeline = RenderPipelines.register(
+            RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
+                .withLocation(
+                    Identifier.fromNamespaceAndPath(
+                        "mine2dengine",
+                        "pipeline/mine2d_drop_shadow",
+                    ),
+                )
+                .withVertexShader(
+                    Identifier.fromNamespaceAndPath("mine2dengine", "core/drop_shadow"),
+                )
+                .withFragmentShader(
+                    Identifier.fromNamespaceAndPath("mine2dengine", "core/drop_shadow"),
+                )
+                .withBindGroupLayout(
+                    BindGroupLayout.builder()
+                        .withUniform("Mine2DDropShadow", UniformType.UNIFORM_BUFFER)
+                        .withSampler(DROP_SHADOW_SAMPLER_NAME)
+                        .build(),
+                )
+                .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
+                .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
+                .withCull(false)
+                .build(),
+        ),
+        uniformBlock = DROP_SHADOW_UNIFORM_BLOCK,
+    )
+
     internal val TEXT_SHADOW_UV_BOUNDS = Mine2DUniform.vec4("UvBounds")
     internal val TEXT_SHADOW_UV_PER_GUI_UNIT = Mine2DUniform.vec2("UvPerGuiUnit")
     internal val TEXT_SHADOW_GRAYSCALE = Mine2DUniform.int("Grayscale")

@@ -1,8 +1,10 @@
 package io.github.aiwao.mine2dengine
 
 import io.github.aiwao.mine2dengine.internal.render.Mine2DTextShadowContext
+import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowContext
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import org.joml.Matrix3x2f
+import org.joml.Vector2f
 import org.joml.Vector2fc
 import kotlin.math.PI
 import kotlin.math.cos
@@ -320,6 +322,81 @@ class Mine2DEngine(
         timeSeconds = timeSeconds,
     )
 
+    /** Applies one CSS drop-shadow operation to all GUI draws extracted by [draw]. */
+    internal fun withDropShadow(
+        x: Float,
+        y: Float,
+        width: Float,
+        height: Float,
+        color: Int,
+        offsetX: Float,
+        offsetY: Float,
+        blurRadius: Float,
+        draw: Mine2DEngine.() -> Unit,
+    ) {
+        validateShadowParameters("Drop shadow", offsetX, offsetY, blurRadius)
+        if (color ushr 24 == 0 || width <= 0f || height <= 0f) {
+            draw()
+            return
+        }
+
+        val pose = Matrix3x2f(graphics.pose())
+        val transformedCorners = listOf(
+            pose.transformPosition(x, y, Vector2f()),
+            pose.transformPosition(x + width, y, Vector2f()),
+            pose.transformPosition(x + width, y + height, Vector2f()),
+            pose.transformPosition(x, y + height, Vector2f()),
+        )
+        val transformedOffsetX = pose.m00() * offsetX + pose.m10() * offsetY
+        val transformedOffsetY = pose.m01() * offsetX + pose.m11() * offsetY
+        val blurAxisXx = pose.m00() * blurRadius
+        val blurAxisXy = pose.m01() * blurRadius
+        val blurAxisYx = pose.m10() * blurRadius
+        val blurAxisYy = pose.m11() * blurRadius
+        val blurExtentX = kotlin.math.abs(blurAxisXx) + kotlin.math.abs(blurAxisYx)
+        val blurExtentY = kotlin.math.abs(blurAxisXy) + kotlin.math.abs(blurAxisYy)
+
+        val groupId = Mine2DDropShadowContext.nextGroupId()
+        val material = Mine2DMaterials.dropShadow(
+            color = color,
+            offsetX = transformedOffsetX,
+            offsetY = transformedOffsetY,
+            viewportWidth = graphics.guiWidth().toFloat(),
+            viewportHeight = graphics.guiHeight().toFloat(),
+            blurAxisXx = blurAxisXx,
+            blurAxisXy = blurAxisXy,
+            blurAxisYx = blurAxisYx,
+            blurAxisYy = blurAxisYy,
+            blurRadius = blurRadius,
+        )
+        graphics.guiRenderState.addGuiElement(
+            DropShadowRenderState(
+                groupId = groupId,
+                outerGroups = Mine2DDropShadowContext.currentGroups(),
+                bindings = material.resolveBindings(
+                    uniformContext(
+                        elementBounds = Mine2DUniformRect(x, y, width, height),
+                        contentBounds = Mine2DUniformRect(x, y, width, height),
+                        timeSeconds = uniformTimeSeconds(),
+                    ),
+                ),
+                left = transformedCorners.minOf { corner -> corner.x() } +
+                    transformedOffsetX - blurExtentX,
+                top = transformedCorners.minOf { corner -> corner.y() } +
+                    transformedOffsetY - blurExtentY,
+                right = transformedCorners.maxOf { corner -> corner.x() } +
+                    transformedOffsetX + blurExtentX,
+                bottom = transformedCorners.maxOf { corner -> corner.y() } +
+                    transformedOffsetY + blurExtentY,
+                scissor = graphics.scissorStack.peek(),
+            ),
+        )
+
+        Mine2DDropShadowContext.beginGroup(groupId).use {
+            draw()
+        }
+    }
+
     private fun enqueueQuad(
         x: Float,
         y: Float,
@@ -355,6 +432,7 @@ class Mine2DEngine(
                 pose = Matrix3x2f(graphics.pose()),
                 polygon = polygon,
                 scissor = graphics.scissorStack.peek(),
+                dropShadowGroups = Mine2DDropShadowContext.currentGroups(),
             ),
         )
     }

@@ -1,6 +1,7 @@
 package io.github.aiwao.mine2dengine
 
 import com.mojang.blaze3d.PrimitiveTopology
+import com.mojang.blaze3d.pipeline.BindGroupLayout
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import net.minecraft.client.renderer.RenderPipelines
 import kotlin.test.Test
@@ -58,6 +59,25 @@ class Mine2DShaderTest {
         assertSame(
             Mine2DShaders.SHADOW_BLUR_RADIUS,
             Mine2DShaders.BOX_SHADOW.uniformBlock?.uniforms?.get(2),
+        )
+    }
+
+    @Test
+    fun `built-in drop shadow shader declares its compositor bindings`() {
+        val shader = Mine2DShaders.DROP_SHADOW
+        val pipeline = shader.pipeline
+
+        assertSame(DefaultVertexFormat.POSITION_COLOR, pipeline.getVertexFormatBinding(0))
+        assertEquals(PrimitiveTopology.TRIANGLES, pipeline.primitiveTopology)
+        assertFalse(pipeline.isCull)
+        assertEquals("Mine2DDropShadow", shader.uniformBlock?.name)
+        assertEquals(
+            listOf("ShadowColor", "OffsetAndViewport", "BlurAxes", "ShadowParameters"),
+            shader.uniformBlock?.uniforms?.map(Mine2DUniform<*>::name),
+        )
+        assertTrue(
+            Mine2DShaders.DROP_SHADOW_SAMPLER_NAME in
+                BindGroupLayout.flattenSamplers(pipeline.bindGroupLayouts),
         )
     }
 

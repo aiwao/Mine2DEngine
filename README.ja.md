@@ -193,6 +193,8 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - パディングは描画される背景の内側、マージンは外側です。
 - `boxShadow` は要素の背後に柔らかい角丸box shadowを描画します。要素内だけの指定であり、
   レイアウト寸法やポインター判定領域には影響しません。
+- `dropShadow` はCSSの `filter: drop-shadow()` と同様に、要素の背景・文字・子孫を合成した
+  alpha形状へ影を付けます。要素内だけの指定であり、レイアウトやヒット領域には影響しません。
 - `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
 - `Div` と `Button` は直接の子要素を縦または横に並べます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
@@ -206,6 +208,7 @@ import io.github.aiwao.mine2dengine.layout.LayoutEngine
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
+import io.github.aiwao.mine2dengine.layout.UiDropShadow
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
 import io.github.aiwao.mine2dengine.layout.UiPaint
@@ -239,7 +242,14 @@ val root = div(
 ) {
     p(
         "Mine2DEngine",
-        UiStyle(color = 0xFFFFCC00.toInt()),
+        UiStyle(
+            color = 0xFFFFCC00.toInt(),
+            dropShadow = UiDropShadow(
+                color = 0x60000000,
+                offsetY = 3f,
+                blurRadius = 4f,
+            ),
+        ),
         onClick = { event -> println("タイトル: button=${event.button()}") },
         onMouseMove = { x, y -> println("タイトル: x=$x, y=$y") },
         onDrag = { event ->
@@ -330,6 +340,11 @@ layout.render(draw, left = 24f, top = 32f)
 scissorが適用されます。Layout外で単独利用する場合は、前景boxの前に
 `Mine2DEngine.boxShadow(...)` を呼び出します。この組み込み効果が追従するのは矩形または
 角丸矩形です。任意のalpha形状に沿う影には、カスタムshaderまたはオフスクリーンmaskを使用してください。
+
+`UiDropShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius` を
+指定できます。要素の背景、文字、子孫ツリー全体を一時alpha maskへ合成し、そのGaussian blurを
+元の描画の背後へ1回描画します。このプロパティは継承されず、ネストにも対応し、CSSの1つの
+`filter: drop-shadow(offsetX offsetY blurRadius color)`に対応します。
 
 `UiTextShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius` を
 指定できます。他の文字プロパティと同様に子孫へ継承され、レイアウトやヒット領域には影響しません。

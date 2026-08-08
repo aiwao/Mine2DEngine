@@ -44,6 +44,8 @@ enum class UiBoxSizing {
  * container and text inside a paragraph's content box.
  * [background] paints only this element's bounds and is not inherited.
  * [boxShadow] paints behind this element and is not inherited or included in layout and hit bounds.
+ * [dropShadow] filters the composited pixels of this element and its descendants. It is not
+ * inherited or included in layout and hit bounds.
  * A null size shrinks to the element's text or children. [color], [font], and [textShadow] are
  * inherited by descendants when null. At the root, color defaults to opaque white and text shadow
  * defaults to none. Every text element must resolve a font from itself or an ancestor. Use
@@ -65,6 +67,7 @@ data class UiStyle(
     val noneDisplay: () -> Boolean = { false },
     val boxShadow: UiBoxShadow? = null,
     val textShadow: UiTextShadow? = null,
+    val dropShadow: UiDropShadow? = null,
 ) {
     companion object {
         const val DEFAULT_COLOR: Int = -1

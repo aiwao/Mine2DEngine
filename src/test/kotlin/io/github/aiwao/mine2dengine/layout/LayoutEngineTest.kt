@@ -63,6 +63,10 @@ class LayoutEngineTest {
             UiStyle::class.java.getMethod("getBoxShadow").returnType,
         )
         assertEquals(
+            UiDropShadow::class.java,
+            UiStyle::class.java.getMethod("getDropShadow").returnType,
+        )
+        assertEquals(
             UiTextShadow::class.java,
             UiStyle::class.java.getMethod("getTextShadow").returnType,
         )
@@ -75,6 +79,7 @@ class LayoutEngineTest {
         assertEquals(null, UiStyle().color)
         assertEquals(null, UiStyle().background)
         assertEquals(null, UiStyle().boxShadow)
+        assertEquals(null, UiStyle().dropShadow)
         assertEquals(null, UiStyle().textShadow)
         assertEquals(UiBoxSizing.CONTENT_BOX, UiStyle().boxSizing)
         assertFalse(UiStyle().noneDisplay())
@@ -197,6 +202,40 @@ class LayoutEngineTest {
         assertFailsWith<IllegalArgumentException> { UiBoxShadow(blurRadius = Float.NaN) }
         assertFailsWith<IllegalArgumentException> { UiBoxShadow(spreadRadius = Float.NaN) }
         assertFailsWith<IllegalArgumentException> { UiBoxShadow(cornerRadius = -1f) }
+    }
+
+    @Test
+    fun `drop shadow does not affect layout or pointer bounds`() {
+        val root = div(
+            UiStyle(
+                width = 20f,
+                height = 10f,
+                dropShadow = UiDropShadow(
+                    offsetX = 12f,
+                    offsetY = 8f,
+                    blurRadius = 6f,
+                ),
+            ),
+        )
+        val layout = calculateLayout(root, left = 5f, top = 7f, textMeasurer)
+
+        assertEquals(UiSize(20f, 10f), layout.size)
+        assertEquals(UiRect(5f, 7f, 20f, 10f), layout.root.bounds)
+        assertSame(root, layout.elementAt(24f, 16f))
+        assertNull(layout.elementAt(30f, 20f))
+    }
+
+    @Test
+    fun `drop shadow parameters reject invalid values`() {
+        assertFailsWith<IllegalArgumentException> { UiDropShadow(offsetX = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> {
+            UiDropShadow(offsetY = Float.POSITIVE_INFINITY)
+        }
+        assertFailsWith<IllegalArgumentException> { UiDropShadow(blurRadius = -1f) }
+        assertFailsWith<IllegalArgumentException> { UiDropShadow(blurRadius = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> {
+            UiDropShadow(offsetX = Float.MAX_VALUE, blurRadius = Float.MAX_VALUE)
+        }
     }
 
     @Test

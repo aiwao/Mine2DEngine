@@ -266,6 +266,32 @@ class UiLayout internal constructor(
         if (!node.displayed) return
 
         val style = node.element.style
+        val dropShadow = style.dropShadow
+        if (dropShadow != null) {
+            renderer.withDropShadow(
+                x = node.bounds.left,
+                y = node.bounds.top,
+                width = node.bounds.width,
+                height = node.bounds.height,
+                color = dropShadow.color,
+                offsetX = dropShadow.offsetX,
+                offsetY = dropShadow.offsetY,
+                blurRadius = dropShadow.blurRadius,
+            ) {
+                drawContents(node, style, renderer, inheritedTextStyle, timeSeconds)
+            }
+        } else {
+            drawContents(node, style, renderer, inheritedTextStyle, timeSeconds)
+        }
+    }
+
+    private fun drawContents(
+        node: UiLayoutNode,
+        style: UiStyle,
+        renderer: Mine2DEngine,
+        inheritedTextStyle: ResolvedUiTextStyle,
+        timeSeconds: Float,
+    ) {
         val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
         style.boxShadow?.let { shadow ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
