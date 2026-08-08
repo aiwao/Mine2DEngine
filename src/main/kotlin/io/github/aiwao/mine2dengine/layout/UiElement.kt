@@ -209,7 +209,7 @@ class Paragraph(
     override var onMouseOut: (() -> Unit)? = null,
 ) : UiElement(style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut)
 
-/** A clickable container. Invoke it through [UiLayout.click] after rendering or layout. */
+/** A clickable container. Invoke it through [UiLayout.mouseClick] after rendering or layout. */
 class Button(
     style: UiStyle = DEFAULT_STYLE,
     override var onClick: ((MouseButtonEvent) -> Unit)? = null,

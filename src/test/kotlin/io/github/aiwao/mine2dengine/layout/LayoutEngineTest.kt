@@ -300,12 +300,12 @@ class LayoutEngineTest {
         assertEquals(UiSize(26f, 10f), layout.size)
         assertNotNull(layout.nodeOf(conditional))
 
-        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertTrue(layout.mouseClick(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
         assertFalse(opened)
         assertEquals(UiSize(13f, 10f), layout.size)
         assertNull(layout.nodeOf(conditional))
 
-        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertTrue(layout.mouseClick(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
         assertTrue(opened)
         assertEquals(UiSize(26f, 10f), layout.size)
         assertNotNull(layout.nodeOf(conditional))
@@ -345,7 +345,7 @@ class LayoutEngineTest {
         assertFalse(layout.root.displayed)
         assertFalse(textMeasured)
         assertNull(layout.elementAt(2f, 3f))
-        assertFalse(layout.click(MouseButtonEvent(2.0, 3.0, MouseButtonInfo(0, 0))))
+        assertFalse(layout.mouseClick(MouseButtonEvent(2.0, 3.0, MouseButtonInfo(0, 0))))
         assertFalse(clicked)
     }
 
@@ -495,13 +495,13 @@ class LayoutEngineTest {
         val missEvent = MouseButtonEvent(100.0, 100.0, MouseButtonInfo(0, 0))
 
         assertSame(button, layout.elementAt(5f, 7f))
-        assertTrue(layout.click(hitEvent))
+        assertTrue(layout.mouseClick(hitEvent))
         assertEquals(1, clickCount)
         assertSame(hitEvent, receivedEvent)
         assertTrue(button.dragging)
-        assertFalse(layout.click(missEvent))
+        assertFalse(layout.mouseClick(missEvent))
         assertTrue(button.dragging)
-        assertTrue(layout.release())
+        assertTrue(layout.mouseRelease())
         assertFalse(button.dragging)
     }
 
@@ -527,17 +527,17 @@ class LayoutEngineTest {
         }
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
-        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertTrue(layout.mouseClick(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
         assertEquals(listOf<UiElement>(paragraph), clicked)
 
         clicked.clear()
         paragraph.onClick = null
-        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertTrue(layout.mouseClick(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
         assertEquals(listOf<UiElement>(innerDiv), clicked)
 
         clicked.clear()
         innerDiv.onClick = null
-        assertTrue(layout.click(MouseButtonEvent(40.0, 40.0, MouseButtonInfo(0, 0))))
+        assertTrue(layout.mouseClick(MouseButtonEvent(40.0, 40.0, MouseButtonInfo(0, 0))))
         assertEquals(listOf<UiElement>(root), clicked)
     }
 
@@ -550,7 +550,7 @@ class LayoutEngineTest {
         }
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
-        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertTrue(layout.mouseClick(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
     }
 
     @Test
@@ -566,15 +566,15 @@ class LayoutEngineTest {
         val event = MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))
 
         assertFalse(button.disabled)
-        assertTrue(layout.click(event))
+        assertTrue(layout.mouseClick(event))
         assertEquals(1, clickCount)
 
         button.disabled = true
-        assertTrue(layout.click(event))
+        assertTrue(layout.mouseClick(event))
         assertEquals(1, clickCount)
 
         button.disabled = false
-        assertTrue(layout.click(event))
+        assertTrue(layout.mouseClick(event))
         assertEquals(2, clickCount)
     }
 
@@ -646,15 +646,15 @@ class LayoutEngineTest {
         val layout = calculateLayout(root, left = 4f, top = 6f, textMeasurer)
 
         assertFalse(paragraph.dragging)
-        assertTrue(layout.click(MouseButtonEvent(5.0, 7.0, MouseButtonInfo(0, 0))))
+        assertTrue(layout.mouseClick(MouseButtonEvent(5.0, 7.0, MouseButtonInfo(0, 0))))
         assertTrue(paragraph.dragging)
 
         assertTrue(layout.mouseMove(100.25, 200.5))
         assertEquals(listOf(100.25 to 200.5), dragCoordinates)
 
-        assertTrue(layout.release())
+        assertTrue(layout.mouseRelease())
         assertFalse(paragraph.dragging)
-        assertFalse(layout.release())
+        assertFalse(layout.mouseRelease())
         assertFalse(layout.mouseMove(100.25, 200.5))
         assertEquals(listOf(100.25 to 200.5), dragCoordinates)
     }
@@ -669,7 +669,7 @@ class LayoutEngineTest {
         )
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
-        assertTrue(layout.click(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertTrue(layout.mouseClick(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
         assertTrue(layout.mouseMove(2.0, 3.0))
         assertEquals(listOf("move", "drag"), callbacks)
     }

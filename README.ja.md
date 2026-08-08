@@ -262,13 +262,13 @@ hoverableLayout.render(draw)
 余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。`element.style` に
 代入すると、動的スタイルはその静的な値で置き換えられます。
 
-`div`、`p` / `paragraph`、`button` を含むすべての要素で `onClick`、`onMouseMove`、`onDrag`、`onMouseOver`、`onMouseOut` を利用できます。要素の `disabled` プロパティを `true` にすると、再び有効にするまで `onClick` コールバックは呼び出されません。読み取り専用の `hovering` プロパティで、カーソルが要素内にあるかを確認できます。返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやポインター入力の通知ができます。Minecraft の `MouseButtonEvent` を `click` に渡すと、イベントの座標で最前面のクリック可能な要素を特定してドラッグ状態を開始し、そのイベントを要素の `onClick` に渡します。`mouseMove` にマウス座標を渡すと、`hovering` の更新、境界をまたいだ際のコールバック、座標上で最前面の `onMouseMove`、ドラッグ中の要素の `onDrag` が呼び出されます。ドラッグは要素の領域外でも継続し、`release` を呼ぶと終了します。
+`div`、`p` / `paragraph`、`button` を含むすべての要素で `onClick`、`onMouseMove`、`onDrag`、`onMouseOver`、`onMouseOut` を利用できます。要素の `disabled` プロパティを `true` にすると、再び有効にするまで `onClick` コールバックは呼び出されません。読み取り専用の `hovering` プロパティで、カーソルが要素内にあるかを確認できます。返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやポインター入力の通知ができます。Minecraft の `MouseButtonEvent` を `mouseClick` に渡すと、イベントの座標で最前面のクリック可能な要素を特定してドラッグ状態を開始し、そのイベントを要素の `onClick` に渡します。`mouseMove` にマウス座標を渡すと、`hovering` の更新、境界をまたいだ際のコールバック、座標上で最前面の `onMouseMove`、ドラッグ中の要素の `onDrag` が呼び出されます。ドラッグは要素の領域外でも継続し、`mouseRelease` を呼ぶと終了します。
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())
-val handled = layout.click(event)
+val handled = layout.mouseClick(event)
 val moveHandled = layout.mouseMove(mouseX, mouseY)
-val releaseHandled = layout.release()
+val releaseHandled = layout.mouseRelease()
 ```
 
 `LayoutEngine.layout(root)` は描画せずにジオメトリを計算します。返されたレイアウトの `render(renderer)` を呼び出すと描画できます。`noneDisplay` の戻り値が変わった場合は自動的に再計算されますが、文字列、その他のスタイル、子要素を変更した後はレイアウトを再計算してください。

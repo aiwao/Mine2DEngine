@@ -100,10 +100,10 @@ class UiLayout internal constructor(
      * Invokes the topmost clickable element at the GUI coordinate in [event].
      * Elements with an [UiElement.onClick] or [UiElement.onDrag] callback are clickable. A
      * [Button] remains clickable without a callback, preserving its control semantics. The hit
-     * element starts dragging until [release] is called. Its [UiElement.onClick] callback is not
+     * element starts dragging until [mouseRelease] is called. Its [UiElement.onClick] callback is not
      * invoked while [UiElement.disabled] is true. Returns true when one was hit.
      */
-    fun click(event: MouseButtonEvent): Boolean {
+    fun mouseClick(event: MouseButtonEvent): Boolean {
         refreshNoneDisplay()
         val x = event.x().toFloat()
         val y = event.y().toFloat()
@@ -186,7 +186,7 @@ class UiLayout internal constructor(
     }
 
     /** Stops the current drag. Returns true when an element was dragging. */
-    fun release(): Boolean {
+    fun mouseRelease(): Boolean {
         refreshNoneDisplay()
         val draggingElements = nodesInPaintOrder()
             .map(UiLayoutNode::element)

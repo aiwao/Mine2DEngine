@@ -263,13 +263,13 @@ layout refreshes drawing properties such as colors, including values inherited b
 Recalculate the layout when the resolved style changes sizing, spacing, direction, alignment, or
 font. Assigning `element.style` replaces its dynamic style with that static value.
 
-Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div`, `p` / `paragraph`, and `button`. Set an element's `disabled` property to `true` to prevent its `onClick` callback from running until it is enabled again. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `click`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. A drag continues outside the element's bounds until `release` is called:
+Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div`, `p` / `paragraph`, and `button`. Set an element's `disabled` property to `true` to prevent its `onClick` callback from running until it is enabled again. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `mouseClick`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. A drag continues outside the element's bounds until `mouseRelease` is called:
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())
-val handled = layout.click(event)
+val handled = layout.mouseClick(event)
 val moveHandled = layout.mouseMove(mouseX, mouseY)
-val releaseHandled = layout.release()
+val releaseHandled = layout.mouseRelease()
 ```
 
 `LayoutEngine.layout(root)` calculates geometry without drawing. Call `render(renderer)` on the returned layout to draw it. Changes to `noneDisplay` trigger automatic recalculation; recalculate the layout after changing text, other styles, or children.
