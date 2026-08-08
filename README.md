@@ -184,7 +184,7 @@ Mine2DEngine applies linear filtering only to glyph atlases created by `Mine2DFo
 
 ## Layout engine
 
-The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follows a CSS-like box model:
+The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-like box model:
 
 - `boxSizing` controls whether a non-null `width` or `height` specifies the content box or the
   complete padded box. It defaults to `UiBoxSizing.CONTENT_BOX`; use `UiBoxSizing.BORDER_BOX` to
@@ -195,8 +195,8 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
 - `dropShadow` follows the composited alpha of an element's background, text, and descendants, like
   CSS `filter: drop-shadow()`. It is local to that element and does not affect layout or hit bounds.
 - When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
-- `Div` and `Button` place direct children vertically or horizontally.
-- `childStyle` on a `Div` or `Button` applies one `UiStyle` to every descendant, like
+- `Div` places direct children vertically or horizontally.
+- `childStyle` on a `Div` applies one `UiStyle` to every descendant, like
   CSS `.parent *`. Non-default values in a descendant's own style take precedence. A non-null
   `childStyle` on a nested container takes precedence below that container.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
@@ -268,10 +268,10 @@ val root = div(
             margin = UiEdges(top = 6f, right = 0f, bottom = 0f, left = 0f),
         ),
     ) {
-        button(onClick = { event -> println("OK: button=${event.button()}") }) {
+        div(onClick = { event -> println("OK: button=${event.button()}") }) {
             p("OK")
         }
-        button(onClick = { event -> println("Cancel: button=${event.button()}") }) {
+        div(onClick = { event -> println("Cancel: button=${event.button()}") }) {
             p("Cancel")
         }
     }
@@ -323,14 +323,14 @@ hoverableLayout.mouseMove(mouseX, mouseY)
 hoverableLayout.render(draw)
 ```
 
-Dynamic styles are supported by `div`, `p` / `paragraph`, and `button`. Redrawing an existing
+Dynamic styles are supported by `div` and `p` / `paragraph`. Redrawing an existing
 layout refreshes drawing properties such as inherited text colors, shadows, background paint, and
 materials.
 Drawing-only changes do not require relayout. Recalculate the
 layout when the resolved `style` or `childStyle` changes sizing, spacing, direction, alignment, or
 font. Assigning `element.style` replaces its dynamic style with that static value.
 
-Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div`, `p` / `paragraph`, and `button`. Set an element's `disabled` property to `true` to prevent its `onClick` callback from running until it is enabled again. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `mouseClick`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. The `MouseButtonEvent` passed to `onDrag` uses the current mouse coordinates and retains the button and modifier information from the `mouseClick` event that started the drag. A drag continues outside the element's bounds until `mouseRelease` is called:
+Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div` and `p` / `paragraph`. Set an element's `disabled` property to `true` to prevent its `onClick` callback from running until it is enabled again. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `mouseClick`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. The `MouseButtonEvent` passed to `onDrag` uses the current mouse coordinates and retains the button and modifier information from the `mouseClick` event that started the drag. A drag continues outside the element's bounds until `mouseRelease` is called:
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())

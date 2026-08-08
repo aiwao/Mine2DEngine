@@ -20,7 +20,7 @@ class Mine2DTextMeasurer(
 }
 
 /**
- * Measures and positions a tree of [Div], [Paragraph], and [Button] nodes.
+ * Measures and positions a tree of [Div] and [Paragraph] nodes.
  *
  * [left] and [top] passed to [layout] are the top-left coordinate of the root's outer box.
  * Text fonts are selected through [UiStyle.font] and remain owned by the caller.
