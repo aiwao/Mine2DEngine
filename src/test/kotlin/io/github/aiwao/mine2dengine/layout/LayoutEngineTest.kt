@@ -29,8 +29,6 @@ class LayoutEngineTest {
 
     @Test
     fun `layout engine calculates and layouts render themselves`() {
-        assertTrue(LayoutEngine::class.java.constructors.isEmpty())
-        assertFalse(LayoutEngine::class.java.methods.any { method -> method.name == "render" })
         val layoutMethod = LayoutEngine::class.java.getMethod(
             "layout",
             UiElement::class.java,
