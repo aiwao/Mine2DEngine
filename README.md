@@ -208,7 +208,9 @@ val root = div(
         UiStyle(color = 0xFFFFCC00.toInt()),
         onClick = { event -> println("Title: button=${event.button()}") },
         onMouseMove = { x, y -> println("Title: x=$x, y=$y") },
-        onDrag = { x, y -> println("Dragging title: x=$x, y=$y") },
+        onDrag = { event ->
+            println("Dragging title: x=${event.x()}, y=${event.y()}, button=${event.button()}")
+        },
         onMouseOver = { println("Pointer entered title") },
         onMouseOut = { println("Pointer left title") },
     )
@@ -263,7 +265,7 @@ layout refreshes drawing properties such as colors, including values inherited b
 Recalculate the layout when the resolved style changes sizing, spacing, direction, alignment, or
 font. Assigning `element.style` replaces its dynamic style with that static value.
 
-Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div`, `p` / `paragraph`, and `button`. Set an element's `disabled` property to `true` to prevent its `onClick` callback from running until it is enabled again. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `mouseClick`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. A drag continues outside the element's bounds until `mouseRelease` is called:
+Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div`, `p` / `paragraph`, and `button`. Set an element's `disabled` property to `true` to prevent its `onClick` callback from running until it is enabled again. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `mouseClick`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. The `MouseButtonEvent` passed to `onDrag` uses the current mouse coordinates and retains the button and modifier information from the `mouseClick` event that started the drag. A drag continues outside the element's bounds until `mouseRelease` is called:
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())
