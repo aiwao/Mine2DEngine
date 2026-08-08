@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class Mine2DShaderTest {
@@ -17,6 +18,8 @@ class Mine2DShaderTest {
         assertSame(DefaultVertexFormat.POSITION_COLOR, pipeline.getVertexFormatBinding(0))
         assertEquals(PrimitiveTopology.TRIANGLES, pipeline.primitiveTopology)
         assertFalse(pipeline.isCull)
+        assertNull(Mine2DShaders.COLOR.uniformBlock)
+        assertSame(Mine2DShaders.COLOR, Mine2DMaterials.COLOR.shader)
     }
 
     @Test

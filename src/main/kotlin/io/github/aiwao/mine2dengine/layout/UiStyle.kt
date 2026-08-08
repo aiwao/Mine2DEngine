@@ -42,6 +42,7 @@ enum class UiBoxSizing {
  * CSS `display: none`.
  * [horizontalAlignment] and [verticalAlignment] position direct children in a
  * container and text inside a paragraph's content box.
+ * [background] paints only this element's bounds and is not inherited.
  * A null size shrinks to the element's text or children. [color], [font], and
  * [dropShadow] are inherited by descendants when null. At the root, color defaults
  * to opaque white and drop shadow defaults to enabled. Every text element must
@@ -49,7 +50,7 @@ enum class UiBoxSizing {
  */
 data class UiStyle(
     val color: Int? = null,
-    val backgroundColor: Int? = null,
+    val background: UiPaint? = null,
     val margin: UiEdges = UiEdges(),
     val padding: UiEdges = UiEdges(),
     val direction: UiDirection = UiDirection.VERTICAL,

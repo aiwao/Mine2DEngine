@@ -2,6 +2,7 @@ package io.github.aiwao.mine2dengine.layout
 
 import io.github.aiwao.mine2dengine.Mine2DEngine
 import io.github.aiwao.mine2dengine.Mine2DFont
+import io.github.aiwao.mine2dengine.Mine2DUniformRect
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.MouseButtonInfo
 import java.util.IdentityHashMap
@@ -23,7 +24,7 @@ data class UiLayoutNode(
     val element: UiElement,
     /** Includes the element's margin and begins at its layout coordinate. */
     val outerBounds: UiRect,
-    /** The rectangle painted by background-color. */
+    /** The rectangle painted by the element's background paint. */
     val bounds: UiRect,
     /** The area available to text or children after padding. */
     val contentBounds: UiRect,
@@ -84,7 +85,7 @@ class UiLayout internal constructor(
     /** Renders this layout, recalculating geometry when a none-display value changes. */
     fun render(renderer: Mine2DEngine) {
         refreshNoneDisplay()
-        draw(root, renderer, ResolvedUiTextStyle())
+        draw(root, renderer, ResolvedUiTextStyle(), renderer.uniformTimeSeconds())
     }
 
     /** Moves this layout to [left], [top], then renders it without recalculating its size. */
@@ -260,19 +261,26 @@ class UiLayout internal constructor(
         node: UiLayoutNode,
         renderer: Mine2DEngine,
         inheritedTextStyle: ResolvedUiTextStyle,
+        timeSeconds: Float,
     ) {
         if (!node.displayed) return
 
         val style = node.element.style
         val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
-        style.backgroundColor?.let { color ->
+        style.background?.let { paint ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
                 renderer.quad(
                     node.bounds.left,
                     node.bounds.top,
                     node.bounds.width,
                     node.bounds.height,
-                    color,
+                    paint.color,
+                    paint.material ?: renderer.material,
+                    renderer.uniformContext(
+                        elementBounds = node.bounds.toUniformRect(),
+                        contentBounds = node.contentBounds.toUniformRect(),
+                        timeSeconds = timeSeconds,
+                    ),
                 )
             }
         }
@@ -289,7 +297,9 @@ class UiLayout internal constructor(
             )
         }
 
-        node.children.forEach { child -> draw(child, renderer, resolvedTextStyle) }
+        node.children.forEach { child ->
+            draw(child, renderer, resolvedTextStyle, timeSeconds)
+        }
     }
 
     private fun drawText(
@@ -342,4 +352,11 @@ private fun UiLayoutNode.translated(deltaX: Float, deltaY: Float): UiLayoutNode 
 private fun UiRect.translated(deltaX: Float, deltaY: Float): UiRect = copy(
     left = left + deltaX,
     top = top + deltaY,
+)
+
+private fun UiRect.toUniformRect(): Mine2DUniformRect = Mine2DUniformRect(
+    left = left,
+    top = top,
+    width = width,
+    height = height,
 )

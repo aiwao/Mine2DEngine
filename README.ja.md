@@ -103,7 +103,7 @@ object ExampleModClient : ClientModInitializer {
 | `line(startX, startY, endX, endY, width, color)` | 端が平らな塗りつぶし線を描画します。                                                                                   |
 | `circle(centerX, centerY, radius, color, segments)` | 正多角形で近似した塗りつぶし円を描画します。segmentsを増やすほど輪郭が滑らかになります。                               |
 | `text(font, text, x, y, color, dropShadow)` | 読み込み済みの `Mine2DFont` で文字列を描画します。                                                                     |
-| `withShader(shader) { ... }` | ブロック内だけ既定のポリゴンシェーダーを変更し、終了後に元へ戻します。                                                 |
+| `withMaterial(material) { ... }` | ブロック内だけ既定のポリゴンMaterialを変更し、終了後に元へ戻します。                                                |
 
 ポリゴンの各点は時計回り、反時計回りのどちらでも指定できます。3 個以上の異なる点と 0 ではない面積が必要で、自己交差はできません。連続する重複点と不要な同一直線上の点は自動的に取り除かれます。線には異なる始点・終点と正の幅、円には正の半径と 3 以上の分割数が必要です。
 
@@ -191,6 +191,7 @@ import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
+import io.github.aiwao.mine2dengine.layout.UiPaint
 import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
@@ -202,7 +203,7 @@ val root = div(
         height = 100f,
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
-        backgroundColor = 0xD0202020.toInt(),
+        background = UiPaint(color = 0xD0202020.toInt()),
         horizontalAlignment = UiHorizontalAlignment.CENTER,
         verticalAlignment = UiVerticalAlignment.CENTER,
     ),
@@ -249,11 +250,13 @@ val hoverable = div(
         UiStyle(
             width = 120f,
             height = 24f,
-            backgroundColor = if (element.hovering) {
-                0xFFFFFFFF.toInt()
-            } else {
-                0xFF000000.toInt()
-            },
+            background = UiPaint(
+                color = if (element.hovering) {
+                    0xFFFFFFFF.toInt()
+                } else {
+                    0xFF000000.toInt()
+                },
+            ),
         )
     },
 )
@@ -265,7 +268,8 @@ hoverableLayout.render(draw)
 ```
 
 動的スタイルは `div`、`p` / `paragraph`、`button` で利用できます。既存レイアウトを再描画すると
-子孫へ継承される値も含め、色などの描画プロパティが更新されます。解決後のスタイルによってサイズ、
+継承される文字色などに加え、背景PaintやMaterialなどの描画プロパティも更新されます。これらの
+描画プロパティだけを変える場合は再レイアウト不要です。解決後のスタイルによってサイズ、
 余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。`element.style` に
 代入すると、動的スタイルはその静的な値で置き換えられます。
 
@@ -293,22 +297,71 @@ layout.render(draw, left = 24f, top = 32f)
 
 ## カスタムシェーダー
 
-クライアント初期化時にカスタムパイプラインを登録します。頂点・フラグメントシェーダーの識別子は `assets/<namespace>/shaders/` からの相対位置で、拡張子 `.vsh` または `.fsh` は付けません。
+シェーダーはPipelineとバインディングの定義、Materialはそのシェーダーへ渡す不変なUniform値とTextureの組み合わせです。クライアント初期化時にカスタムPipelineを登録します。頂点・フラグメントシェーダーの識別子は `assets/<namespace>/shaders/` からの相対位置で、拡張子 `.vsh` または `.fsh` は付けません。
 
 ```kotlin
-val accentShader = Mine2DShader.register(
-    location = Identifier.fromNamespaceAndPath("examplemod", "pipeline/accent"),
-    vertexShader = Identifier.fromNamespaceAndPath("examplemod", "core/accent"),
-    fragmentShader = Identifier.fromNamespaceAndPath("examplemod", "core/accent"),
+val elementBounds = Mine2DUniform.elementBounds()
+val radius = Mine2DUniform.float("Radius", defaultValue = 0f)
+val edgeSoftness = Mine2DUniform.float("EdgeSoftness", defaultValue = 1f)
+
+val roundedRectShader = Mine2DShader.register(
+    location = Identifier.fromNamespaceAndPath("examplemod", "pipeline/rounded_rect"),
+    vertexShader = Identifier.fromNamespaceAndPath("examplemod", "core/rounded_rect"),
+    fragmentShader = Identifier.fromNamespaceAndPath("examplemod", "core/rounded_rect"),
+    uniformBlock = Mine2DUniformBlock(
+        "Mine2DMaterial",
+        elementBounds,
+        radius,
+        edgeSoftness,
+    ),
 )
 
-draw.withShader(accentShader) {
+val roundedPanel = roundedRectShader.material {
+    set(radius, 8f)
+    set(edgeSoftness, 0.75f)
+}
+
+draw.withMaterial(roundedPanel) {
     quad(20f, 20f, 80f, 24f, 0xFFFFFFFF.toInt())
     circle(60f, 72f, 20f, 0xFFFFFFFF.toInt(), segments = 32)
 }
 ```
 
-Mine2D のシェーダーは、バインディング 0 で `DefaultVertexFormat.POSITION_COLOR`、プリミティブトポロジーに `PrimitiveTopology.TRIANGLES` を使う必要があります。`Mine2DShader.register` はこの頂点形式とトポロジーを適用し、カリングを無効にします。すでに作成済みで互換性のあるパイプラインに限り `Mine2DShader.from(...)` を使用してください。
+シェーダーソースには、キーと同じ名前、型、順序のstd140ブロックを宣言します。
+
+```glsl
+layout(std140) uniform Mine2DMaterial {
+    vec4 ElementBounds;
+    float Radius;
+    float EdgeSoftness;
+};
+```
+
+Layoutの要素別背景にはMaterialを含む `UiPaint` を指定します。背景Paintは子へ継承されません。Materialを省略したPaintは、描画時の `Mine2DEngine.material` を使用します。Paragraphの文字列はMinecraftのテキスト描画経路を使うため、背景Materialの対象外です。
+
+```kotlin
+val panel = div(
+    UiStyle(
+        width = 120f,
+        height = 40f,
+        background = UiPaint(
+            color = 0xFFFFFFFF.toInt(),
+            material = roundedPanel,
+        ),
+    ),
+)
+```
+
+`Mine2DUniform.int`、`float`、`vec2`、`vec3`、`vec4`、`mat4` はMaterialから設定する型付きキーです。既定値のないキーはMaterial作成時に必須です。次のキーは描画ごとにエンジンが自動設定します。
+
+- `elementBounds()`：描画領域の `(left, top, width, height)`
+- `contentBounds()`：padding内側の領域。通常のポリゴン描画ではelement boundsと同じ
+- `viewportSize()`：GUIの `(width, height)`
+- `timeSeconds()`：単調増加する秒数
+
+Textureを使うシェーダーは `Mine2DSampler` キーを `register(samplers = ...)` に渡し、Material作成時に `bind(key, textureView, gpuSampler)` ですべて割り当てます。Uniform、Vector、Matrix、Textureの組み合わせはMaterial作成時に検証され、描画キューには不変な値が保存されます。
+
+Mine2D のシェーダーは、バインディング0で `DefaultVertexFormat.POSITION_COLOR`、プリミティブトポロジーに `PrimitiveTopology.TRIANGLES` を使う必要があります。`Mine2DShader.register` はこの頂点形式とトポロジーを適用し、カリングを無効にします。すでに作成済みで互換性があり、同じUniform/Samplerバインディングを宣言済みのPipelineに限り `Mine2DShader.from(...)` を使用してください。Materialバインディングを持つポリゴンはUniform値を正しく分離するため1ポリゴン1Drawになり、バインディングのない標準Materialは従来どおりバッチ化できます。
 
 ## ソースからのビルド
 

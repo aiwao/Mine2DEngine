@@ -56,6 +56,10 @@ class LayoutEngineTest {
             Mine2DFont::class.java,
             UiStyle::class.java.getMethod("getFont").returnType,
         )
+        assertEquals(
+            UiPaint::class.java,
+            UiStyle::class.java.getMethod("getBackground").returnType,
+        )
     }
 
     @Test
@@ -63,6 +67,7 @@ class LayoutEngineTest {
         val layout = calculateLayout(Paragraph("default"), left = 0f, top = 0f, textMeasurer)
 
         assertEquals(null, UiStyle().color)
+        assertEquals(null, UiStyle().background)
         assertEquals(null, UiStyle().dropShadow)
         assertEquals(UiBoxSizing.CONTENT_BOX, UiStyle().boxSizing)
         assertFalse(UiStyle().noneDisplay())
@@ -128,6 +133,31 @@ class LayoutEngineTest {
         root.style = UiStyle(color = 0xFF123456.toInt())
         assertEquals(0xFF123456.toInt(), root.style.color)
         assertEquals(3, evaluations["root"])
+    }
+
+    @Test
+    fun `dynamic styles can replace an element background paint without relayout`() {
+        val root = div(
+            style = { element ->
+                UiStyle(
+                    width = 20f,
+                    height = 20f,
+                    background = UiPaint(
+                        color = if (element.hovering) {
+                            0xFFFFFFFF.toInt()
+                        } else {
+                            0xFF000000.toInt()
+                        },
+                    ),
+                )
+            },
+        )
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(0xFF000000.toInt(), root.style.background?.color)
+        layout.mouseMove(10.0, 10.0)
+        assertEquals(0xFFFFFFFF.toInt(), root.style.background?.color)
+        assertEquals(UiSize(20f, 20f), layout.size)
     }
 
     @Test
