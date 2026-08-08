@@ -28,6 +28,9 @@ sealed class UiElement(
         styleProvider = provider
     }
 
+    /** Whether this element's click callback is disabled. */
+    var disabled: Boolean = false
+
     /** Whether this element has been clicked and not yet released. */
     var dragging: Boolean = false
         internal set
