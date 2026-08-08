@@ -102,7 +102,9 @@ Coordinates are GUI coordinates, and colors are Minecraft ARGB integers (`0xAARR
 | `quad(x, y, width, height, color)` | Draws a filled rectangle. |
 | `line(startX, startY, endX, endY, width, color)` | Draws a filled line with butt caps. |
 | `circle(centerX, centerY, radius, color, segments)` | Draws a filled regular-polygon approximation of a circle. More segments produce a smoother edge. |
-| `text(font, text, x, y, color, dropShadow)` | Draws text using a loaded `Mine2DFont`. |
+| `boxShadow(x, y, width, height, ...)` | Draws a soft rounded-box shadow without drawing the box itself. |
+| `textShadow(font, text, x, y, ...)` | Draws a configurable glyph shadow without drawing the foreground text. |
+| `text(font, text, x, y, color)` | Draws text using a loaded `Mine2DFont`. |
 | `withMaterial(material) { ... }` | Temporarily changes the default polygon material and restores it after the block. |
 
 Polygon points may use clockwise or counterclockwise order. A polygon must have at least three distinct points, a non-zero area, and no self-intersections. Consecutive duplicate points and redundant collinear points are removed automatically. Lines require different endpoints and a positive width; circles require a positive radius and at least three segments.
@@ -158,7 +160,18 @@ Draw and measure text with the loaded font:
 
 ```kotlin
 uiFont?.let { font ->
-    draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt(), dropShadow = true)
+    draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt())
+
+    draw.textShadow(
+        font,
+        "Custom shadow",
+        16,
+        36,
+        color = 0xA0000000.toInt(),
+        offsetY = 2f,
+        blurRadius = 2f,
+    )
+    draw.text(font, "Custom shadow", 16, 36, 0xFFFFFFFF.toInt())
 
     val width = font.width("Mine2DEngine")
     val lineHeight = font.lineHeight
@@ -177,22 +190,29 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
   complete padded box. It defaults to `UiBoxSizing.CONTENT_BOX`; use `UiBoxSizing.BORDER_BOX` to
   include padding in the specified size. A `null` size still shrinks to the text or children.
 - Padding is inside the painted background; margin is outside it.
+- `boxShadow` paints a soft rounded-box shadow behind an element. It is local to that element and
+  does not affect layout size or pointer bounds.
+- `dropShadow` follows the composited alpha of an element's background, text, and descendants, like
+  CSS `filter: drop-shadow()`. It is local to that element and does not affect layout or hit bounds.
 - When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
 - `Div` and `Button` place direct children vertically or horizontally.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
-- `color`, `font`, and `dropShadow` are inherited from ancestors and may be overridden by a child.
-  A null `color` or `dropShadow` inherits the parent; at the root they default to opaque white and
-  enabled, respectively.
+- `color`, `font`, and `textShadow` are inherited from ancestors and may be overridden by a child.
+  A null value inherits the parent. At the root, color defaults to opaque white and text shadow
+  defaults to none. Set `textShadow = UiTextShadow.NONE` to explicitly clear an inherited shadow.
 - Paragraph newlines create multiple lines.
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
+import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
+import io.github.aiwao.mine2dengine.layout.UiDropShadow
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
 import io.github.aiwao.mine2dengine.layout.UiPaint
 import io.github.aiwao.mine2dengine.layout.UiStyle
+import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
 
@@ -204,13 +224,31 @@ val root = div(
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
         background = UiPaint(color = 0xD0202020.toInt()),
+        boxShadow = UiBoxShadow(
+            color = 0x80000000.toInt(),
+            offsetY = 3f,
+            blurRadius = 5f,
+            cornerRadius = 6f,
+        ),
+        textShadow = UiTextShadow(
+            color = 0xA0000000.toInt(),
+            offsetY = 2f,
+            blurRadius = 1f,
+        ),
         horizontalAlignment = UiHorizontalAlignment.CENTER,
         verticalAlignment = UiVerticalAlignment.CENTER,
     ),
 ) {
     p(
         "Mine2DEngine",
-        UiStyle(color = 0xFFFFCC00.toInt()),
+        UiStyle(
+            color = 0xFFFFCC00.toInt(),
+            dropShadow = UiDropShadow(
+                color = 0x60000000,
+                offsetY = 3f,
+                blurRadius = 4f,
+            ),
+        ),
         onClick = { event -> println("Title: button=${event.button()}") },
         onMouseMove = { x, y -> println("Title: x=$x, y=$y") },
         onDrag = { event ->
@@ -219,7 +257,7 @@ val root = div(
         onMouseOver = { println("Pointer entered title") },
         onMouseOut = { println("Pointer left title") },
     )
-    p("A lightweight Fabric UI", UiStyle(dropShadow = false))
+    p("A lightweight Fabric UI", UiStyle(textShadow = UiTextShadow.NONE))
 
     div(
         UiStyle(
@@ -268,7 +306,8 @@ hoverableLayout.render(draw)
 ```
 
 Dynamic styles are supported by `div`, `p` / `paragraph`, and `button`. Redrawing an existing
-layout refreshes drawing properties such as inherited text colors, background paint, and materials.
+layout refreshes drawing properties such as inherited text colors, shadows, background paint, and
+materials.
 Drawing-only changes do not require relayout. Recalculate the
 layout when the resolved style changes sizing, spacing, direction, alignment, or font. Assigning
 `element.style` replaces its dynamic style with that static value.
@@ -294,6 +333,26 @@ layout.render(draw)
 // Equivalent shorthand
 layout.render(draw, left = 24f, top = 32f)
 ```
+
+`UiBoxShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, non-negative `blurRadius`,
+finite positive or negative `spreadRadius`, and non-negative `cornerRadius`. Spread and blur are
+paint-only overflow: they do not change the element's geometry or hit area. The shadow follows the
+current GUI pose and scissor. For a standalone shadow outside the layout engine, call
+`Mine2DEngine.boxShadow(...)` before drawing its foreground box. This built-in effect follows a
+rectangle or rounded rectangle; use a custom shader or off-screen mask for an arbitrary alpha shape.
+
+`UiDropShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, and non-negative `blurRadius`.
+The renderer composites the element's background, text, and complete descendant subtree into a
+temporary alpha mask, then draws one Gaussian-blurred copy behind the original pixels. The property
+is not inherited, supports nested drop shadows, and corresponds to one CSS
+`filter: drop-shadow(offsetX offsetY blurRadius color)` operation.
+
+`UiTextShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, and non-negative `blurRadius`.
+It is inherited with other text properties and does not affect layout or hit bounds. Use
+`UiTextShadow.NONE` to explicitly clear an inherited shadow. These values correspond to one CSS
+`text-shadow`. Positive blur is sampled from each glyph's alpha by a Gaussian shader in one glyph
+draw instead of repeatedly drawing displaced copies of the text. Outside the layout engine, call
+`Mine2DEngine.textShadow(...)` immediately before the foreground `text(...)` call.
 
 ## Custom shaders
 

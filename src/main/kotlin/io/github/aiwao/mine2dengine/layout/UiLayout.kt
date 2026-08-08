@@ -33,8 +33,8 @@ data class UiLayoutNode(
     val font: Mine2DFont? = null,
     /** The text color resolved from this element's style and its ancestors. */
     val color: Int = UiStyle.DEFAULT_COLOR,
-    /** The text shadow setting resolved from this element's style and its ancestors. */
-    val dropShadow: Boolean = UiStyle.DEFAULT_DROP_SHADOW,
+    /** The configurable text shadow resolved from this element's style and its ancestors. */
+    val textShadow: UiTextShadow? = null,
     /** Whether this node generated a layout box. */
     internal val displayed: Boolean = true,
 )
@@ -266,7 +266,49 @@ class UiLayout internal constructor(
         if (!node.displayed) return
 
         val style = node.element.style
+        val dropShadow = style.dropShadow
+        if (dropShadow != null) {
+            renderer.withDropShadow(
+                x = node.bounds.left,
+                y = node.bounds.top,
+                width = node.bounds.width,
+                height = node.bounds.height,
+                color = dropShadow.color,
+                offsetX = dropShadow.offsetX,
+                offsetY = dropShadow.offsetY,
+                blurRadius = dropShadow.blurRadius,
+            ) {
+                drawContents(node, style, renderer, inheritedTextStyle, timeSeconds)
+            }
+        } else {
+            drawContents(node, style, renderer, inheritedTextStyle, timeSeconds)
+        }
+    }
+
+    private fun drawContents(
+        node: UiLayoutNode,
+        style: UiStyle,
+        renderer: Mine2DEngine,
+        inheritedTextStyle: ResolvedUiTextStyle,
+        timeSeconds: Float,
+    ) {
         val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
+        style.boxShadow?.let { shadow ->
+            if (node.bounds.width > 0f && node.bounds.height > 0f) {
+                renderer.boxShadow(
+                    x = node.bounds.left,
+                    y = node.bounds.top,
+                    width = node.bounds.width,
+                    height = node.bounds.height,
+                    color = shadow.color,
+                    offsetX = shadow.offsetX,
+                    offsetY = shadow.offsetY,
+                    blurRadius = shadow.blurRadius,
+                    spreadRadius = shadow.spreadRadius,
+                    cornerRadius = shadow.cornerRadius,
+                )
+            }
+        }
         style.background?.let { paint ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
                 renderer.quad(
@@ -325,13 +367,25 @@ class UiLayout internal constructor(
                 alignment = style.horizontalAlignment,
             ) + contentBounds.left
             val y = textTop + index * textMeasurer.lineHeight
+            resolvedTextStyle.textShadow
+                ?.let { shadow ->
+                    renderer.textShadow(
+                        font = font,
+                        text = line,
+                        x = x.roundToInt(),
+                        y = y.roundToInt(),
+                        color = shadow.color,
+                        offsetX = shadow.offsetX,
+                        offsetY = shadow.offsetY,
+                        blurRadius = shadow.blurRadius,
+                    )
+                }
             renderer.text(
                 font,
                 line,
                 x.roundToInt(),
                 y.roundToInt(),
                 resolvedTextStyle.color,
-                dropShadow = resolvedTextStyle.dropShadow,
             )
         }
     }

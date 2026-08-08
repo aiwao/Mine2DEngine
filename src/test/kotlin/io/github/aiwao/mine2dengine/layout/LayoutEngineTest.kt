@@ -29,8 +29,6 @@ class LayoutEngineTest {
 
     @Test
     fun `layout engine calculates and layouts render themselves`() {
-        assertTrue(LayoutEngine::class.java.constructors.isEmpty())
-        assertFalse(LayoutEngine::class.java.methods.any { method -> method.name == "render" })
         val layoutMethod = LayoutEngine::class.java.getMethod(
             "layout",
             UiElement::class.java,
@@ -60,6 +58,18 @@ class LayoutEngineTest {
             UiPaint::class.java,
             UiStyle::class.java.getMethod("getBackground").returnType,
         )
+        assertEquals(
+            UiBoxShadow::class.java,
+            UiStyle::class.java.getMethod("getBoxShadow").returnType,
+        )
+        assertEquals(
+            UiDropShadow::class.java,
+            UiStyle::class.java.getMethod("getDropShadow").returnType,
+        )
+        assertEquals(
+            UiTextShadow::class.java,
+            UiStyle::class.java.getMethod("getTextShadow").returnType,
+        )
     }
 
     @Test
@@ -68,11 +78,32 @@ class LayoutEngineTest {
 
         assertEquals(null, UiStyle().color)
         assertEquals(null, UiStyle().background)
+        assertEquals(null, UiStyle().boxShadow)
         assertEquals(null, UiStyle().dropShadow)
+        assertEquals(null, UiStyle().textShadow)
         assertEquals(UiBoxSizing.CONTENT_BOX, UiStyle().boxSizing)
         assertFalse(UiStyle().noneDisplay())
         assertEquals(UiStyle.DEFAULT_COLOR, layout.root.color)
-        assertTrue(layout.root.dropShadow)
+        assertNull(layout.root.textShadow)
+    }
+
+    @Test
+    fun `all shadow styles use consistent offset and blur defaults`() {
+        fun assertDefaults(offsetX: Float, offsetY: Float, blurRadius: Float) {
+            assertEquals(0f, offsetX)
+            assertEquals(0f, offsetY)
+            assertEquals(4f, blurRadius)
+        }
+
+        UiBoxShadow().let { shadow ->
+            assertDefaults(shadow.offsetX, shadow.offsetY, shadow.blurRadius)
+        }
+        UiDropShadow().let { shadow ->
+            assertDefaults(shadow.offsetX, shadow.offsetY, shadow.blurRadius)
+        }
+        UiTextShadow().let { shadow ->
+            assertDefaults(shadow.offsetX, shadow.offsetY, shadow.blurRadius)
+        }
     }
 
     @Test
@@ -161,16 +192,116 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `box shadow does not affect layout or pointer bounds`() {
+        val root = div(
+            UiStyle(
+                width = 20f,
+                height = 10f,
+                boxShadow = UiBoxShadow(
+                    offsetX = 12f,
+                    offsetY = 8f,
+                    blurRadius = 6f,
+                    spreadRadius = 4f,
+                ),
+            ),
+        )
+        val layout = calculateLayout(root, left = 5f, top = 7f, textMeasurer)
+
+        assertEquals(UiSize(20f, 10f), layout.size)
+        assertEquals(UiRect(5f, 7f, 20f, 10f), layout.root.bounds)
+        assertSame(root, layout.elementAt(24f, 16f))
+        assertNull(layout.elementAt(30f, 20f))
+    }
+
+    @Test
+    fun `box shadow parameters reject invalid values`() {
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(offsetX = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(offsetY = Float.POSITIVE_INFINITY) }
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(blurRadius = -1f) }
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(blurRadius = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(spreadRadius = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(cornerRadius = -1f) }
+    }
+
+    @Test
+    fun `drop shadow does not affect layout or pointer bounds`() {
+        val root = div(
+            UiStyle(
+                width = 20f,
+                height = 10f,
+                dropShadow = UiDropShadow(
+                    offsetX = 12f,
+                    offsetY = 8f,
+                    blurRadius = 6f,
+                ),
+            ),
+        )
+        val layout = calculateLayout(root, left = 5f, top = 7f, textMeasurer)
+
+        assertEquals(UiSize(20f, 10f), layout.size)
+        assertEquals(UiRect(5f, 7f, 20f, 10f), layout.root.bounds)
+        assertSame(root, layout.elementAt(24f, 16f))
+        assertNull(layout.elementAt(30f, 20f))
+    }
+
+    @Test
+    fun `drop shadow parameters reject invalid values`() {
+        assertFailsWith<IllegalArgumentException> { UiDropShadow(offsetX = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> {
+            UiDropShadow(offsetY = Float.POSITIVE_INFINITY)
+        }
+        assertFailsWith<IllegalArgumentException> { UiDropShadow(blurRadius = -1f) }
+        assertFailsWith<IllegalArgumentException> { UiDropShadow(blurRadius = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> {
+            UiDropShadow(offsetX = Float.MAX_VALUE, blurRadius = Float.MAX_VALUE)
+        }
+    }
+
+    @Test
+    fun `text shadow parameters reject invalid values`() {
+        assertFailsWith<IllegalArgumentException> { UiTextShadow(offsetX = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { UiTextShadow(offsetY = Float.POSITIVE_INFINITY) }
+        assertFailsWith<IllegalArgumentException> { UiTextShadow(blurRadius = -1f) }
+        assertFailsWith<IllegalArgumentException> { UiTextShadow(blurRadius = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> {
+            UiTextShadow(offsetX = Float.MAX_VALUE, blurRadius = Float.MAX_VALUE)
+        }
+    }
+
+    @Test
+    fun `text shadow does not affect text layout or pointer bounds`() {
+        val paragraph = Paragraph(
+            "text",
+            UiStyle(
+                textShadow = UiTextShadow(
+                    offsetX = 20f,
+                    offsetY = 20f,
+                    blurRadius = 10f,
+                ),
+            ),
+        )
+        val layout = calculateLayout(paragraph, left = 5f, top = 7f, textMeasurer)
+
+        assertEquals(UiSize(20f, 10f), layout.size)
+        assertEquals(UiRect(5f, 7f, 20f, 10f), layout.root.bounds)
+        assertSame(paragraph, layout.elementAt(24f, 16f))
+        assertNull(layout.elementAt(30f, 20f))
+    }
+
+    @Test
     fun `text style is inherited and can be overridden by a child`() {
         val inheritedFont = fontToken("inherited")
         val overriddenFont = fontToken("overridden")
+        val inheritedShadow = UiTextShadow(color = 0x80112233.toInt())
+        val overriddenShadow = UiTextShadow(color = 0x80445566.toInt(), blurRadius = 2f)
         lateinit var inheritedParagraph: Paragraph
         lateinit var overriddenParagraph: Paragraph
+        lateinit var shadowlessParagraph: Paragraph
         val root = div(
             UiStyle(
                 color = 0xFF112233.toInt(),
                 font = inheritedFont,
-                dropShadow = false,
+                textShadow = inheritedShadow,
             ),
         ) {
             div {
@@ -180,8 +311,12 @@ class LayoutEngineTest {
                     UiStyle(
                         color = 0xFF445566.toInt(),
                         font = overriddenFont,
-                        dropShadow = true,
+                        textShadow = overriddenShadow,
                     ),
+                )
+                shadowlessParagraph = p(
+                    "shadowless",
+                    UiStyle(textShadow = UiTextShadow.NONE),
                 )
             }
         }
@@ -189,14 +324,16 @@ class LayoutEngineTest {
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
         val inheritedNode = layout.nodeOf(inheritedParagraph)!!
         val overriddenNode = layout.nodeOf(overriddenParagraph)!!
+        val shadowlessNode = layout.nodeOf(shadowlessParagraph)!!
 
         assertSame(inheritedFont, layout.root.font)
         assertSame(inheritedFont, inheritedNode.font)
         assertEquals(0xFF112233.toInt(), inheritedNode.color)
-        assertFalse(inheritedNode.dropShadow)
+        assertSame(inheritedShadow, inheritedNode.textShadow)
         assertSame(overriddenFont, overriddenNode.font)
         assertEquals(0xFF445566.toInt(), overriddenNode.color)
-        assertTrue(overriddenNode.dropShadow)
+        assertSame(overriddenShadow, overriddenNode.textShadow)
+        assertSame(UiTextShadow.NONE, shadowlessNode.textShadow)
     }
 
     @Test

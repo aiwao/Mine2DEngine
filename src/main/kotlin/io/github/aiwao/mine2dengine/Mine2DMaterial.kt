@@ -8,6 +8,8 @@ import io.github.aiwao.mine2dengine.internal.render.Mine2DTextureBinding
 import io.github.aiwao.mine2dengine.internal.render.Mine2DUniformBinding
 import java.util.Collections
 import java.util.IdentityHashMap
+import org.joml.Vector2f
+import org.joml.Vector4f
 
 /** A typed sampler binding declared by a [Mine2DShader]. */
 class Mine2DSampler(
@@ -154,4 +156,67 @@ object Mine2DMaterials {
     /** Standard untextured vertex color material with alpha blending. */
     @JvmField
     val COLOR: Mine2DMaterial = Mine2DShaders.COLOR.material()
+
+    internal fun boxShadow(
+        color: Int,
+        width: Float,
+        height: Float,
+        blurRadius: Float,
+        cornerRadius: Float,
+    ): Mine2DMaterial = Mine2DShaders.BOX_SHADOW.material {
+        set(Mine2DShaders.BOX_SHADOW_COLOR, color.toRgbaVector())
+        set(Mine2DShaders.BOX_SHADOW_SIZE, Vector2f(width, height))
+        set(Mine2DShaders.SHADOW_BLUR_RADIUS, blurRadius)
+        set(Mine2DShaders.BOX_SHADOW_CORNER_RADIUS, cornerRadius)
+    }
+
+    internal fun dropShadow(
+        color: Int,
+        offsetX: Float,
+        offsetY: Float,
+        viewportWidth: Float,
+        viewportHeight: Float,
+        blurAxisXx: Float,
+        blurAxisXy: Float,
+        blurAxisYx: Float,
+        blurAxisYy: Float,
+        blurRadius: Float,
+    ): Mine2DMaterial = Mine2DShaders.DROP_SHADOW.material {
+        set(Mine2DShaders.DROP_SHADOW_COLOR, color.toRgbaVector())
+        set(
+            Mine2DShaders.DROP_SHADOW_OFFSET_VIEWPORT,
+            Vector4f(offsetX, offsetY, viewportWidth, viewportHeight),
+        )
+        set(
+            Mine2DShaders.DROP_SHADOW_BLUR_AXES,
+            Vector4f(blurAxisXx, blurAxisXy, blurAxisYx, blurAxisYy),
+        )
+        set(Mine2DShaders.DROP_SHADOW_PARAMETERS, Vector4f(blurRadius, 0f, 0f, 0f))
+    }
+
+    internal fun textShadow(
+        minU: Float,
+        minV: Float,
+        maxU: Float,
+        maxV: Float,
+        uPerGuiUnit: Float,
+        vPerGuiUnit: Float,
+        blurRadius: Float,
+        grayscale: Boolean,
+    ): Mine2DMaterial = Mine2DShaders.TEXT_SHADOW.material {
+        set(Mine2DShaders.TEXT_SHADOW_UV_BOUNDS, Vector4f(minU, minV, maxU, maxV))
+        set(
+            Mine2DShaders.TEXT_SHADOW_UV_PER_GUI_UNIT,
+            Vector2f(uPerGuiUnit, vPerGuiUnit),
+        )
+        set(Mine2DShaders.SHADOW_BLUR_RADIUS, blurRadius)
+        set(Mine2DShaders.TEXT_SHADOW_GRAYSCALE, if (grayscale) 1 else 0)
+    }
 }
+
+private fun Int.toRgbaVector(): Vector4f = Vector4f(
+    (this ushr 16 and 0xFF) / 255f,
+    (this ushr 8 and 0xFF) / 255f,
+    (this and 0xFF) / 255f,
+    (this ushr 24 and 0xFF) / 255f,
+)

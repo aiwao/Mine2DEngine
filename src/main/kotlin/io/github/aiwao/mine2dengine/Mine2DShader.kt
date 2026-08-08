@@ -5,8 +5,11 @@ import com.mojang.blaze3d.pipeline.BindGroupLayout
 import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.shaders.UniformType
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
+import com.mojang.blaze3d.vertex.VertexFormat
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.resources.Identifier
+import org.joml.Vector2f
+import org.joml.Vector4f
 
 /**
  * An immutable polygon pipeline and its typed material binding schema.
@@ -54,12 +57,40 @@ class Mine2DShader private constructor(
             pipeline: RenderPipeline,
             uniformBlock: Mine2DUniformBlock? = null,
             samplers: List<Mine2DSampler> = emptyList(),
+        ): Mine2DShader = fromCompatiblePipeline(
+            pipeline = pipeline,
+            uniformBlock = uniformBlock,
+            samplers = samplers,
+            vertexFormat = DefaultVertexFormat.POSITION_COLOR,
+            topology = PrimitiveTopology.TRIANGLES,
+            contract = "Mine2D polygon shaders",
+        )
+
+        internal fun fromTextPipeline(
+            pipeline: RenderPipeline,
+            uniformBlock: Mine2DUniformBlock,
+        ): Mine2DShader = fromCompatiblePipeline(
+            pipeline = pipeline,
+            uniformBlock = uniformBlock,
+            samplers = emptyList(),
+            vertexFormat = DefaultVertexFormat.POSITION_TEX_COLOR,
+            topology = PrimitiveTopology.QUADS,
+            contract = "Mine2D text-shadow shader",
+        )
+
+        private fun fromCompatiblePipeline(
+            pipeline: RenderPipeline,
+            uniformBlock: Mine2DUniformBlock?,
+            samplers: List<Mine2DSampler>,
+            vertexFormat: VertexFormat,
+            topology: PrimitiveTopology,
+            contract: String,
         ): Mine2DShader {
-            require(pipeline.getVertexFormatBinding(0) == DefaultVertexFormat.POSITION_COLOR) {
-                "Mine2D shaders must use DefaultVertexFormat.POSITION_COLOR at binding 0"
+            require(pipeline.getVertexFormatBinding(0) == vertexFormat) {
+                "$contract must use $vertexFormat at binding 0"
             }
-            require(pipeline.primitiveTopology == PrimitiveTopology.TRIANGLES) {
-                "Mine2D shaders must use PrimitiveTopology.TRIANGLES"
+            require(pipeline.primitiveTopology == topology) {
+                "$contract must use $topology"
             }
 
             val uniformDescriptions = BindGroupLayout.flattenUniforms(pipeline.bindGroupLayouts)
@@ -140,6 +171,114 @@ object Mine2DShaders {
         location = Identifier.fromNamespaceAndPath("mine2dengine", "pipeline/mine2d_color"),
         vertexShader = Identifier.withDefaultNamespace("core/gui"),
         fragmentShader = Identifier.withDefaultNamespace("core/gui"),
+    )
+
+    internal val BOX_SHADOW_COLOR = Mine2DUniform.vec4(
+        "ShadowColor",
+        Vector4f(0f, 0f, 0f, 0.5f),
+    )
+    internal val BOX_SHADOW_SIZE = Mine2DUniform.vec2(
+        "ShadowSize",
+        Vector2f(1f, 1f),
+    )
+    internal val SHADOW_BLUR_RADIUS = Mine2DUniform.float("BlurRadius", 0f)
+    internal val BOX_SHADOW_CORNER_RADIUS = Mine2DUniform.float("CornerRadius", 0f)
+
+    /** Analytic rounded-box shadow used by [Mine2DEngine.boxShadow]. */
+    internal val BOX_SHADOW: Mine2DShader = Mine2DShader.register(
+        location = Identifier.fromNamespaceAndPath("mine2dengine", "pipeline/mine2d_box_shadow"),
+        vertexShader = Identifier.fromNamespaceAndPath("mine2dengine", "core/box_shadow"),
+        fragmentShader = Identifier.fromNamespaceAndPath("mine2dengine", "core/box_shadow"),
+        uniformBlock = Mine2DUniformBlock(
+            "Mine2DBoxShadow",
+            BOX_SHADOW_COLOR,
+            BOX_SHADOW_SIZE,
+            SHADOW_BLUR_RADIUS,
+            BOX_SHADOW_CORNER_RADIUS,
+        ),
+    )
+
+    internal const val DROP_SHADOW_SAMPLER_NAME = "DropShadowSampler"
+    internal val DROP_SHADOW_COLOR = Mine2DUniform.vec4(
+        "ShadowColor",
+        Vector4f(0f, 0f, 0f, 0.5f),
+    )
+    internal val DROP_SHADOW_OFFSET_VIEWPORT = Mine2DUniform.vec4("OffsetAndViewport")
+    internal val DROP_SHADOW_BLUR_AXES = Mine2DUniform.vec4("BlurAxes")
+    internal val DROP_SHADOW_PARAMETERS = Mine2DUniform.vec4("ShadowParameters")
+    private val DROP_SHADOW_UNIFORM_BLOCK = Mine2DUniformBlock(
+        "Mine2DDropShadow",
+        DROP_SHADOW_COLOR,
+        DROP_SHADOW_OFFSET_VIEWPORT,
+        DROP_SHADOW_BLUR_AXES,
+        DROP_SHADOW_PARAMETERS,
+    )
+
+    /** Composites a Gaussian-blurred alpha mask for CSS-compatible drop shadows. */
+    internal val DROP_SHADOW: Mine2DShader = Mine2DShader.from(
+        pipeline = RenderPipelines.register(
+            RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
+                .withLocation(
+                    Identifier.fromNamespaceAndPath(
+                        "mine2dengine",
+                        "pipeline/mine2d_drop_shadow",
+                    ),
+                )
+                .withVertexShader(
+                    Identifier.fromNamespaceAndPath("mine2dengine", "core/drop_shadow"),
+                )
+                .withFragmentShader(
+                    Identifier.fromNamespaceAndPath("mine2dengine", "core/drop_shadow"),
+                )
+                .withBindGroupLayout(
+                    BindGroupLayout.builder()
+                        .withUniform("Mine2DDropShadow", UniformType.UNIFORM_BUFFER)
+                        .withSampler(DROP_SHADOW_SAMPLER_NAME)
+                        .build(),
+                )
+                .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
+                .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
+                .withCull(false)
+                .build(),
+        ),
+        uniformBlock = DROP_SHADOW_UNIFORM_BLOCK,
+    )
+
+    internal val TEXT_SHADOW_UV_BOUNDS = Mine2DUniform.vec4("UvBounds")
+    internal val TEXT_SHADOW_UV_PER_GUI_UNIT = Mine2DUniform.vec2("UvPerGuiUnit")
+    internal val TEXT_SHADOW_GRAYSCALE = Mine2DUniform.int("Grayscale")
+    private val TEXT_SHADOW_UNIFORM_BLOCK = Mine2DUniformBlock(
+        "Mine2DTextShadow",
+        TEXT_SHADOW_UV_BOUNDS,
+        TEXT_SHADOW_UV_PER_GUI_UNIT,
+        SHADOW_BLUR_RADIUS,
+        TEXT_SHADOW_GRAYSCALE,
+    )
+
+    /** Glyph-alpha Gaussian shadow used by [Mine2DEngine.textShadow]. */
+    internal val TEXT_SHADOW: Mine2DShader = Mine2DShader.fromTextPipeline(
+        pipeline = RenderPipelines.register(
+            RenderPipeline.builder(RenderPipelines.GUI_TEXT_SNIPPET)
+                .withLocation(
+                    Identifier.fromNamespaceAndPath(
+                        "mine2dengine",
+                        "pipeline/mine2d_text_shadow",
+                    ),
+                )
+                .withVertexShader(
+                    Identifier.fromNamespaceAndPath("mine2dengine", "core/text_shadow"),
+                )
+                .withFragmentShader(
+                    Identifier.fromNamespaceAndPath("mine2dengine", "core/text_shadow"),
+                )
+                .withBindGroupLayout(
+                    BindGroupLayout.builder()
+                        .withUniform("Mine2DTextShadow", UniformType.UNIFORM_BUFFER)
+                        .build(),
+                )
+                .build(),
+        ),
+        uniformBlock = TEXT_SHADOW_UNIFORM_BLOCK,
     )
 
     /** Forces object initialization during mod initialization. */

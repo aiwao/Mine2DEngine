@@ -102,7 +102,9 @@ object ExampleModClient : ClientModInitializer {
 | `quad(x, y, width, height, color)` | 塗りつぶした矩形を描画します。                                                                                         |
 | `line(startX, startY, endX, endY, width, color)` | 端が平らな塗りつぶし線を描画します。                                                                                   |
 | `circle(centerX, centerY, radius, color, segments)` | 正多角形で近似した塗りつぶし円を描画します。segmentsを増やすほど輪郭が滑らかになります。                               |
-| `text(font, text, x, y, color, dropShadow)` | 読み込み済みの `Mine2DFont` で文字列を描画します。                                                                     |
+| `boxShadow(x, y, width, height, ...)` | 前景のbox自体を描かず、柔らかい角丸box shadowを描画します。                                                           |
+| `textShadow(font, text, x, y, ...)` | 前景文字を描かず、設定可能なglyph shadowを描画します。                                                                |
+| `text(font, text, x, y, color)` | 読み込み済みの `Mine2DFont` で文字列を描画します。                                                                                 |
 | `withMaterial(material) { ... }` | ブロック内だけ既定のポリゴンMaterialを変更し、終了後に元へ戻します。                                                |
 
 ポリゴンの各点は時計回り、反時計回りのどちらでも指定できます。3 個以上の異なる点と 0 ではない面積が必要で、自己交差はできません。連続する重複点と不要な同一直線上の点は自動的に取り除かれます。線には異なる始点・終点と正の幅、円には正の半径と 3 以上の分割数が必要です。
@@ -158,7 +160,18 @@ ClientLifecycleEvents.CLIENT_STOPPING.register {
 
 ```kotlin
 uiFont?.let { font ->
-    draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt(), dropShadow = true)
+    draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt())
+
+    draw.textShadow(
+        font,
+        "Custom shadow",
+        16,
+        36,
+        color = 0xA0000000.toInt(),
+        offsetY = 2f,
+        blurRadius = 2f,
+    )
+    draw.text(font, "Custom shadow", 16, 36, 0xFFFFFFFF.toInt())
 
     val width = font.width("Mine2DEngine")
     val lineHeight = font.lineHeight
@@ -178,21 +191,29 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   `UiBoxSizing.BORDER_BOX` を指定すると、指定寸法にpaddingが含まれます。寸法が `null` の場合は
   どちらでも文字列または子要素に合わせて縮みます。
 - パディングは描画される背景の内側、マージンは外側です。
+- `boxShadow` は要素の背後に柔らかい角丸box shadowを描画します。要素内だけの指定であり、
+  レイアウト寸法やポインター判定領域には影響しません。
+- `dropShadow` はCSSの `filter: drop-shadow()` と同様に、要素の背景・文字・子孫を合成した
+  alpha形状へ影を付けます。要素内だけの指定であり、レイアウトやヒット領域には影響しません。
 - `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
 - `Div` と `Button` は直接の子要素を縦または横に並べます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
-- `color`、`font`、`dropShadow` は祖先から継承され、子要素で上書きできます。`color` または
-  `dropShadow` が `null` の場合は親を継承し、ルートではそれぞれ不透明な白と有効が既定値です。
+- `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
+  親を継承します。ルートではcolorが不透明な白、文字shadowはなしが既定値です。継承したshadowを
+  明示的に解除するには `textShadow = UiTextShadow.NONE` を指定します。
 - 段落内の改行は複数行になります。
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
+import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
+import io.github.aiwao.mine2dengine.layout.UiDropShadow
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
 import io.github.aiwao.mine2dengine.layout.UiPaint
 import io.github.aiwao.mine2dengine.layout.UiStyle
+import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
 
@@ -204,13 +225,31 @@ val root = div(
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
         background = UiPaint(color = 0xD0202020.toInt()),
+        boxShadow = UiBoxShadow(
+            color = 0x80000000.toInt(),
+            offsetY = 3f,
+            blurRadius = 5f,
+            cornerRadius = 6f,
+        ),
+        textShadow = UiTextShadow(
+            color = 0xA0000000.toInt(),
+            offsetY = 2f,
+            blurRadius = 1f,
+        ),
         horizontalAlignment = UiHorizontalAlignment.CENTER,
         verticalAlignment = UiVerticalAlignment.CENTER,
     ),
 ) {
     p(
         "Mine2DEngine",
-        UiStyle(color = 0xFFFFCC00.toInt()),
+        UiStyle(
+            color = 0xFFFFCC00.toInt(),
+            dropShadow = UiDropShadow(
+                color = 0x60000000,
+                offsetY = 3f,
+                blurRadius = 4f,
+            ),
+        ),
         onClick = { event -> println("タイトル: button=${event.button()}") },
         onMouseMove = { x, y -> println("タイトル: x=$x, y=$y") },
         onDrag = { event ->
@@ -219,7 +258,7 @@ val root = div(
         onMouseOver = { println("タイトルにカーソルが入りました") },
         onMouseOut = { println("タイトルからカーソルが出ました") },
     )
-    p("軽量な Fabric UI", UiStyle(dropShadow = false))
+    p("軽量な Fabric UI", UiStyle(textShadow = UiTextShadow.NONE))
 
     div(
         UiStyle(
@@ -268,7 +307,7 @@ hoverableLayout.render(draw)
 ```
 
 動的スタイルは `div`、`p` / `paragraph`、`button` で利用できます。既存レイアウトを再描画すると
-継承される文字色などに加え、背景PaintやMaterialなどの描画プロパティも更新されます。これらの
+継承される文字色やshadow、背景Paint、Materialなどの描画プロパティも更新されます。これらの
 描画プロパティだけを変える場合は再レイアウト不要です。解決後のスタイルによってサイズ、
 余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。`element.style` に
 代入すると、動的スタイルはその静的な値で置き換えられます。
@@ -294,6 +333,25 @@ layout.render(draw)
 // 同等の短縮形
 layout.render(draw, left = 24f, top = 32f)
 ```
+
+`UiBoxShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius`、
+正負どちらも使える有限な `spreadRadius`、0以上の `cornerRadius` を指定できます。spreadとblurは
+描画だけを要素外へ広げ、要素のジオメトリやヒット領域を変更しません。影には現在のGUI poseと
+scissorが適用されます。Layout外で単独利用する場合は、前景boxの前に
+`Mine2DEngine.boxShadow(...)` を呼び出します。この組み込み効果が追従するのは矩形または
+角丸矩形です。任意のalpha形状に沿う影には、カスタムshaderまたはオフスクリーンmaskを使用してください。
+
+`UiDropShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius` を
+指定できます。要素の背景、文字、子孫ツリー全体を一時alpha maskへ合成し、そのGaussian blurを
+元の描画の背後へ1回描画します。このプロパティは継承されず、ネストにも対応し、CSSの1つの
+`filter: drop-shadow(offsetX offsetY blurRadius color)`に対応します。
+
+`UiTextShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius` を
+指定できます。他の文字プロパティと同様に子孫へ継承され、レイアウトやヒット領域には影響しません。
+継承したshadowを明示的に解除するには`UiTextShadow.NONE`を指定します。各値はCSSの1つの
+`text-shadow`に対応します。正のblurは文字列をずらして何度も描くのではなく、各glyphのalphaを
+Gaussian shaderでサンプリングし、glyphごとに1回で描画します。Layout外では、前景の`text(...)`の直前に
+`Mine2DEngine.textShadow(...)`を呼び出します。
 
 ## カスタムシェーダー
 

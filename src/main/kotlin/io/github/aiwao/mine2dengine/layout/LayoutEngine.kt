@@ -246,7 +246,7 @@ private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): Ui
             children = emptyList(),
             font = measured.textStyle.font,
             color = measured.textStyle.color,
-            dropShadow = measured.textStyle.dropShadow,
+            textShadow = measured.textStyle.textShadow,
             displayed = false,
         )
     }
@@ -273,7 +273,7 @@ private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): Ui
         children = children,
         font = measured.textStyle.font,
         color = measured.textStyle.color,
-        dropShadow = measured.textStyle.dropShadow,
+        textShadow = measured.textStyle.textShadow,
         displayed = measured.displayed,
     )
 }
