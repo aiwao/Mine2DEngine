@@ -438,6 +438,31 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `disabled prevents onClick until the element is enabled again`() {
+        var clickCount = 0
+        lateinit var button: Button
+        val root = div {
+            button = button(onClick = { clickCount++ }) {
+                p("Run")
+            }
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+        val event = MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))
+
+        assertFalse(button.disabled)
+        assertTrue(layout.click(event))
+        assertEquals(1, clickCount)
+
+        button.disabled = true
+        assertTrue(layout.click(event))
+        assertEquals(1, clickCount)
+
+        button.disabled = false
+        assertTrue(layout.click(event))
+        assertEquals(2, clickCount)
+    }
+
+    @Test
     fun `onMouseMove can be used by every element type`() {
         val moved = mutableListOf<UiElement>()
         var receivedCoordinates: Pair<Double, Double>? = null
