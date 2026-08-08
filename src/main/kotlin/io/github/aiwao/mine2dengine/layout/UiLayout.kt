@@ -3,6 +3,7 @@ package io.github.aiwao.mine2dengine.layout
 import io.github.aiwao.mine2dengine.Mine2DEngine
 import io.github.aiwao.mine2dengine.Mine2DFont
 import net.minecraft.client.input.MouseButtonEvent
+import net.minecraft.client.input.MouseButtonInfo
 import java.util.IdentityHashMap
 import kotlin.math.roundToInt
 
@@ -46,6 +47,8 @@ class UiLayout internal constructor(
         private set
 
     private var noneDisplayStates: List<UiNoneDisplayState> = snapshot.noneDisplayStates
+
+    private var dragButtonInfo: MouseButtonInfo? = null
 
     /** The left coordinate of the root's outer box. Changing it translates the complete layout. */
     var left: Float
@@ -121,6 +124,7 @@ class UiLayout internal constructor(
 
         nodes.forEach { node -> node.element.dragging = false }
         element.dragging = true
+        dragButtonInfo = event.buttonInfo()
         if (!element.disabled) {
             element.onClick?.invoke(event)
         }
@@ -130,8 +134,9 @@ class UiLayout internal constructor(
     /**
      * Updates [UiElement.hovering] and invokes mouse-over or mouse-out callbacks, invokes the
      * topmost [UiElement.onMouseMove] callback at [x], [y], then invokes [UiElement.onDrag] on the
-     * dragging element even when the pointer is outside its bounds. Returns true when at least
-     * one callback was invoked.
+     * dragging element with a [MouseButtonEvent] containing the current coordinates and the
+     * button information from [mouseClick], even when the pointer is outside its bounds. Returns
+     * true when at least one callback was invoked.
      */
     fun mouseMove(x: Double, y: Double): Boolean {
         refreshNoneDisplay()
@@ -178,7 +183,10 @@ class UiLayout internal constructor(
             ?.element
             ?.onDrag
             ?.let { onDrag ->
-                onDrag(x, y)
+                val buttonInfo = checkNotNull(dragButtonInfo) {
+                    "A dragging element must have mouse button information"
+                }
+                onDrag(MouseButtonEvent(x, y, buttonInfo))
                 handled = true
             }
 
@@ -192,9 +200,13 @@ class UiLayout internal constructor(
             .map(UiLayoutNode::element)
             .filter(UiElement::dragging)
             .distinct()
-        if (draggingElements.isEmpty()) return false
+        if (draggingElements.isEmpty()) {
+            dragButtonInfo = null
+            return false
+        }
 
         draggingElements.forEach { element -> element.dragging = false }
+        dragButtonInfo = null
         return true
     }
 
@@ -232,13 +244,16 @@ class UiLayout internal constructor(
         nodesInPaintOrder()
             .filter(UiLayoutNode::displayed)
             .mapTo(displayedElements, UiLayoutNode::element)
-        previousNodes
+        val hiddenElements = previousNodes
             .map(UiLayoutNode::element)
             .filterNot(displayedElements::contains)
-            .forEach { element ->
-                element.dragging = false
-                element.hovering = false
-            }
+        if (hiddenElements.any(UiElement::dragging)) {
+            dragButtonInfo = null
+        }
+        hiddenElements.forEach { element ->
+            element.dragging = false
+            element.hovering = false
+        }
     }
 
     private fun draw(

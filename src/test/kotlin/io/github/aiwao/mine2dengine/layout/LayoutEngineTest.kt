@@ -634,29 +634,30 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `drag starts on click moves outside bounds and stops on release`() {
-        val dragCoordinates = mutableListOf<Pair<Double, Double>>()
+    fun `drag receives current coordinates and click button info until release`() {
+        val dragEvents = mutableListOf<MouseButtonEvent>()
         lateinit var paragraph: Paragraph
         val root = div(UiStyle(width = 50f, height = 50f)) {
             paragraph = p(
                 text = "Drag",
-                onDrag = { x, y -> dragCoordinates += x to y },
+                onDrag = { event -> dragEvents += event },
             )
         }
         val layout = calculateLayout(root, left = 4f, top = 6f, textMeasurer)
+        val buttonInfo = MouseButtonInfo(1, 2)
 
         assertFalse(paragraph.dragging)
-        assertTrue(layout.mouseClick(MouseButtonEvent(5.0, 7.0, MouseButtonInfo(0, 0))))
+        assertTrue(layout.mouseClick(MouseButtonEvent(5.0, 7.0, buttonInfo)))
         assertTrue(paragraph.dragging)
 
         assertTrue(layout.mouseMove(100.25, 200.5))
-        assertEquals(listOf(100.25 to 200.5), dragCoordinates)
+        assertEquals(listOf(MouseButtonEvent(100.25, 200.5, buttonInfo)), dragEvents)
 
         assertTrue(layout.mouseRelease())
         assertFalse(paragraph.dragging)
         assertFalse(layout.mouseRelease())
         assertFalse(layout.mouseMove(100.25, 200.5))
-        assertEquals(listOf(100.25 to 200.5), dragCoordinates)
+        assertEquals(1, dragEvents.size)
     }
 
     @Test
@@ -665,7 +666,7 @@ class LayoutEngineTest {
         val root = div(
             style = UiStyle(width = 20f, height = 20f),
             onMouseMove = { _, _ -> callbacks += "move" },
-            onDrag = { _, _ -> callbacks += "drag" },
+            onDrag = { callbacks += "drag" },
         )
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
