@@ -173,7 +173,9 @@ Mine2DEngine applies linear filtering only to glyph atlases created by `Mine2DFo
 
 The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follows a CSS-like box model:
 
-- `width` and `height` specify the content box. A `null` value shrinks to the text or children.
+- `boxSizing` controls whether a non-null `width` or `height` specifies the content box or the
+  complete padded box. It defaults to `UiBoxSizing.CONTENT_BOX`; use `UiBoxSizing.BORDER_BOX` to
+  include padding in the specified size. A `null` size still shrinks to the text or children.
 - Padding is inside the painted background; margin is outside it.
 - When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
 - `Div` and `Button` place direct children vertically or horizontally.
@@ -185,6 +187,7 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
+import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
@@ -198,6 +201,7 @@ val root = div(
         width = 180f,
         height = 100f,
         padding = UiEdges(8f),
+        boxSizing = UiBoxSizing.BORDER_BOX,
         backgroundColor = 0xD0202020.toInt(),
         horizontalAlignment = UiHorizontalAlignment.CENTER,
         verticalAlignment = UiVerticalAlignment.CENTER,

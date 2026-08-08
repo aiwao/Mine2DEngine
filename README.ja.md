@@ -173,7 +173,10 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 レイアウトパッケージでは `Div`、`Paragraph`、`Button` からツリーを作ります。CSS に似たボックスモデルを採用しています。
 
-- `width` と `height` はコンテンツボックスを指定します。`null` の場合は文字列または子要素に合わせて縮みます。
+- `boxSizing` は、`null` ではない `width` と `height` がコンテンツボックスとpaddingを含む
+  ボックスのどちらを指定するかを決めます。既定値は `UiBoxSizing.CONTENT_BOX` です。
+  `UiBoxSizing.BORDER_BOX` を指定すると、指定寸法にpaddingが含まれます。寸法が `null` の場合は
+  どちらでも文字列または子要素に合わせて縮みます。
 - パディングは描画される背景の内側、マージンは外側です。
 - `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
 - `Div` と `Button` は直接の子要素を縦または横に並べます。
@@ -184,6 +187,7 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
+import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
@@ -197,6 +201,7 @@ val root = div(
         width = 180f,
         height = 100f,
         padding = UiEdges(8f),
+        boxSizing = UiBoxSizing.BORDER_BOX,
         backgroundColor = 0xD0202020.toInt(),
         horizontalAlignment = UiHorizontalAlignment.CENTER,
         verticalAlignment = UiVerticalAlignment.CENTER,

@@ -22,11 +22,18 @@ enum class UiVerticalAlignment {
     BOTTOM,
 }
 
+/** Determines whether an explicit size applies to the content or the padded box. */
+enum class UiBoxSizing {
+    CONTENT_BOX,
+    BORDER_BOX,
+}
+
 /**
  * Visual and layout properties shared by every UI element.
  *
- * [width] and [height] describe the content box. Padding is painted inside the
- * background, while margin remains outside it, following the CSS box model.
+ * [boxSizing] determines whether a non-null [width] or [height] describes the content box or the
+ * complete padded box. Padding is painted inside the background, while margin remains outside it,
+ * following the CSS box model.
  * [gap] adds space between adjacent direct children without adding space at the
  * edges of the content box.
  * [noneDisplay] is evaluated during layout, rendering, and pointer queries.
@@ -53,6 +60,7 @@ data class UiStyle(
     val font: Mine2DFont? = null,
     val dropShadow: Boolean? = null,
     val gap: Float = 0f,
+    val boxSizing: UiBoxSizing = UiBoxSizing.CONTENT_BOX,
     val noneDisplay: () -> Boolean = { false },
 ) {
     companion object {
