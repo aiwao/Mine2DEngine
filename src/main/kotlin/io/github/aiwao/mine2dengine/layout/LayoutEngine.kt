@@ -66,7 +66,7 @@ private fun calculateLayout(
         val measured = measure(
             element = root,
             inheritedTextStyle = ResolvedUiTextStyle(),
-            inheritedChildStyle = { null },
+            inheritedChildStyle = { _ -> null },
             textMeasurer = textMeasurer,
             noneDisplayStates = noneDisplayStates,
             evaluatedNoneDisplays = evaluatedNoneDisplays,
@@ -112,13 +112,13 @@ private data class MeasuredNode(
 private fun measure(
     element: UiElement,
     inheritedTextStyle: ResolvedUiTextStyle,
-    inheritedChildStyle: () -> UiStyle?,
+    inheritedChildStyle: (UiElement) -> UiStyle?,
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
     noneDisplayStates: MutableList<UiNoneDisplayState>,
     evaluatedNoneDisplays: Map<UiElement, Boolean>,
 ): MeasuredNode {
     val styleProvider = {
-        inheritedChildStyle()?.withOverrides(element.style) ?: element.style
+        inheritedChildStyle(element)?.withOverrides(element.style) ?: element.style
     }
     val style = styleProvider()
     val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
@@ -142,9 +142,9 @@ private fun measure(
     }
 
     val children = if (element is UiContainer) {
-        val descendantStyle = {
-            val inheritedStyle = inheritedChildStyle()
-            val childStyle = element.childStyle
+        val descendantStyle = { descendant: UiElement ->
+            val inheritedStyle = inheritedChildStyle(descendant)
+            val childStyle = element.childStyle?.invoke(descendant)
             when {
                 inheritedStyle == null -> childStyle
                 childStyle == null -> inheritedStyle

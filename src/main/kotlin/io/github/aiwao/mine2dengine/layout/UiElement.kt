@@ -49,17 +49,18 @@ sealed class UiContainer(
     override var onDrag: ((MouseButtonEvent) -> Unit)? = null,
     override var onMouseOver: (() -> Unit)? = null,
     override var onMouseOut: (() -> Unit)? = null,
-    childStyle: UiStyle? = null,
+    childStyle: ((UiElement) -> UiStyle)? = null,
 ) : UiElement(style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
     val children: MutableList<UiElement> = children.toMutableList()
 
     /**
-     * A style applied to every descendant, like the CSS selector `.parent *`.
+     * Resolves a style for every descendant, like the CSS selector `.parent *`.
      *
-     * A descendant's own non-default style values take precedence. A descendant container's
+     * The provider receives the descendant being styled and is evaluated whenever its style is
+     * used. A descendant's own non-default style values take precedence. A descendant container's
      * non-null child style also takes precedence for its own descendants.
      */
-    var childStyle: UiStyle? = childStyle
+    var childStyle: ((UiElement) -> UiStyle)? = childStyle
 
     fun <T : UiElement> add(element: T): T {
         children += element
@@ -73,7 +74,7 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
-        childStyle: UiStyle? = null,
+        childStyle: ((UiElement) -> UiStyle)? = null,
         content: Div.() -> Unit = {},
     ): Div = add(
         Div(
@@ -95,7 +96,7 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
-        childStyle: UiStyle? = null,
+        childStyle: ((UiElement) -> UiStyle)? = null,
         content: Div.() -> Unit = {},
     ): Div = add(
         Div(
@@ -171,7 +172,7 @@ class Div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    childStyle: UiStyle? = null,
+    childStyle: ((UiElement) -> UiStyle)? = null,
 ) : UiContainer(style, children, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut, childStyle)
 
 /** A text element corresponding to an HTML p. Newlines create multiple lines. */
@@ -193,7 +194,7 @@ fun div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    childStyle: UiStyle? = null,
+    childStyle: ((UiElement) -> UiStyle)? = null,
     content: Div.() -> Unit = {},
 ): Div = Div(
     style = style,
@@ -213,7 +214,7 @@ fun div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    childStyle: UiStyle? = null,
+    childStyle: ((UiElement) -> UiStyle)? = null,
     content: Div.() -> Unit = {},
 ): Div = Div(
     onClick = onClick,

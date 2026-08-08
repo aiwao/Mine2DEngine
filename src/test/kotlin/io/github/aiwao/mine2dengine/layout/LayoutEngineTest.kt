@@ -186,16 +186,27 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `child style applies to every descendant but not the container itself`() {
-        val descendantStyle = UiStyle(
-            color = 0xFF112233.toInt(),
-            width = 20f,
-            height = 10f,
-        )
-        val nestedChildStyle = UiStyle(
-            color = 0xFF445566.toInt(),
-            width = 8f,
-        )
+    fun `child style receives and dynamically styles every descendant`() {
+        val outerEvaluations = mutableListOf<UiElement>()
+        val nestedEvaluations = mutableListOf<UiElement>()
+        val paragraphShadow = UiDropShadow()
+        var shadowsEnabled = false
+        val descendantStyle: (UiElement) -> UiStyle = { child ->
+            outerEvaluations += child
+            UiStyle(
+                color = 0xFF112233.toInt(),
+                width = 20f,
+                height = 10f,
+                dropShadow = paragraphShadow.takeIf { shadowsEnabled && child is Paragraph },
+            )
+        }
+        val nestedChildStyle: (UiElement) -> UiStyle = { child ->
+            nestedEvaluations += child
+            UiStyle(
+                color = 0xFF445566.toInt(),
+                width = 8f,
+            )
+        }
         lateinit var directParagraph: Paragraph
         lateinit var nestedDiv: Div
         lateinit var nestedParagraph: Paragraph
@@ -217,6 +228,11 @@ class LayoutEngineTest {
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
         assertEquals(UiRect(0f, 0f, 80f, 60f), layout.root.bounds)
+        assertEquals(
+            listOf(directParagraph, nestedDiv, nestedParagraph, styledDiv, styledParagraph),
+            outerEvaluations,
+        )
+        assertEquals(listOf<UiElement>(styledParagraph), nestedEvaluations)
         val expectedSizes = mapOf(
             directParagraph to UiSize(1f, 10f),
             nestedDiv to UiSize(20f, 10f),
@@ -235,6 +251,10 @@ class LayoutEngineTest {
         )
         assertEquals(0xFF445566.toInt(), styledParagraphNode.color)
         assertEquals(1f, directParagraph.style.width)
+        assertNull(layout.nodeOf(directParagraph)!!.styleProvider().dropShadow)
+
+        shadowsEnabled = true
+        assertSame(paragraphShadow, layout.nodeOf(directParagraph)!!.styleProvider().dropShadow)
     }
 
     @Test

@@ -197,9 +197,10 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   alpha形状へ影を付けます。要素内だけの指定であり、レイアウトやヒット領域には影響しません。
 - `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
 - `Div` は直接の子要素を縦または横に並べます。
-- `Div` の `childStyle` は、CSS の `.parent *` と同様に、1つの
-  `UiStyle` をすべての子孫へ適用します。子孫自身のstyleにあるデフォルト以外の値が優先されます。
-  ネストしたコンテナにnullではない `childStyle` がある場合、その配下では近い指定が優先されます。
+- `Div` の `childStyle` は、CSS の `.parent *` と同様に、各子孫を受け取って `UiStyle` を
+  解決します。子孫の型や現在の状態を参照できます。子孫自身のstyleにあるデフォルト以外の値が
+  優先されます。ネストしたコンテナにnullではない `childStyle` がある場合、その配下では近い
+  指定が優先されます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
 - `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
   親を継承します。ルートではcolorが不透明な白、文字shadowはなしが既定値です。継承したshadowを
@@ -208,6 +209,7 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
+import io.github.aiwao.mine2dengine.layout.Paragraph
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
@@ -282,12 +284,16 @@ val layout = LayoutEngine.layout(root, left = 12f, top = 12f)
 layout.render(draw)
 ```
 
-たとえば、次の2つの段落には、ネストした `Div` 内の段落も含めて同じ子孫styleが適用されます。
+たとえば、次の指定では、ネストした `Div` 内も含めて段落の子孫だけにdrop shadowを適用します。
 
 ```kotlin
 val labels = div(
     style = UiStyle(font = font),
-    childStyle = UiStyle(color = 0xFFFFCC00.toInt()),
+    childStyle = { child ->
+        UiStyle(
+            dropShadow = if (child is Paragraph) UiDropShadow() else null,
+        )
+    },
 ) {
     p("First")
     div {

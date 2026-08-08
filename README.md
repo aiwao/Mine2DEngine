@@ -196,9 +196,10 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
   CSS `filter: drop-shadow()`. It is local to that element and does not affect layout or hit bounds.
 - When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
 - `Div` places direct children vertically or horizontally.
-- `childStyle` on a `Div` applies one `UiStyle` to every descendant, like
-  CSS `.parent *`. Non-default values in a descendant's own style take precedence. A non-null
-  `childStyle` on a nested container takes precedence below that container.
+- `childStyle` on a `Div` receives each descendant and resolves its `UiStyle`, like CSS
+  `.parent *`. It can inspect the descendant's type and current state. Non-default values in a
+  descendant's own style take precedence. A non-null `childStyle` on a nested container takes
+  precedence below that container.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
 - `color`, `font`, and `textShadow` are inherited from ancestors and may be overridden by a child.
   A null value inherits the parent. At the root, color defaults to opaque white and text shadow
@@ -207,6 +208,7 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
+import io.github.aiwao.mine2dengine.layout.Paragraph
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
@@ -281,13 +283,17 @@ val layout = LayoutEngine.layout(root, left = 12f, top = 12f)
 layout.render(draw)
 ```
 
-For example, both paragraphs below use the same descendant style, including the one inside the
-nested `Div`:
+For example, this applies a drop shadow only to paragraph descendants, including the one inside
+the nested `Div`:
 
 ```kotlin
 val labels = div(
     style = UiStyle(font = font),
-    childStyle = UiStyle(color = 0xFFFFCC00.toInt()),
+    childStyle = { child ->
+        UiStyle(
+            dropShadow = if (child is Paragraph) UiDropShadow() else null,
+        )
+    },
 ) {
     p("First")
     div {
