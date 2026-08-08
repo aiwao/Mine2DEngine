@@ -359,7 +359,23 @@ val panel = div(
 - `viewportSize()`: GUI `(width, height)`
 - `timeSeconds()`: monotonic elapsed seconds
 
-For textures, pass `Mine2DSampler` keys to `register(samplers = ...)` and assign every key with `bind(key, textureView, gpuSampler)` while building the material. Uniforms, vectors, matrices, and texture assignments are validated when the material is built, and immutable snapshots are queued for rendering.
+For textures, pass `Mine2DSampler` keys to `register(samplers = ...)` and assign every key while building the material. Use `bind(key, textureView, gpuSampler)` for a fixed texture. A shader that needs the scene behind the GUI can use `bindGuiBackground(key)`:
+
+```kotlin
+val backgroundSampler = Mine2DSampler("BackgroundSampler")
+val blurShader = Mine2DShader.register(
+    location = Identifier.fromNamespaceAndPath("examplemod", "pipeline/blur"),
+    vertexShader = Identifier.fromNamespaceAndPath("examplemod", "core/blur"),
+    fragmentShader = Identifier.fromNamespaceAndPath("examplemod", "core/blur"),
+    samplers = listOf(backgroundSampler),
+)
+
+val blur = blurShader.material {
+    bindGuiBackground(backgroundSampler)
+}
+```
+
+The GUI background is copied to a separate full-resolution texture immediately before extracted GUI elements are rendered. All `bindGuiBackground` bindings in that frame share the snapshot. This avoids the invalid feedback loop caused by sampling the main color texture while it is also the active render attachment. Pass a `FilterMode` as the second argument to override the default linear filtering. Uniforms, vectors, matrices, and sampler assignments are validated when the material is built, and immutable binding descriptions are queued for rendering.
 
 A Mine2D shader must use `DefaultVertexFormat.POSITION_COLOR` at binding 0 and `PrimitiveTopology.TRIANGLES`. `Mine2DShader.register` enforces the vertex format and topology and disables culling. Use `Mine2DShader.from(...)` only for a compatible pipeline that already declares the same uniform and sampler bindings. Polygons with material bindings use one draw each so different uniform values remain isolated; the standard material without custom bindings can still be batched normally.
 

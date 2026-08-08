@@ -2,6 +2,7 @@ package io.github.aiwao.mine2dengine
 
 import com.mojang.blaze3d.textures.GpuSampler
 import com.mojang.blaze3d.textures.GpuTextureView
+import com.mojang.blaze3d.textures.FilterMode
 import io.github.aiwao.mine2dengine.internal.render.Mine2DRenderBindings
 import io.github.aiwao.mine2dengine.internal.render.Mine2DTextureBinding
 import io.github.aiwao.mine2dengine.internal.render.Mine2DUniformBinding
@@ -32,12 +33,12 @@ data class Mine2DTexture(
 class Mine2DMaterial internal constructor(
     val shader: Mine2DShader,
     values: IdentityHashMap<Mine2DUniform<*>, Any>,
-    textures: IdentityHashMap<Mine2DSampler, Mine2DTexture>,
+    samplerBindings: IdentityHashMap<Mine2DSampler, Mine2DTextureBinding>,
 ) {
     internal val values: Map<Mine2DUniform<*>, Any> =
         Collections.unmodifiableMap(IdentityHashMap(values))
-    internal val textures: Map<Mine2DSampler, Mine2DTexture> =
-        Collections.unmodifiableMap(IdentityHashMap(textures))
+    internal val samplerBindings: Map<Mine2DSampler, Mine2DTextureBinding> =
+        Collections.unmodifiableMap(IdentityHashMap(samplerBindings))
 
     /** Creates a copy with selected values or textures replaced. */
     fun with(configure: Mine2DMaterialBuilder.() -> Unit): Mine2DMaterial =
@@ -50,10 +51,9 @@ class Mine2DMaterial internal constructor(
             }
             .orEmpty()
         val textureBindings = shader.samplers.map { sampler ->
-            val texture = checkNotNull(textures[sampler]) {
-                "Texture ${sampler.name} was not resolved for ${shader.pipeline.location}"
+            checkNotNull(samplerBindings[sampler]) {
+                "Sampler ${sampler.name} was not resolved for ${shader.pipeline.location}"
             }
-            Mine2DTextureBinding(sampler.name, texture.view, texture.sampler)
         }
 
         return if (uniformBindings.isEmpty() && textureBindings.isEmpty()) {
@@ -70,13 +70,13 @@ class Mine2DMaterialBuilder internal constructor(
     base: Mine2DMaterial? = null,
 ) {
     private val values = IdentityHashMap<Mine2DUniform<*>, Any>()
-    private val textures = IdentityHashMap<Mine2DSampler, Mine2DTexture>()
+    private val samplerBindings = IdentityHashMap<Mine2DSampler, Mine2DTextureBinding>()
 
     init {
         if (base != null) {
             require(base.shader === shader) { "A material can only copy values from the same shader" }
             values.putAll(base.values)
-            textures.putAll(base.textures)
+            samplerBindings.putAll(base.samplerBindings)
         }
     }
 
@@ -103,10 +103,23 @@ class Mine2DMaterialBuilder internal constructor(
 
     /** Binds a prepared texture pair to a sampler key declared by this shader. */
     fun bind(key: Mine2DSampler, texture: Mine2DTexture): Mine2DMaterialBuilder = apply {
-        require(shader.samplers.any { candidate -> candidate === key }) {
-            "Sampler ${key.name} does not belong to shader ${shader.pipeline.location}"
-        }
-        textures[key] = texture
+        requireDeclaredSampler(key)
+        samplerBindings[key] = Mine2DTextureBinding.fixed(key.name, texture.view, texture.sampler)
+    }
+
+    /**
+     * Binds a snapshot of the main color target taken immediately before GUI element rendering.
+     *
+     * The renderer copies the target to a separate texture once per frame, so shaders can sample
+     * the background without reading from the texture currently used as their render attachment.
+     */
+    @JvmOverloads
+    fun bindGuiBackground(
+        key: Mine2DSampler,
+        filterMode: FilterMode = FilterMode.LINEAR,
+    ): Mine2DMaterialBuilder = apply {
+        requireDeclaredSampler(key)
+        samplerBindings[key] = Mine2DTextureBinding.guiBackground(key.name, filterMode)
     }
 
     internal fun build(): Mine2DMaterial {
@@ -120,13 +133,19 @@ class Mine2DMaterialBuilder internal constructor(
             values[uniform] = uniform.copyAndValidate(checkNotNull(uniform.defaultValue))
         }
 
-        val missingSamplers = shader.samplers.filterNot(textures::containsKey)
+        val missingSamplers = shader.samplers.filterNot(samplerBindings::containsKey)
         require(missingSamplers.isEmpty()) {
             "Material for ${shader.pipeline.location} requires samplers: " +
                 missingSamplers.joinToString { sampler -> sampler.name }
         }
 
-        return Mine2DMaterial(shader, values, textures)
+        return Mine2DMaterial(shader, values, samplerBindings)
+    }
+
+    private fun requireDeclaredSampler(key: Mine2DSampler) {
+        require(shader.samplers.any { candidate -> candidate === key }) {
+            "Sampler ${key.name} does not belong to shader ${shader.pipeline.location}"
+        }
     }
 }
 

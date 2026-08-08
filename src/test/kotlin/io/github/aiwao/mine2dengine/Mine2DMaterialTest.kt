@@ -4,7 +4,9 @@ import com.mojang.blaze3d.PrimitiveTopology
 import com.mojang.blaze3d.pipeline.BindGroupLayout
 import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.shaders.UniformType
+import com.mojang.blaze3d.textures.FilterMode
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
+import io.github.aiwao.mine2dengine.internal.render.Mine2DTextureBinding
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.resources.Identifier
 import org.joml.Matrix4f
@@ -161,6 +163,22 @@ class Mine2DMaterialTest {
         val shader = shader(uniformBlock = null, samplers = listOf(sampler))
 
         assertFailsWith<IllegalArgumentException> { shader.material() }
+    }
+
+    @Test
+    fun `GUI background binding satisfies a sampler without an extraction-time texture`() {
+        val sampler = Mine2DSampler("BackgroundSampler")
+        val shader = shader(uniformBlock = null, samplers = listOf(sampler))
+
+        val material = shader.material {
+            bindGuiBackground(sampler)
+        }
+        val binding = material.resolveBindings(defaultContext()).textures().single()
+
+        assertEquals(Mine2DTextureBinding.Kind.GUI_BACKGROUND, binding.kind())
+        assertEquals(FilterMode.LINEAR, binding.filterMode())
+        assertEquals(null, binding.texture())
+        assertEquals(null, binding.sampler())
     }
 
     private fun shader(

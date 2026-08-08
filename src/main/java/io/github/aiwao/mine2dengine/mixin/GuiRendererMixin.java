@@ -5,7 +5,11 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.IndexType;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DMaterialRenderState;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DRenderBindings;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DTextureBinding;
@@ -15,6 +19,7 @@ import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.render.GuiRenderer;
 import net.minecraft.client.renderer.DynamicUniformStorage;
 import net.minecraft.client.renderer.StagedVertexBuffer;
@@ -40,6 +45,12 @@ abstract class GuiRendererMixin {
     @Unique
     private final Map<Integer, DynamicUniformStorage<PackedUniform>> mine2dengine$uniformStorages =
         new LinkedHashMap<>();
+
+    @Unique
+    private GpuTexture mine2dengine$guiBackgroundTexture;
+
+    @Unique
+    private GpuTextureView mine2dengine$guiBackgroundView;
 
     @Inject(method = "addElementToMesh", at = @At("HEAD"))
     private void mine2dengine$beginMaterialDraw(
@@ -75,6 +86,28 @@ abstract class GuiRendererMixin {
         previousDraw = null;
     }
 
+    @Inject(method = "draw", at = @At("HEAD"))
+    private void mine2dengine$captureGuiBackground(CallbackInfo callbackInfo) {
+        if (!mine2dengine$usesGuiBackground()) {
+            return;
+        }
+
+        RenderTarget mainTarget = Minecraft.getInstance().gameRenderer.mainRenderTarget();
+        GpuTexture source = mainTarget.getColorTexture();
+        mine2dengine$ensureGuiBackgroundTexture(source);
+        RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(
+            source,
+            mine2dengine$guiBackgroundTexture,
+            0,
+            0,
+            0,
+            0,
+            0,
+            source.getWidth(0),
+            source.getHeight(0)
+        );
+    }
+
     @WrapOperation(
         method = "executeDraw",
         at = @At(
@@ -93,7 +126,7 @@ abstract class GuiRendererMixin {
         if (bindings != null) {
             bindings.uniforms().forEach(renderPass::setUniform);
             for (Mine2DTextureBinding texture : bindings.textures()) {
-                renderPass.bindTexture(texture.name(), texture.texture(), texture.sampler());
+                mine2dengine$bindTexture(renderPass, texture);
             }
         }
 
@@ -111,6 +144,7 @@ abstract class GuiRendererMixin {
         mine2dengine$bindingsByDraw.clear();
         mine2dengine$uniformStorages.values().forEach(DynamicUniformStorage::close);
         mine2dengine$uniformStorages.clear();
+        mine2dengine$closeGuiBackgroundTexture();
     }
 
     @Unique
@@ -118,6 +152,81 @@ abstract class GuiRendererMixin {
         return renderState instanceof Mine2DMaterialRenderState materialRenderState
             ? materialRenderState.mine2dengineBindings()
             : Mine2DRenderBindings.EMPTY;
+    }
+
+    @Unique
+    private boolean mine2dengine$usesGuiBackground() {
+        for (PreparedBindings bindings : mine2dengine$bindingsByDraw.values()) {
+            for (Mine2DTextureBinding texture : bindings.textures()) {
+                if (texture.kind() == Mine2DTextureBinding.Kind.GUI_BACKGROUND) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Unique
+    private void mine2dengine$ensureGuiBackgroundTexture(GpuTexture source) {
+        if (
+            mine2dengine$guiBackgroundTexture != null
+                && !mine2dengine$guiBackgroundTexture.isClosed()
+                && mine2dengine$guiBackgroundTexture.getFormat() == source.getFormat()
+                && mine2dengine$guiBackgroundTexture.getWidth(0) == source.getWidth(0)
+                && mine2dengine$guiBackgroundTexture.getHeight(0) == source.getHeight(0)
+        ) {
+            return;
+        }
+
+        mine2dengine$closeGuiBackgroundTexture();
+        mine2dengine$guiBackgroundTexture = RenderSystem.getDevice().createTexture(
+            "Mine2D GUI background snapshot",
+            GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING,
+            source.getFormat(),
+            source.getWidth(0),
+            source.getHeight(0),
+            1,
+            1
+        );
+        mine2dengine$guiBackgroundView = RenderSystem.getDevice().createTextureView(
+            mine2dengine$guiBackgroundTexture
+        );
+    }
+
+    @Unique
+    private void mine2dengine$bindTexture(
+        RenderPass renderPass,
+        Mine2DTextureBinding texture
+    ) {
+        switch (texture.kind()) {
+            case FIXED -> renderPass.bindTexture(
+                texture.name(),
+                texture.texture(),
+                texture.sampler()
+            );
+            case GUI_BACKGROUND -> {
+                if (mine2dengine$guiBackgroundView == null) {
+                    throw new IllegalStateException("Mine2D GUI background was not captured");
+                }
+                renderPass.bindTexture(
+                    texture.name(),
+                    mine2dengine$guiBackgroundView,
+                    RenderSystem.getSamplerCache().getClampToEdge(texture.filterMode())
+                );
+            }
+        }
+    }
+
+    @Unique
+    private void mine2dengine$closeGuiBackgroundTexture() {
+        if (mine2dengine$guiBackgroundTexture != null) {
+            mine2dengine$guiBackgroundTexture.close();
+            mine2dengine$guiBackgroundTexture = null;
+        }
+        if (mine2dengine$guiBackgroundView != null) {
+            mine2dengine$guiBackgroundView.close();
+            mine2dengine$guiBackgroundView = null;
+        }
     }
 
     @Unique
