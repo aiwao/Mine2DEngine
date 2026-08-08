@@ -88,6 +88,25 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `all shadow styles use consistent offset and blur defaults`() {
+        fun assertDefaults(offsetX: Float, offsetY: Float, blurRadius: Float) {
+            assertEquals(0f, offsetX)
+            assertEquals(0f, offsetY)
+            assertEquals(4f, blurRadius)
+        }
+
+        UiBoxShadow().let { shadow ->
+            assertDefaults(shadow.offsetX, shadow.offsetY, shadow.blurRadius)
+        }
+        UiDropShadow().let { shadow ->
+            assertDefaults(shadow.offsetX, shadow.offsetY, shadow.blurRadius)
+        }
+        UiTextShadow().let { shadow ->
+            assertDefaults(shadow.offsetX, shadow.offsetY, shadow.blurRadius)
+        }
+    }
+
+    @Test
     fun `dynamic styles receive their elements and react to current state`() {
         val evaluations = mutableMapOf<String, Int>()
         fun evaluated(name: String) {

@@ -12,7 +12,7 @@ import io.github.aiwao.mine2dengine.validateShadowParameters
 data class UiDropShadow(
     val color: Int = 0x80000000.toInt(),
     val offsetX: Float = 0f,
-    val offsetY: Float = 2f,
+    val offsetY: Float = 0f,
     val blurRadius: Float = 4f,
 ) {
     init {

@@ -10,9 +10,9 @@ import io.github.aiwao.mine2dengine.validateShadowParameters
  */
 data class UiTextShadow(
     val color: Int = 0x80000000.toInt(),
-    val offsetX: Float = 1f,
-    val offsetY: Float = 1f,
-    val blurRadius: Float = 0f,
+    val offsetX: Float = 0f,
+    val offsetY: Float = 0f,
+    val blurRadius: Float = 4f,
 ) {
     companion object {
         /** Explicitly clears an inherited text shadow. */

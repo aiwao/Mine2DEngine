@@ -198,7 +198,7 @@ class Mine2DEngine(
         height: Float,
         color: Int = 0x80000000.toInt(),
         offsetX: Float = 0f,
-        offsetY: Float = 2f,
+        offsetY: Float = 0f,
         blurRadius: Float = 4f,
         spreadRadius: Float = 0f,
         cornerRadius: Float = 0f,
@@ -250,9 +250,9 @@ class Mine2DEngine(
         x: Int,
         y: Int,
         color: Int = 0x80000000.toInt(),
-        offsetX: Float = 1f,
-        offsetY: Float = 1f,
-        blurRadius: Float = 0f,
+        offsetX: Float = 0f,
+        offsetY: Float = 0f,
+        blurRadius: Float = 4f,
     ) {
         font.checkOpen()
         validateShadowParameters("Text shadow", offsetX, offsetY, blurRadius)
