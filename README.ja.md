@@ -184,7 +184,7 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 ## レイアウトエンジン
 
-レイアウトパッケージでは `Div`、`Paragraph`、`Button` からツリーを作ります。CSS に似たボックスモデルを採用しています。
+レイアウトパッケージでは `Div` と `Paragraph` からツリーを作ります。CSS に似たボックスモデルを採用しています。
 
 - `boxSizing` は、`null` ではない `width` と `height` がコンテンツボックスとpaddingを含む
   ボックスのどちらを指定するかを決めます。既定値は `UiBoxSizing.CONTENT_BOX` です。
@@ -196,7 +196,11 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - `dropShadow` はCSSの `filter: drop-shadow()` と同様に、要素の背景・文字・子孫を合成した
   alpha形状へ影を付けます。要素内だけの指定であり、レイアウトやヒット領域には影響しません。
 - `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
-- `Div` と `Button` は直接の子要素を縦または横に並べます。
+- `Div` は直接の子要素を縦または横に並べます。
+- `Div` の `childStyle` は、CSS の `.parent *` と同様に、各子孫を受け取って `UiStyle` を
+  解決します。子孫の型や現在の状態を参照できます。子孫自身のstyleにあるデフォルト以外の値が
+  優先されます。ネストしたコンテナにnullではない `childStyle` がある場合、その配下では近い
+  指定が優先されます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
 - `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
   親を継承します。ルートではcolorが不透明な白、文字shadowはなしが既定値です。継承したshadowを
@@ -205,6 +209,7 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
+import io.github.aiwao.mine2dengine.layout.Paragraph
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
@@ -266,10 +271,10 @@ val root = div(
             margin = UiEdges(top = 6f, right = 0f, bottom = 0f, left = 0f),
         ),
     ) {
-        button(onClick = { event -> println("OK: button=${event.button()}") }) {
+        div(onClick = { event -> println("OK: button=${event.button()}") }) {
             p("OK")
         }
-        button(onClick = { event -> println("キャンセル: button=${event.button()}") }) {
+        div(onClick = { event -> println("キャンセル: button=${event.button()}") }) {
             p("キャンセル")
         }
     }
@@ -277,6 +282,24 @@ val root = div(
 
 val layout = LayoutEngine.layout(root, left = 12f, top = 12f)
 layout.render(draw)
+```
+
+たとえば、次の指定では、ネストした `Div` 内も含めて段落の子孫だけにdrop shadowを適用します。
+
+```kotlin
+val labels = div(
+    style = UiStyle(font = font),
+    childStyle = { child ->
+        UiStyle(
+            dropShadow = if (child is Paragraph) UiDropShadow() else null,
+        )
+    },
+) {
+    p("First")
+    div {
+        p("Second")
+    }
+}
 ```
 
 `style` には具体的な要素を受け取る関数も指定できます。レイアウトまたは描画で使われるたびに
@@ -306,13 +329,13 @@ hoverableLayout.mouseMove(mouseX, mouseY)
 hoverableLayout.render(draw)
 ```
 
-動的スタイルは `div`、`p` / `paragraph`、`button` で利用できます。既存レイアウトを再描画すると
+動的スタイルは `div` と `p` / `paragraph` で利用できます。既存レイアウトを再描画すると
 継承される文字色やshadow、背景Paint、Materialなどの描画プロパティも更新されます。これらの
-描画プロパティだけを変える場合は再レイアウト不要です。解決後のスタイルによってサイズ、
-余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。`element.style` に
-代入すると、動的スタイルはその静的な値で置き換えられます。
+描画プロパティだけを変える場合は再レイアウト不要です。解決後の `style` または `childStyle` に
+よってサイズ、余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。
+`element.style` に代入すると、動的スタイルはその静的な値で置き換えられます。
 
-`div`、`p` / `paragraph`、`button` を含むすべての要素で `onClick`、`onMouseMove`、`onDrag`、`onMouseOver`、`onMouseOut` を利用できます。要素の `disabled` プロパティを `true` にすると、再び有効にするまで `onClick` コールバックは呼び出されません。読み取り専用の `hovering` プロパティで、カーソルが要素内にあるかを確認できます。返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやポインター入力の通知ができます。Minecraft の `MouseButtonEvent` を `mouseClick` に渡すと、イベントの座標で最前面のクリック可能な要素を特定してドラッグ状態を開始し、そのイベントを要素の `onClick` に渡します。`mouseMove` にマウス座標を渡すと、`hovering` の更新、境界をまたいだ際のコールバック、座標上で最前面の `onMouseMove`、ドラッグ中の要素の `onDrag` が呼び出されます。`onDrag` が受け取る `MouseButtonEvent` の座標は現在のマウス座標で、ボタンと修飾キーの情報はドラッグを開始した `mouseClick` のイベントから引き継がれます。ドラッグは要素の領域外でも継続し、`mouseRelease` を呼ぶと終了します。
+`div` と `p` / `paragraph` を含むすべての要素で `onClick`、`onMouseMove`、`onDrag`、`onMouseOver`、`onMouseOut` を利用できます。要素の `disabled` プロパティを `true` にすると、再び有効にするまで `onClick` コールバックは呼び出されません。読み取り専用の `hovering` プロパティで、カーソルが要素内にあるかを確認できます。返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやポインター入力の通知ができます。Minecraft の `MouseButtonEvent` を `mouseClick` に渡すと、イベントの座標で最前面のクリック可能な要素を特定してドラッグ状態を開始し、そのイベントを要素の `onClick` に渡します。`mouseMove` にマウス座標を渡すと、`hovering` の更新、境界をまたいだ際のコールバック、座標上で最前面の `onMouseMove`、ドラッグ中の要素の `onDrag` が呼び出されます。`onDrag` が受け取る `MouseButtonEvent` の座標は現在のマウス座標で、ボタンと修飾キーの情報はドラッグを開始した `mouseClick` のイベントから引き継がれます。ドラッグは要素の領域外でも継続し、`mouseRelease` を呼ぶと終了します。
 
 ```kotlin
 val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())

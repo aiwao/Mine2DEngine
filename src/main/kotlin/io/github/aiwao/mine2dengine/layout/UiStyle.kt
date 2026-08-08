@@ -2,6 +2,8 @@ package io.github.aiwao.mine2dengine.layout
 
 import io.github.aiwao.mine2dengine.Mine2DFont
 
+private val DEFAULT_NONE_DISPLAY: () -> Boolean = { false }
+
 /** The direction in which a container lays out its direct children. */
 enum class UiDirection {
     VERTICAL,
@@ -64,7 +66,7 @@ data class UiStyle(
     val font: Mine2DFont? = null,
     val gap: Float = 0f,
     val boxSizing: UiBoxSizing = UiBoxSizing.CONTENT_BOX,
-    val noneDisplay: () -> Boolean = { false },
+    val noneDisplay: () -> Boolean = DEFAULT_NONE_DISPLAY,
     val boxShadow: UiBoxShadow? = null,
     val textShadow: UiTextShadow? = null,
     val dropShadow: UiDropShadow? = null,
@@ -99,3 +101,27 @@ internal fun UiStyle.resolveTextStyle(parent: ResolvedUiTextStyle): ResolvedUiTe
         font = font ?: parent.font,
         textShadow = textShadow ?: parent.textShadow,
     )
+
+/** Applies the explicitly non-default values in [overrides] to this style. */
+internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
+    color = overrides.color ?: color,
+    background = overrides.background ?: background,
+    margin = overrides.margin.takeUnless { it == UiEdges() } ?: margin,
+    padding = overrides.padding.takeUnless { it == UiEdges() } ?: padding,
+    direction = overrides.direction.takeUnless { it == UiDirection.VERTICAL } ?: direction,
+    horizontalAlignment = overrides.horizontalAlignment
+        .takeUnless { it == UiHorizontalAlignment.LEFT }
+        ?: horizontalAlignment,
+    verticalAlignment = overrides.verticalAlignment
+        .takeUnless { it == UiVerticalAlignment.TOP }
+        ?: verticalAlignment,
+    width = overrides.width ?: width,
+    height = overrides.height ?: height,
+    font = overrides.font ?: font,
+    gap = overrides.gap.takeUnless { it == 0f } ?: gap,
+    boxSizing = overrides.boxSizing.takeUnless { it == UiBoxSizing.CONTENT_BOX } ?: boxSizing,
+    noneDisplay = overrides.noneDisplay.takeUnless { it === DEFAULT_NONE_DISPLAY } ?: noneDisplay,
+    boxShadow = overrides.boxShadow ?: boxShadow,
+    textShadow = overrides.textShadow ?: textShadow,
+    dropShadow = overrides.dropShadow ?: dropShadow,
+)

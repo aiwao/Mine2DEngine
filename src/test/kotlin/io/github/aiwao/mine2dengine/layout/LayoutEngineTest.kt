@@ -116,7 +116,6 @@ class LayoutEngineTest {
         lateinit var innerDiv: Div
         lateinit var shortParagraph: Paragraph
         lateinit var longParagraph: Paragraph
-        lateinit var button: Button
         val root = div(
             style = { element ->
                 evaluated("root")
@@ -139,22 +138,17 @@ class LayoutEngineTest {
                 evaluated("paragraph")
                 UiStyle(width = element.text.length.toFloat())
             })
-            button = button(style = { element ->
-                evaluated("button")
-                Button.DEFAULT_STYLE.copy(width = element.children.size.toFloat())
-            })
         }
 
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
         assertEquals(
-            mapOf("root" to 1, "div" to 1, "p" to 1, "paragraph" to 1, "button" to 1),
+            mapOf("root" to 1, "div" to 1, "p" to 1, "paragraph" to 1),
             evaluations,
         )
         assertSame(innerDiv, root.children[0])
         assertSame(shortParagraph, root.children[1])
         assertSame(longParagraph, root.children[2])
-        assertSame(button, root.children[3])
         assertEquals(0xFF000000.toInt(), root.style.color)
 
         layout.mouseMove(79.0, 79.0)
@@ -189,6 +183,78 @@ class LayoutEngineTest {
         layout.mouseMove(10.0, 10.0)
         assertEquals(0xFFFFFFFF.toInt(), root.style.background?.color)
         assertEquals(UiSize(20f, 20f), layout.size)
+    }
+
+    @Test
+    fun `child style receives and dynamically styles every descendant`() {
+        val outerEvaluations = mutableListOf<UiElement>()
+        val nestedEvaluations = mutableListOf<UiElement>()
+        val paragraphShadow = UiDropShadow()
+        var shadowsEnabled = false
+        val descendantStyle: (UiElement) -> UiStyle = { child ->
+            outerEvaluations += child
+            UiStyle(
+                color = 0xFF112233.toInt(),
+                width = 20f,
+                height = 10f,
+                dropShadow = paragraphShadow.takeIf { shadowsEnabled && child is Paragraph },
+            )
+        }
+        val nestedChildStyle: (UiElement) -> UiStyle = { child ->
+            nestedEvaluations += child
+            UiStyle(
+                color = 0xFF445566.toInt(),
+                width = 8f,
+            )
+        }
+        lateinit var directParagraph: Paragraph
+        lateinit var nestedDiv: Div
+        lateinit var nestedParagraph: Paragraph
+        lateinit var styledDiv: Div
+        lateinit var styledParagraph: Paragraph
+        val root = div(
+            style = UiStyle(width = 80f, height = 60f),
+            childStyle = descendantStyle,
+        ) {
+            directParagraph = p("direct", UiStyle(width = 1f))
+            nestedDiv = div {
+                nestedParagraph = p("nested", UiStyle(width = 2f))
+            }
+            styledDiv = div(style = UiStyle(), childStyle = nestedChildStyle) {
+                styledParagraph = p("styled")
+            }
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(UiRect(0f, 0f, 80f, 60f), layout.root.bounds)
+        assertEquals(
+            listOf(directParagraph, nestedDiv, nestedParagraph, styledDiv, styledParagraph),
+            outerEvaluations,
+        )
+        assertEquals(listOf<UiElement>(styledParagraph), nestedEvaluations)
+        val expectedSizes = mapOf(
+            directParagraph to UiSize(1f, 10f),
+            nestedDiv to UiSize(20f, 10f),
+            nestedParagraph to UiSize(2f, 10f),
+            styledDiv to UiSize(20f, 10f),
+        )
+        expectedSizes.forEach { (descendant, expectedSize) ->
+            val node = layout.nodeOf(descendant)!!
+            assertEquals(expectedSize, UiSize(node.bounds.width, node.bounds.height))
+            assertEquals(0xFF112233.toInt(), node.color)
+        }
+        val styledParagraphNode = layout.nodeOf(styledParagraph)!!
+        assertEquals(
+            UiSize(8f, 10f),
+            UiSize(styledParagraphNode.bounds.width, styledParagraphNode.bounds.height),
+        )
+        assertEquals(0xFF445566.toInt(), styledParagraphNode.color)
+        assertEquals(1f, directParagraph.style.width)
+        assertNull(layout.nodeOf(directParagraph)!!.styleProvider().dropShadow)
+
+        shadowsEnabled = true
+        assertSame(paragraphShadow, layout.nodeOf(directParagraph)!!.styleProvider().dropShadow)
     }
 
     @Test
@@ -707,12 +773,12 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `click invokes the topmost button with the mouse event and reports misses`() {
+    fun `click invokes the topmost clickable div with the mouse event and reports misses`() {
         var clickCount = 0
         var receivedEvent: MouseButtonEvent? = null
-        lateinit var button: Button
+        lateinit var clickableDiv: Div
         val root = div {
-            button = button(onClick = { event ->
+            clickableDiv = div(onClick = { event ->
                 clickCount++
                 receivedEvent = event
             }) {
@@ -723,15 +789,14 @@ class LayoutEngineTest {
         val hitEvent = MouseButtonEvent(5.0, 7.0, MouseButtonInfo(1, 2))
         val missEvent = MouseButtonEvent(100.0, 100.0, MouseButtonInfo(0, 0))
 
-        assertSame(button, layout.elementAt(5f, 7f))
         assertTrue(layout.mouseClick(hitEvent))
         assertEquals(1, clickCount)
         assertSame(hitEvent, receivedEvent)
-        assertTrue(button.dragging)
+        assertTrue(clickableDiv.dragging)
         assertFalse(layout.mouseClick(missEvent))
-        assertTrue(button.dragging)
+        assertTrue(clickableDiv.dragging)
         assertTrue(layout.mouseRelease())
-        assertFalse(button.dragging)
+        assertFalse(clickableDiv.dragging)
     }
 
     @Test
@@ -771,38 +836,38 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `button without onClick still consumes a click`() {
+    fun `div without click or drag callbacks does not consume a click`() {
         val root = div {
-            button {
+            div {
                 p("Run")
             }
         }
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
-        assertTrue(layout.mouseClick(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
+        assertFalse(layout.mouseClick(MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))))
     }
 
     @Test
     fun `disabled prevents onClick until the element is enabled again`() {
         var clickCount = 0
-        lateinit var button: Button
+        lateinit var clickableDiv: Div
         val root = div {
-            button = button(onClick = { clickCount++ }) {
+            clickableDiv = div(onClick = { clickCount++ }) {
                 p("Run")
             }
         }
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
         val event = MouseButtonEvent(1.0, 1.0, MouseButtonInfo(0, 0))
 
-        assertFalse(button.disabled)
+        assertFalse(clickableDiv.disabled)
         assertTrue(layout.mouseClick(event))
         assertEquals(1, clickCount)
 
-        button.disabled = true
+        clickableDiv.disabled = true
         assertTrue(layout.mouseClick(event))
         assertEquals(1, clickCount)
 
-        button.disabled = false
+        clickableDiv.disabled = false
         assertTrue(layout.mouseClick(event))
         assertEquals(2, clickCount)
     }
@@ -813,7 +878,7 @@ class LayoutEngineTest {
         var receivedCoordinates: Pair<Double, Double>? = null
         lateinit var paragraph: Paragraph
         lateinit var innerDiv: Div
-        lateinit var button: Button
+        lateinit var siblingDiv: Div
         lateinit var root: Div
         root = div(
             style = UiStyle(width = 50f, height = 50f),
@@ -834,8 +899,8 @@ class LayoutEngineTest {
                     },
                 )
             }
-            button = button(onMouseMove = { _, _ -> moved += button }) {
-                p("Button")
+            siblingDiv = div(onMouseMove = { _, _ -> moved += siblingDiv }) {
+                p("Div")
             }
         }
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
@@ -852,7 +917,7 @@ class LayoutEngineTest {
         moved.clear()
         innerDiv.onMouseMove = null
         assertTrue(layout.mouseMove(1.0, 31.0))
-        assertEquals(listOf<UiElement>(button), moved)
+        assertEquals(listOf<UiElement>(siblingDiv), moved)
 
         moved.clear()
         assertTrue(layout.mouseMove(49.0, 49.0))
@@ -974,12 +1039,12 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `button lays out child elements like a div`() {
+    fun `div lays out child elements horizontally`() {
         lateinit var first: Paragraph
         lateinit var second: Paragraph
         val root = div {
-            button(
-                style = Button.DEFAULT_STYLE.copy(
+            div(
+                style = UiStyle(
                     direction = UiDirection.HORIZONTAL,
                     gap = 2f,
                 ),
@@ -991,9 +1056,9 @@ class LayoutEngineTest {
 
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
-        assertEquals(UiSize(29f, 16f), layout.size)
-        assertEquals(6f, layout.nodeOf(first)!!.outerBounds.left)
-        assertEquals(13f, layout.nodeOf(second)!!.outerBounds.left)
+        assertEquals(UiSize(17f, 10f), layout.size)
+        assertEquals(0f, layout.nodeOf(first)!!.outerBounds.left)
+        assertEquals(7f, layout.nodeOf(second)!!.outerBounds.left)
     }
 
     @Test

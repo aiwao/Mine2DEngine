@@ -20,7 +20,7 @@ class Mine2DTextMeasurer(
 }
 
 /**
- * Measures and positions a tree of [Div], [Paragraph], and [Button] nodes.
+ * Measures and positions a tree of [Div] and [Paragraph] nodes.
  *
  * [left] and [top] passed to [layout] are the top-left coordinate of the root's outer box.
  * Text fonts are selected through [UiStyle.font] and remain owned by the caller.
@@ -66,6 +66,7 @@ private fun calculateLayout(
         val measured = measure(
             element = root,
             inheritedTextStyle = ResolvedUiTextStyle(),
+            inheritedChildStyle = { _ -> null },
             textMeasurer = textMeasurer,
             noneDisplayStates = noneDisplayStates,
             evaluatedNoneDisplays = evaluatedNoneDisplays,
@@ -83,6 +84,7 @@ private fun calculateLayout(
 private data class MeasuredNode(
     val element: UiElement,
     val style: UiStyle,
+    val styleProvider: () -> UiStyle,
     val contentSize: UiSize,
     val children: List<MeasuredNode>,
     val textStyle: ResolvedUiTextStyle,
@@ -110,11 +112,15 @@ private data class MeasuredNode(
 private fun measure(
     element: UiElement,
     inheritedTextStyle: ResolvedUiTextStyle,
+    inheritedChildStyle: (UiElement) -> UiStyle?,
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
     noneDisplayStates: MutableList<UiNoneDisplayState>,
     evaluatedNoneDisplays: Map<UiElement, Boolean>,
 ): MeasuredNode {
-    val style = element.style
+    val styleProvider = {
+        inheritedChildStyle(element)?.withOverrides(element.style) ?: element.style
+    }
+    val style = styleProvider()
     val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
     val noneDisplay = evaluatedNoneDisplays[element] ?: style.noneDisplay()
     noneDisplayStates += UiNoneDisplayState(
@@ -127,6 +133,7 @@ private fun measure(
         return MeasuredNode(
             element = element,
             style = style,
+            styleProvider = styleProvider,
             contentSize = UiSize(0f, 0f),
             children = emptyList(),
             textStyle = resolvedTextStyle,
@@ -135,11 +142,21 @@ private fun measure(
     }
 
     val children = if (element is UiContainer) {
+        val descendantStyle = { descendant: UiElement ->
+            val inheritedStyle = inheritedChildStyle(descendant)
+            val childStyle = element.childStyle?.invoke(descendant)
+            when {
+                inheritedStyle == null -> childStyle
+                childStyle == null -> inheritedStyle
+                else -> inheritedStyle.withOverrides(childStyle)
+            }
+        }
         element.children
             .map { child ->
                 measure(
                     element = child,
                     inheritedTextStyle = resolvedTextStyle,
+                    inheritedChildStyle = descendantStyle,
                     textMeasurer = textMeasurer,
                     noneDisplayStates = noneDisplayStates,
                     evaluatedNoneDisplays = evaluatedNoneDisplays,
@@ -163,6 +180,7 @@ private fun measure(
     return MeasuredNode(
         element = element,
         style = style,
+        styleProvider = styleProvider,
         contentSize = UiSize(
             width = contentLength(
                 specifiedLength = style.width,
@@ -275,7 +293,9 @@ private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): Ui
         color = measured.textStyle.color,
         textShadow = measured.textStyle.textShadow,
         displayed = measured.displayed,
-    )
+    ).also { node ->
+        node.styleProvider = measured.styleProvider
+    }
 }
 
 private fun placeChildren(measured: MeasuredNode, contentBounds: UiRect): List<UiLayoutNode> {
