@@ -29,6 +29,10 @@ enum class UiVerticalAlignment {
  * background, while margin remains outside it, following the CSS box model.
  * [gap] adds space between adjacent direct children without adding space at the
  * edges of the content box.
+ * [noneDisplay] is evaluated during layout, rendering, and pointer queries.
+ * When its value changes, geometry is recalculated. A true value removes the
+ * element and its descendants from layout, rendering, and pointer input, like
+ * CSS `display: none`.
  * [horizontalAlignment] and [verticalAlignment] position direct children in a
  * container and text inside a paragraph's content box.
  * A null size shrinks to the element's text or children. [color], [font], and
@@ -49,6 +53,7 @@ data class UiStyle(
     val font: Mine2DFont? = null,
     val dropShadow: Boolean? = null,
     val gap: Float = 0f,
+    val noneDisplay: () -> Boolean = { false },
 ) {
     companion object {
         const val DEFAULT_COLOR: Int = -1

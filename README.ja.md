@@ -175,6 +175,7 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 - `width` と `height` はコンテンツボックスを指定します。`null` の場合は文字列または子要素に合わせて縮みます。
 - パディングは描画される背景の内側、マージンは外側です。
+- `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
 - `Div` と `Button` は直接の子要素を縦または横に並べます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
 - `color`、`font`、`dropShadow` は祖先から継承され、子要素で上書きできます。`color` または
@@ -270,7 +271,7 @@ val moveHandled = layout.mouseMove(mouseX, mouseY)
 val releaseHandled = layout.release()
 ```
 
-`LayoutEngine.layout(root)` は描画せずにジオメトリを計算します。返されたレイアウトの `render(renderer)` を呼び出すと描画できます。文字列、スタイル、子要素を変更した後はレイアウトを再計算してください。
+`LayoutEngine.layout(root)` は描画せずにジオメトリを計算します。返されたレイアウトの `render(renderer)` を呼び出すと描画できます。`noneDisplay` の戻り値が変わった場合は自動的に再計算されますが、文字列、その他のスタイル、子要素を変更した後はレイアウトを再計算してください。
 
 計算済みレイアウトの位置だけを変える場合は、`left` / `top` を変更します。すべての要素とヒットテスト領域が一緒に移動します。`layout.render(renderer, left, top)` を使うと、移動と再描画を一度に行えます。
 
