@@ -102,6 +102,7 @@ object ExampleModClient : ClientModInitializer {
 | `quad(x, y, width, height, color)` | 塗りつぶした矩形を描画します。                                                                                         |
 | `line(startX, startY, endX, endY, width, color)` | 端が平らな塗りつぶし線を描画します。                                                                                   |
 | `circle(centerX, centerY, radius, color, segments)` | 正多角形で近似した塗りつぶし円を描画します。segmentsを増やすほど輪郭が滑らかになります。                               |
+| `boxShadow(x, y, width, height, ...)` | 前景のbox自体を描かず、柔らかい角丸box shadowを描画します。                                                           |
 | `text(font, text, x, y, color, dropShadow)` | 読み込み済みの `Mine2DFont` で文字列を描画します。                                                                     |
 | `withMaterial(material) { ... }` | ブロック内だけ既定のポリゴンMaterialを変更し、終了後に元へ戻します。                                                |
 
@@ -178,6 +179,8 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   `UiBoxSizing.BORDER_BOX` を指定すると、指定寸法にpaddingが含まれます。寸法が `null` の場合は
   どちらでも文字列または子要素に合わせて縮みます。
 - パディングは描画される背景の内側、マージンは外側です。
+- `boxShadow` は要素の背後に柔らかい角丸box shadowを描画します。要素内だけの指定であり、
+  レイアウト寸法やポインター判定領域には影響しません。
 - `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
 - `Div` と `Button` は直接の子要素を縦または横に並べます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
@@ -187,6 +190,7 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
+import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiEdges
@@ -204,6 +208,12 @@ val root = div(
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
         background = UiPaint(color = 0xD0202020.toInt()),
+        boxShadow = UiBoxShadow(
+            color = 0x80000000.toInt(),
+            offsetY = 3f,
+            blurRadius = 5f,
+            cornerRadius = 6f,
+        ),
         horizontalAlignment = UiHorizontalAlignment.CENTER,
         verticalAlignment = UiVerticalAlignment.CENTER,
     ),
@@ -294,6 +304,13 @@ layout.render(draw)
 // 同等の短縮形
 layout.render(draw, left = 24f, top = 32f)
 ```
+
+`UiBoxShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius`、
+正負どちらも使える有限な `spreadRadius`、0以上の `cornerRadius` を指定できます。spreadとblurは
+描画だけを要素外へ広げ、要素のジオメトリやヒット領域を変更しません。影には現在のGUI poseと
+scissorが適用されます。Layout外で単独利用する場合は、前景boxの前に
+`Mine2DEngine.boxShadow(...)` を呼び出します。この組み込み効果が追従するのは矩形または
+角丸矩形です。任意のalpha形状に沿う影には、カスタムshaderまたはオフスクリーンmaskを使用してください。
 
 ## カスタムシェーダー
 

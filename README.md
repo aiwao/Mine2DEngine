@@ -102,6 +102,7 @@ Coordinates are GUI coordinates, and colors are Minecraft ARGB integers (`0xAARR
 | `quad(x, y, width, height, color)` | Draws a filled rectangle. |
 | `line(startX, startY, endX, endY, width, color)` | Draws a filled line with butt caps. |
 | `circle(centerX, centerY, radius, color, segments)` | Draws a filled regular-polygon approximation of a circle. More segments produce a smoother edge. |
+| `boxShadow(x, y, width, height, ...)` | Draws a soft rounded-box shadow without drawing the box itself. |
 | `text(font, text, x, y, color, dropShadow)` | Draws text using a loaded `Mine2DFont`. |
 | `withMaterial(material) { ... }` | Temporarily changes the default polygon material and restores it after the block. |
 
@@ -177,6 +178,8 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
   complete padded box. It defaults to `UiBoxSizing.CONTENT_BOX`; use `UiBoxSizing.BORDER_BOX` to
   include padding in the specified size. A `null` size still shrinks to the text or children.
 - Padding is inside the painted background; margin is outside it.
+- `boxShadow` paints a soft rounded-box shadow behind an element. It is local to that element and
+  does not affect layout size or pointer bounds.
 - When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
 - `Div` and `Button` place direct children vertically or horizontally.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
@@ -187,6 +190,7 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
+import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiEdges
@@ -204,6 +208,12 @@ val root = div(
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
         background = UiPaint(color = 0xD0202020.toInt()),
+        boxShadow = UiBoxShadow(
+            color = 0x80000000.toInt(),
+            offsetY = 3f,
+            blurRadius = 5f,
+            cornerRadius = 6f,
+        ),
         horizontalAlignment = UiHorizontalAlignment.CENTER,
         verticalAlignment = UiVerticalAlignment.CENTER,
     ),
@@ -294,6 +304,13 @@ layout.render(draw)
 // Equivalent shorthand
 layout.render(draw, left = 24f, top = 32f)
 ```
+
+`UiBoxShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, non-negative `blurRadius`,
+finite positive or negative `spreadRadius`, and non-negative `cornerRadius`. Spread and blur are
+paint-only overflow: they do not change the element's geometry or hit area. The shadow follows the
+current GUI pose and scissor. For a standalone shadow outside the layout engine, call
+`Mine2DEngine.boxShadow(...)` before drawing its foreground box. This built-in effect follows a
+rectangle or rounded rectangle; use a custom shader or off-screen mask for an arbitrary alpha shape.
 
 ## Custom shaders
 

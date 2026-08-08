@@ -267,6 +267,22 @@ class UiLayout internal constructor(
 
         val style = node.element.style
         val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
+        style.boxShadow?.let { shadow ->
+            if (node.bounds.width > 0f && node.bounds.height > 0f) {
+                renderer.boxShadow(
+                    x = node.bounds.left,
+                    y = node.bounds.top,
+                    width = node.bounds.width,
+                    height = node.bounds.height,
+                    color = shadow.color,
+                    offsetX = shadow.offsetX,
+                    offsetY = shadow.offsetY,
+                    blurRadius = shadow.blurRadius,
+                    spreadRadius = shadow.spreadRadius,
+                    cornerRadius = shadow.cornerRadius,
+                )
+            }
+        }
         style.background?.let { paint ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
                 renderer.quad(

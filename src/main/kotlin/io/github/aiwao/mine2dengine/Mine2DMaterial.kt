@@ -8,6 +8,8 @@ import io.github.aiwao.mine2dengine.internal.render.Mine2DTextureBinding
 import io.github.aiwao.mine2dengine.internal.render.Mine2DUniformBinding
 import java.util.Collections
 import java.util.IdentityHashMap
+import org.joml.Vector2f
+import org.joml.Vector4f
 
 /** A typed sampler binding declared by a [Mine2DShader]. */
 class Mine2DSampler(
@@ -154,4 +156,24 @@ object Mine2DMaterials {
     /** Standard untextured vertex color material with alpha blending. */
     @JvmField
     val COLOR: Mine2DMaterial = Mine2DShaders.COLOR.material()
+
+    internal fun boxShadow(
+        color: Int,
+        width: Float,
+        height: Float,
+        blurRadius: Float,
+        cornerRadius: Float,
+    ): Mine2DMaterial = Mine2DShaders.BOX_SHADOW.material {
+        set(Mine2DShaders.BOX_SHADOW_COLOR, color.toRgbaVector())
+        set(Mine2DShaders.BOX_SHADOW_SIZE, Vector2f(width, height))
+        set(Mine2DShaders.BOX_SHADOW_BLUR_RADIUS, blurRadius)
+        set(Mine2DShaders.BOX_SHADOW_CORNER_RADIUS, cornerRadius)
+    }
 }
+
+private fun Int.toRgbaVector(): Vector4f = Vector4f(
+    (this ushr 16 and 0xFF) / 255f,
+    (this ushr 8 and 0xFF) / 255f,
+    (this and 0xFF) / 255f,
+    (this ushr 24 and 0xFF) / 255f,
+)

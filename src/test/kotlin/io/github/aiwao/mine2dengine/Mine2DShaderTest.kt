@@ -9,6 +9,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class Mine2DShaderTest {
     @Test
@@ -20,6 +21,22 @@ class Mine2DShaderTest {
         assertFalse(pipeline.isCull)
         assertNull(Mine2DShaders.COLOR.uniformBlock)
         assertSame(Mine2DShaders.COLOR, Mine2DMaterials.COLOR.shader)
+    }
+
+    @Test
+    fun `built-in box shadow shader has material bindings`() {
+        val shader = Mine2DShaders.BOX_SHADOW
+        val pipeline = shader.pipeline
+
+        assertSame(DefaultVertexFormat.POSITION_COLOR, pipeline.getVertexFormatBinding(0))
+        assertEquals(PrimitiveTopology.TRIANGLES, pipeline.primitiveTopology)
+        assertFalse(pipeline.isCull)
+        assertEquals("Mine2DBoxShadow", shader.uniformBlock?.name)
+        assertEquals(
+            listOf("ShadowColor", "ShadowSize", "BlurRadius", "CornerRadius"),
+            shader.uniformBlock?.uniforms?.map(Mine2DUniform<*>::name),
+        )
+        assertTrue(shader.samplers.isEmpty())
     }
 
     @Test

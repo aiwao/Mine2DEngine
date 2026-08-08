@@ -181,6 +181,24 @@ class Mine2DMaterialTest {
         assertEquals(null, binding.sampler())
     }
 
+    @Test
+    fun `built-in box shadow material packs ARGB color and shape parameters`() {
+        val material = Mine2DMaterials.boxShadow(
+            color = 0x80402010.toInt(),
+            width = 104f,
+            height = 44f,
+            blurRadius = 6f,
+            cornerRadius = 10f,
+        )
+        val data = material.resolveBindings(defaultContext()).uniforms().single().dataUnsafe()
+        val buffer = ByteBuffer.wrap(data).order(ByteOrder.nativeOrder())
+
+        assertFloatSequence(buffer, 0, 64f / 255f, 32f / 255f, 16f / 255f, 128f / 255f)
+        assertFloatSequence(buffer, 16, 104f, 44f)
+        assertEquals(6f, buffer.getFloat(24))
+        assertEquals(10f, buffer.getFloat(28))
+    }
+
     private fun shader(
         uniformBlock: Mine2DUniformBlock?,
         samplers: List<Mine2DSampler> = emptyList(),

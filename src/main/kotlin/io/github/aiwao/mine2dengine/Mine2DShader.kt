@@ -7,6 +7,8 @@ import com.mojang.blaze3d.shaders.UniformType
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.resources.Identifier
+import org.joml.Vector2f
+import org.joml.Vector4f
 
 /**
  * An immutable polygon pipeline and its typed material binding schema.
@@ -140,6 +142,31 @@ object Mine2DShaders {
         location = Identifier.fromNamespaceAndPath("mine2dengine", "pipeline/mine2d_color"),
         vertexShader = Identifier.withDefaultNamespace("core/gui"),
         fragmentShader = Identifier.withDefaultNamespace("core/gui"),
+    )
+
+    internal val BOX_SHADOW_COLOR = Mine2DUniform.vec4(
+        "ShadowColor",
+        Vector4f(0f, 0f, 0f, 0.5f),
+    )
+    internal val BOX_SHADOW_SIZE = Mine2DUniform.vec2(
+        "ShadowSize",
+        Vector2f(1f, 1f),
+    )
+    internal val BOX_SHADOW_BLUR_RADIUS = Mine2DUniform.float("BlurRadius", 0f)
+    internal val BOX_SHADOW_CORNER_RADIUS = Mine2DUniform.float("CornerRadius", 0f)
+
+    /** Analytic rounded-box shadow used by [Mine2DEngine.boxShadow]. */
+    internal val BOX_SHADOW: Mine2DShader = Mine2DShader.register(
+        location = Identifier.fromNamespaceAndPath("mine2dengine", "pipeline/mine2d_box_shadow"),
+        vertexShader = Identifier.fromNamespaceAndPath("mine2dengine", "core/box_shadow"),
+        fragmentShader = Identifier.fromNamespaceAndPath("mine2dengine", "core/box_shadow"),
+        uniformBlock = Mine2DUniformBlock(
+            "Mine2DBoxShadow",
+            BOX_SHADOW_COLOR,
+            BOX_SHADOW_SIZE,
+            BOX_SHADOW_BLUR_RADIUS,
+            BOX_SHADOW_CORNER_RADIUS,
+        ),
     )
 
     /** Forces object initialization during mod initialization. */

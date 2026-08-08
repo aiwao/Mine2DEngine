@@ -60,6 +60,10 @@ class LayoutEngineTest {
             UiPaint::class.java,
             UiStyle::class.java.getMethod("getBackground").returnType,
         )
+        assertEquals(
+            UiBoxShadow::class.java,
+            UiStyle::class.java.getMethod("getBoxShadow").returnType,
+        )
     }
 
     @Test
@@ -68,6 +72,7 @@ class LayoutEngineTest {
 
         assertEquals(null, UiStyle().color)
         assertEquals(null, UiStyle().background)
+        assertEquals(null, UiStyle().boxShadow)
         assertEquals(null, UiStyle().dropShadow)
         assertEquals(UiBoxSizing.CONTENT_BOX, UiStyle().boxSizing)
         assertFalse(UiStyle().noneDisplay())
@@ -158,6 +163,38 @@ class LayoutEngineTest {
         layout.mouseMove(10.0, 10.0)
         assertEquals(0xFFFFFFFF.toInt(), root.style.background?.color)
         assertEquals(UiSize(20f, 20f), layout.size)
+    }
+
+    @Test
+    fun `box shadow does not affect layout or pointer bounds`() {
+        val root = div(
+            UiStyle(
+                width = 20f,
+                height = 10f,
+                boxShadow = UiBoxShadow(
+                    offsetX = 12f,
+                    offsetY = 8f,
+                    blurRadius = 6f,
+                    spreadRadius = 4f,
+                ),
+            ),
+        )
+        val layout = calculateLayout(root, left = 5f, top = 7f, textMeasurer)
+
+        assertEquals(UiSize(20f, 10f), layout.size)
+        assertEquals(UiRect(5f, 7f, 20f, 10f), layout.root.bounds)
+        assertSame(root, layout.elementAt(24f, 16f))
+        assertNull(layout.elementAt(30f, 20f))
+    }
+
+    @Test
+    fun `box shadow parameters reject invalid values`() {
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(offsetX = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(offsetY = Float.POSITIVE_INFINITY) }
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(blurRadius = -1f) }
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(blurRadius = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(spreadRadius = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { UiBoxShadow(cornerRadius = -1f) }
     }
 
     @Test
