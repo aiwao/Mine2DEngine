@@ -164,13 +164,36 @@ private fun measure(
         element = element,
         style = style,
         contentSize = UiSize(
-            width = style.width ?: naturalSize.width,
-            height = style.height ?: naturalSize.height,
+            width = contentLength(
+                specifiedLength = style.width,
+                naturalLength = naturalSize.width,
+                padding = style.padding.horizontal,
+                boxSizing = style.boxSizing,
+            ),
+            height = contentLength(
+                specifiedLength = style.height,
+                naturalLength = naturalSize.height,
+                padding = style.padding.vertical,
+                boxSizing = style.boxSizing,
+            ),
         ),
         children = children,
         textStyle = resolvedTextStyle,
         displayed = true,
     )
+}
+
+private fun contentLength(
+    specifiedLength: Float?,
+    naturalLength: Float,
+    padding: Float,
+    boxSizing: UiBoxSizing,
+): Float {
+    val length = specifiedLength ?: return naturalLength
+    return when (boxSizing) {
+        UiBoxSizing.CONTENT_BOX -> length
+        UiBoxSizing.BORDER_BOX -> (length - padding).coerceAtLeast(0f)
+    }
 }
 
 private fun measureText(text: String, textMeasurer: UiTextMeasurer): UiSize {

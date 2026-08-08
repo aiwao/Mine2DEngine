@@ -64,6 +64,7 @@ class LayoutEngineTest {
 
         assertEquals(null, UiStyle().color)
         assertEquals(null, UiStyle().dropShadow)
+        assertEquals(UiBoxSizing.CONTENT_BOX, UiStyle().boxSizing)
         assertFalse(UiStyle().noneDisplay())
         assertEquals(UiStyle.DEFAULT_COLOR, layout.root.color)
         assertTrue(layout.root.dropShadow)
@@ -191,6 +192,67 @@ class LayoutEngineTest {
         assertEquals(UiRect(5f, 7f, 120f, 34f), layout.root.bounds)
         assertEquals(UiRect(57f, 17f, 16f, 14f), paragraphNode.outerBounds)
         assertEquals(UiRect(61f, 18f, 10f, 10f), paragraphNode.bounds)
+    }
+
+    @Test
+    fun `explicit size applies to the selected box`() {
+        val padding = UiEdges(top = 3f, right = 10f, bottom = 7f, left = 20f)
+        val contentBox = div(
+            UiStyle(
+                width = 100f,
+                height = 50f,
+                padding = padding,
+            ),
+        )
+        val borderBox = div(
+            UiStyle(
+                width = 100f,
+                height = 50f,
+                padding = padding,
+                boxSizing = UiBoxSizing.BORDER_BOX,
+            ),
+        )
+
+        val contentBoxLayout = calculateLayout(contentBox, left = 5f, top = 7f, textMeasurer)
+        val borderBoxLayout = calculateLayout(borderBox, left = 5f, top = 7f, textMeasurer)
+
+        assertEquals(UiRect(5f, 7f, 130f, 60f), contentBoxLayout.root.bounds)
+        assertEquals(UiRect(25f, 10f, 100f, 50f), contentBoxLayout.root.contentBounds)
+        assertEquals(UiRect(5f, 7f, 100f, 50f), borderBoxLayout.root.bounds)
+        assertEquals(UiRect(25f, 10f, 70f, 40f), borderBoxLayout.root.contentBounds)
+    }
+
+    @Test
+    fun `border box does not change automatic size`() {
+        val paragraph = Paragraph(
+            text = "abcd",
+            style = UiStyle(
+                padding = UiEdges(3f),
+                boxSizing = UiBoxSizing.BORDER_BOX,
+            ),
+        )
+
+        val layout = calculateLayout(paragraph, left = 2f, top = 4f, textMeasurer)
+
+        assertEquals(UiRect(2f, 4f, 26f, 16f), layout.root.bounds)
+        assertEquals(UiRect(5f, 7f, 20f, 10f), layout.root.contentBounds)
+    }
+
+    @Test
+    fun `border box floors content size at zero when padding exceeds explicit size`() {
+        val root = div(
+            UiStyle(
+                width = 10f,
+                height = 5f,
+                padding = UiEdges(top = 4f, right = 7f, bottom = 3f, left = 8f),
+                boxSizing = UiBoxSizing.BORDER_BOX,
+            ),
+        )
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(UiRect(0f, 0f, 15f, 7f), layout.root.bounds)
+        assertEquals(UiRect(8f, 4f, 0f, 0f), layout.root.contentBounds)
     }
 
     @Test
