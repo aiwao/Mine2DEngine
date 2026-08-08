@@ -104,7 +104,7 @@ Coordinates are GUI coordinates, and colors are Minecraft ARGB integers (`0xAARR
 | `circle(centerX, centerY, radius, color, segments)` | Draws a filled regular-polygon approximation of a circle. More segments produce a smoother edge. |
 | `boxShadow(x, y, width, height, ...)` | Draws a soft rounded-box shadow without drawing the box itself. |
 | `textShadow(font, text, x, y, ...)` | Draws a configurable glyph shadow without drawing the foreground text. |
-| `text(font, text, x, y, color, dropShadow)` | Draws text using a loaded `Mine2DFont`. |
+| `text(font, text, x, y, color)` | Draws text using a loaded `Mine2DFont`. |
 | `withMaterial(material) { ... }` | Temporarily changes the default polygon material and restores it after the block. |
 
 Polygon points may use clockwise or counterclockwise order. A polygon must have at least three distinct points, a non-zero area, and no self-intersections. Consecutive duplicate points and redundant collinear points are removed automatically. Lines require different endpoints and a positive width; circles require a positive radius and at least three segments.
@@ -160,7 +160,7 @@ Draw and measure text with the loaded font:
 
 ```kotlin
 uiFont?.let { font ->
-    draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt(), dropShadow = true)
+    draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt())
 
     draw.textShadow(
         font,
@@ -195,10 +195,9 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
 - When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
 - `Div` and `Button` place direct children vertically or horizontally.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
-- `color`, `font`, `dropShadow`, and `textShadow` are inherited from ancestors and may be overridden
-  by a child. A null value inherits the parent. At the root, color defaults to opaque white,
-  `dropShadow` is enabled, and `textShadow` is null, which preserves Minecraft's built-in text
-  shadow. Set `dropShadow = false` to disable either kind of inherited text shadow.
+- `color`, `font`, and `textShadow` are inherited from ancestors and may be overridden by a child.
+  A null value inherits the parent. At the root, color defaults to opaque white and text shadow
+  defaults to none. Set `textShadow = UiTextShadow.NONE` to explicitly clear an inherited shadow.
 - Paragraph newlines create multiple lines.
 
 ```kotlin
@@ -248,7 +247,7 @@ val root = div(
         onMouseOver = { println("Pointer entered title") },
         onMouseOut = { println("Pointer left title") },
     )
-    p("A lightweight Fabric UI", UiStyle(dropShadow = false))
+    p("A lightweight Fabric UI", UiStyle(textShadow = UiTextShadow.NONE))
 
     div(
         UiStyle(
@@ -333,9 +332,9 @@ current GUI pose and scissor. For a standalone shadow outside the layout engine,
 rectangle or rounded rectangle; use a custom shader or off-screen mask for an arbitrary alpha shape.
 
 `UiTextShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, and non-negative `blurRadius`.
-It is inherited with other text properties and does not affect layout or hit bounds. When it is set
-and `dropShadow` is enabled, it replaces Minecraft's built-in text shadow. A zero blur uses one glyph
-draw; a positive blur uses a bounded Gaussian approximation of at most 25 glyph draws per line.
+It is inherited with other text properties and does not affect layout or hit bounds. Use
+`UiTextShadow.NONE` to explicitly clear an inherited shadow. A zero blur uses one glyph draw; a
+positive blur uses a bounded Gaussian approximation of at most 25 glyph draws per line.
 Use modest blur radii for text rendered many times per frame. Outside the layout engine, call
 `Mine2DEngine.textShadow(...)` immediately before the foreground `text(...)` call.
 

@@ -262,7 +262,6 @@ class Mine2DEngine(
                 x = x,
                 y = y,
                 color = color.withAlpha(sample.alpha),
-                dropShadow = false,
                 offsetX = offsetX + sample.offsetX,
                 offsetY = offsetY + sample.offsetY,
             )
@@ -270,17 +269,15 @@ class Mine2DEngine(
     }
 
     /** Draws [text] with a loaded TrueType [font]. */
-    @JvmOverloads
     fun text(
         font: Mine2DFont,
         text: String,
         x: Int,
         y: Int,
         color: Int,
-        dropShadow: Boolean = false,
     ) {
         font.checkOpen()
-        enqueueText(font, text, x, y, color, dropShadow, offsetX = 0f, offsetY = 0f)
+        enqueueText(font, text, x, y, color, offsetX = 0f, offsetY = 0f)
     }
 
     /** Temporarily changes the default material and restores it after [draw]. */
@@ -362,12 +359,11 @@ class Mine2DEngine(
         x: Int,
         y: Int,
         color: Int,
-        dropShadow: Boolean,
         offsetX: Float,
         offsetY: Float,
     ) {
         if (offsetX == 0f && offsetY == 0f) {
-            graphics.text(font.renderer, text, x, y, color, dropShadow)
+            graphics.text(font.renderer, text, x, y, color, false)
             return
         }
 
@@ -375,7 +371,7 @@ class Mine2DEngine(
         pose.pushMatrix()
         try {
             pose.translate(offsetX, offsetY)
-            graphics.text(font.renderer, text, x, y, color, dropShadow)
+            graphics.text(font.renderer, text, x, y, color, false)
         } finally {
             pose.popMatrix()
         }

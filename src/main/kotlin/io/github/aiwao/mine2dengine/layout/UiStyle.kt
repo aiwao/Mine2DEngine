@@ -44,11 +44,10 @@ enum class UiBoxSizing {
  * container and text inside a paragraph's content box.
  * [background] paints only this element's bounds and is not inherited.
  * [boxShadow] paints behind this element and is not inherited or included in layout and hit bounds.
- * A null size shrinks to the element's text or children. [color], [font], [dropShadow], and
- * [textShadow] are inherited by descendants when null. At the root, color defaults
- * to opaque white and drop shadow defaults to enabled. Every text element must
- * resolve a font from itself or an ancestor. A resolved [textShadow] replaces Minecraft's built-in
- * drop shadow while [dropShadow] is true; false disables either shadow implementation.
+ * A null size shrinks to the element's text or children. [color], [font], and [textShadow] are
+ * inherited by descendants when null. At the root, color defaults to opaque white and text shadow
+ * defaults to none. Every text element must resolve a font from itself or an ancestor. Use
+ * [UiTextShadow.NONE] to explicitly clear an inherited text shadow.
  */
 data class UiStyle(
     val color: Int? = null,
@@ -61,7 +60,6 @@ data class UiStyle(
     val width: Float? = null,
     val height: Float? = null,
     val font: Mine2DFont? = null,
-    val dropShadow: Boolean? = null,
     val gap: Float = 0f,
     val boxSizing: UiBoxSizing = UiBoxSizing.CONTENT_BOX,
     val noneDisplay: () -> Boolean = { false },
@@ -70,7 +68,6 @@ data class UiStyle(
 ) {
     companion object {
         const val DEFAULT_COLOR: Int = -1
-        const val DEFAULT_DROP_SHADOW: Boolean = true
     }
 
     init {
@@ -90,7 +87,6 @@ data class UiStyle(
 internal data class ResolvedUiTextStyle(
     val color: Int = UiStyle.DEFAULT_COLOR,
     val font: Mine2DFont? = null,
-    val dropShadow: Boolean = UiStyle.DEFAULT_DROP_SHADOW,
     val textShadow: UiTextShadow? = null,
 )
 
@@ -98,6 +94,5 @@ internal fun UiStyle.resolveTextStyle(parent: ResolvedUiTextStyle): ResolvedUiTe
     ResolvedUiTextStyle(
         color = color ?: parent.color,
         font = font ?: parent.font,
-        dropShadow = dropShadow ?: parent.dropShadow,
         textShadow = textShadow ?: parent.textShadow,
     )

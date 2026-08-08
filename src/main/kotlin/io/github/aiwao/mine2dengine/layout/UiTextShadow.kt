@@ -5,8 +5,8 @@ import io.github.aiwao.mine2dengine.validateShadowParameters
 /**
  * A configurable glyph shadow inherited by descendant text without affecting layout bounds.
  *
- * Positive blur uses a bounded multi-sample approximation. Set the containing [UiStyle]'s
- * [UiStyle.dropShadow] to false to disable this shadow for that element and its descendants.
+ * Positive blur uses a bounded multi-sample approximation. Use [NONE] on a descendant to explicitly
+ * clear an inherited shadow.
  */
 data class UiTextShadow(
     val color: Int = 0x80000000.toInt(),
@@ -14,6 +14,12 @@ data class UiTextShadow(
     val offsetY: Float = 1f,
     val blurRadius: Float = 0f,
 ) {
+    companion object {
+        /** Explicitly clears an inherited text shadow. */
+        @JvmField
+        val NONE: UiTextShadow = UiTextShadow(color = 0x00000000)
+    }
+
     init {
         validateShadowParameters("Text shadow", offsetX, offsetY, blurRadius)
     }

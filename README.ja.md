@@ -104,7 +104,7 @@ object ExampleModClient : ClientModInitializer {
 | `circle(centerX, centerY, radius, color, segments)` | 正多角形で近似した塗りつぶし円を描画します。segmentsを増やすほど輪郭が滑らかになります。                               |
 | `boxShadow(x, y, width, height, ...)` | 前景のbox自体を描かず、柔らかい角丸box shadowを描画します。                                                           |
 | `textShadow(font, text, x, y, ...)` | 前景文字を描かず、設定可能なglyph shadowを描画します。                                                                |
-| `text(font, text, x, y, color, dropShadow)` | 読み込み済みの `Mine2DFont` で文字列を描画します。                                                                     |
+| `text(font, text, x, y, color)` | 読み込み済みの `Mine2DFont` で文字列を描画します。                                                                                 |
 | `withMaterial(material) { ... }` | ブロック内だけ既定のポリゴンMaterialを変更し、終了後に元へ戻します。                                                |
 
 ポリゴンの各点は時計回り、反時計回りのどちらでも指定できます。3 個以上の異なる点と 0 ではない面積が必要で、自己交差はできません。連続する重複点と不要な同一直線上の点は自動的に取り除かれます。線には異なる始点・終点と正の幅、円には正の半径と 3 以上の分割数が必要です。
@@ -160,7 +160,7 @@ ClientLifecycleEvents.CLIENT_STOPPING.register {
 
 ```kotlin
 uiFont?.let { font ->
-    draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt(), dropShadow = true)
+    draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt())
 
     draw.textShadow(
         font,
@@ -196,10 +196,9 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
 - `Div` と `Button` は直接の子要素を縦または横に並べます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
-- `color`、`font`、`dropShadow`、`textShadow` は祖先から継承され、子要素で上書きできます。
-  `null` の値は親を継承します。ルートではcolorが不透明な白、`dropShadow`が有効、
-  `textShadow`がnullとなり、Minecraft標準の文字shadowが維持されます。`dropShadow = false`で
-  継承した標準／カスタム文字shadowのどちらも無効化できます。
+- `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
+  親を継承します。ルートではcolorが不透明な白、文字shadowはなしが既定値です。継承したshadowを
+  明示的に解除するには `textShadow = UiTextShadow.NONE` を指定します。
 - 段落内の改行は複数行になります。
 
 ```kotlin
@@ -249,7 +248,7 @@ val root = div(
         onMouseOver = { println("タイトルにカーソルが入りました") },
         onMouseOut = { println("タイトルからカーソルが出ました") },
     )
-    p("軽量な Fabric UI", UiStyle(dropShadow = false))
+    p("軽量な Fabric UI", UiStyle(textShadow = UiTextShadow.NONE))
 
     div(
         UiStyle(
@@ -334,8 +333,8 @@ scissorが適用されます。Layout外で単独利用する場合は、前景b
 
 `UiTextShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius` を
 指定できます。他の文字プロパティと同様に子孫へ継承され、レイアウトやヒット領域には影響しません。
-設定済みかつ`dropShadow`が有効な場合は、Minecraft標準の文字shadowを置き換えます。blurが0なら
-glyph描画は1回、正のblurでは1行あたり最大25回のglyph描画による上限付きGaussian近似を使います。
+継承したshadowを明示的に解除するには`UiTextShadow.NONE`を指定します。blurが0ならglyph描画は1回、
+正のblurでは1行あたり最大25回のglyph描画による上限付きGaussian近似を使います。
 毎フレーム多数描画する文字では小さなblurを推奨します。Layout外では、前景の`text(...)`の直前に
 `Mine2DEngine.textShadow(...)`を呼び出します。
 

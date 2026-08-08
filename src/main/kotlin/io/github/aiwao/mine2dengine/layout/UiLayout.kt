@@ -33,8 +33,6 @@ data class UiLayoutNode(
     val font: Mine2DFont? = null,
     /** The text color resolved from this element's style and its ancestors. */
     val color: Int = UiStyle.DEFAULT_COLOR,
-    /** Whether text shadow rendering is enabled after resolving this element and its ancestors. */
-    val dropShadow: Boolean = UiStyle.DEFAULT_DROP_SHADOW,
     /** The configurable text shadow resolved from this element's style and its ancestors. */
     val textShadow: UiTextShadow? = null,
     /** Whether this node generated a layout box. */
@@ -344,7 +342,6 @@ class UiLayout internal constructor(
             ) + contentBounds.left
             val y = textTop + index * textMeasurer.lineHeight
             resolvedTextStyle.textShadow
-                ?.takeIf { resolvedTextStyle.dropShadow }
                 ?.let { shadow ->
                     renderer.textShadow(
                         font = font,
@@ -363,7 +360,6 @@ class UiLayout internal constructor(
                 x.roundToInt(),
                 y.roundToInt(),
                 resolvedTextStyle.color,
-                dropShadow = resolvedTextStyle.dropShadow && resolvedTextStyle.textShadow == null,
             )
         }
     }

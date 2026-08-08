@@ -78,11 +78,9 @@ class LayoutEngineTest {
         assertEquals(null, UiStyle().background)
         assertEquals(null, UiStyle().boxShadow)
         assertEquals(null, UiStyle().textShadow)
-        assertEquals(null, UiStyle().dropShadow)
         assertEquals(UiBoxSizing.CONTENT_BOX, UiStyle().boxSizing)
         assertFalse(UiStyle().noneDisplay())
         assertEquals(UiStyle.DEFAULT_COLOR, layout.root.color)
-        assertTrue(layout.root.dropShadow)
         assertNull(layout.root.textShadow)
     }
 
@@ -242,11 +240,11 @@ class LayoutEngineTest {
         val overriddenShadow = UiTextShadow(color = 0x80445566.toInt(), blurRadius = 2f)
         lateinit var inheritedParagraph: Paragraph
         lateinit var overriddenParagraph: Paragraph
+        lateinit var shadowlessParagraph: Paragraph
         val root = div(
             UiStyle(
                 color = 0xFF112233.toInt(),
                 font = inheritedFont,
-                dropShadow = false,
                 textShadow = inheritedShadow,
             ),
         ) {
@@ -257,9 +255,12 @@ class LayoutEngineTest {
                     UiStyle(
                         color = 0xFF445566.toInt(),
                         font = overriddenFont,
-                        dropShadow = true,
                         textShadow = overriddenShadow,
                     ),
+                )
+                shadowlessParagraph = p(
+                    "shadowless",
+                    UiStyle(textShadow = UiTextShadow.NONE),
                 )
             }
         }
@@ -267,16 +268,16 @@ class LayoutEngineTest {
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
         val inheritedNode = layout.nodeOf(inheritedParagraph)!!
         val overriddenNode = layout.nodeOf(overriddenParagraph)!!
+        val shadowlessNode = layout.nodeOf(shadowlessParagraph)!!
 
         assertSame(inheritedFont, layout.root.font)
         assertSame(inheritedFont, inheritedNode.font)
         assertEquals(0xFF112233.toInt(), inheritedNode.color)
-        assertFalse(inheritedNode.dropShadow)
         assertSame(inheritedShadow, inheritedNode.textShadow)
         assertSame(overriddenFont, overriddenNode.font)
         assertEquals(0xFF445566.toInt(), overriddenNode.color)
-        assertTrue(overriddenNode.dropShadow)
         assertSame(overriddenShadow, overriddenNode.textShadow)
+        assertSame(UiTextShadow.NONE, shadowlessNode.textShadow)
     }
 
     @Test
