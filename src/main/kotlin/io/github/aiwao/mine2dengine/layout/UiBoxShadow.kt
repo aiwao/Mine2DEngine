@@ -1,5 +1,7 @@
 package io.github.aiwao.mine2dengine.layout
 
+import io.github.aiwao.mine2dengine.validateShadowParameters
+
 /** A soft rounded-box shadow painted behind one UI element without affecting its layout bounds. */
 data class UiBoxShadow(
     val color: Int = 0x80000000.toInt(),
@@ -10,12 +12,7 @@ data class UiBoxShadow(
     val cornerRadius: Float = 0f,
 ) {
     init {
-        require(offsetX.isFinite() && offsetY.isFinite()) {
-            "Box shadow offsets must be finite"
-        }
-        require(blurRadius.isFinite() && blurRadius >= 0f) {
-            "Box shadow blur radius must be finite and non-negative"
-        }
+        validateShadowParameters("Box shadow", offsetX, offsetY, blurRadius)
         require(spreadRadius.isFinite()) {
             "Box shadow spread radius must be finite"
         }

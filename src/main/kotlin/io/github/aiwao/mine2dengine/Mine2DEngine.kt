@@ -232,6 +232,43 @@ class Mine2DEngine(
         )
     }
 
+    /**
+     * Draws only the shadow of [text], leaving the foreground text to a subsequent [text] call.
+     *
+     * A zero [blurRadius] uses one glyph draw. A positive radius uses a bounded set of translucent
+     * glyph samples, preserving predictable GPU and extracted-render-state usage for large radii.
+     * Coordinates, offsets, and blur use GUI units and follow the active pose and scissor rectangle.
+     */
+    @JvmOverloads
+    fun textShadow(
+        font: Mine2DFont,
+        text: String,
+        x: Int,
+        y: Int,
+        color: Int = 0x80000000.toInt(),
+        offsetX: Float = 1f,
+        offsetY: Float = 1f,
+        blurRadius: Float = 0f,
+    ) {
+        font.checkOpen()
+        validateShadowParameters("Text shadow", offsetX, offsetY, blurRadius)
+        val colorAlpha = color ushr 24
+        if (text.isEmpty() || colorAlpha == 0) return
+
+        calculateTextShadowSamples(blurRadius, colorAlpha).forEach { sample ->
+            enqueueText(
+                font = font,
+                text = text,
+                x = x,
+                y = y,
+                color = color.withAlpha(sample.alpha),
+                dropShadow = false,
+                offsetX = offsetX + sample.offsetX,
+                offsetY = offsetY + sample.offsetY,
+            )
+        }
+    }
+
     /** Draws [text] with a loaded TrueType [font]. */
     @JvmOverloads
     fun text(
@@ -243,7 +280,7 @@ class Mine2DEngine(
         dropShadow: Boolean = false,
     ) {
         font.checkOpen()
-        graphics.text(font.renderer, text, x, y, color, dropShadow)
+        enqueueText(font, text, x, y, color, dropShadow, offsetX = 0f, offsetY = 0f)
     }
 
     /** Temporarily changes the default material and restores it after [draw]. */
@@ -318,76 +355,29 @@ class Mine2DEngine(
         val bounds = Mine2DUniformRect(minX, minY, maxX - minX, maxY - minY)
         return uniformContext(bounds, bounds, uniformTimeSeconds())
     }
-}
 
-internal data class Mine2DBoxShadowGeometry(
-    val left: Float,
-    val top: Float,
-    val width: Float,
-    val height: Float,
-    val shadowWidth: Float,
-    val shadowHeight: Float,
-    val cornerRadius: Float,
-) {
-    val right: Float
-        get() = left + width
+    private fun enqueueText(
+        font: Mine2DFont,
+        text: String,
+        x: Int,
+        y: Int,
+        color: Int,
+        dropShadow: Boolean,
+        offsetX: Float,
+        offsetY: Float,
+    ) {
+        if (offsetX == 0f && offsetY == 0f) {
+            graphics.text(font.renderer, text, x, y, color, dropShadow)
+            return
+        }
 
-    val bottom: Float
-        get() = top + height
-}
-
-internal fun calculateBoxShadowGeometry(
-    x: Float,
-    y: Float,
-    width: Float,
-    height: Float,
-    offsetX: Float,
-    offsetY: Float,
-    blurRadius: Float,
-    spreadRadius: Float,
-    cornerRadius: Float,
-): Mine2DBoxShadowGeometry? {
-    require(x.isFinite() && y.isFinite()) { "Box shadow coordinates must be finite" }
-    require(width.isFinite() && width >= 0f && height.isFinite() && height >= 0f) {
-        "Box shadow dimensions must be finite and non-negative"
+        val pose = graphics.pose()
+        pose.pushMatrix()
+        try {
+            pose.translate(offsetX, offsetY)
+            graphics.text(font.renderer, text, x, y, color, dropShadow)
+        } finally {
+            pose.popMatrix()
+        }
     }
-    require(offsetX.isFinite() && offsetY.isFinite()) { "Box shadow offsets must be finite" }
-    require(blurRadius.isFinite() && blurRadius >= 0f) {
-        "Box shadow blur radius must be finite and non-negative"
-    }
-    require(spreadRadius.isFinite()) { "Box shadow spread radius must be finite" }
-    require(cornerRadius.isFinite() && cornerRadius >= 0f) {
-        "Box shadow corner radius must be finite and non-negative"
-    }
-    if (width == 0f || height == 0f) return null
-
-    val shadowWidth = width + spreadRadius * 2f
-    val shadowHeight = height + spreadRadius * 2f
-    require(shadowWidth.isFinite() && shadowHeight.isFinite()) {
-        "Box shadow spread produced non-finite dimensions"
-    }
-    if (shadowWidth <= 0f || shadowHeight <= 0f) return null
-
-    val left = x + offsetX - spreadRadius - blurRadius
-    val top = y + offsetY - spreadRadius - blurRadius
-    val drawWidth = shadowWidth + blurRadius * 2f
-    val drawHeight = shadowHeight + blurRadius * 2f
-    val effectiveCornerRadius = maxOf(0f, cornerRadius + spreadRadius)
-    val right = left + drawWidth
-    val bottom = top + drawHeight
-    require(
-        left.isFinite() && top.isFinite() &&
-            drawWidth.isFinite() && drawHeight.isFinite() &&
-            right.isFinite() && bottom.isFinite() && effectiveCornerRadius.isFinite(),
-    ) { "Box shadow parameters produced non-finite geometry" }
-
-    return Mine2DBoxShadowGeometry(
-        left = left,
-        top = top,
-        width = drawWidth,
-        height = drawHeight,
-        shadowWidth = shadowWidth,
-        shadowHeight = shadowHeight,
-        cornerRadius = effectiveCornerRadius,
-    )
 }

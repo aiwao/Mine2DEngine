@@ -103,6 +103,7 @@ object ExampleModClient : ClientModInitializer {
 | `line(startX, startY, endX, endY, width, color)` | 端が平らな塗りつぶし線を描画します。                                                                                   |
 | `circle(centerX, centerY, radius, color, segments)` | 正多角形で近似した塗りつぶし円を描画します。segmentsを増やすほど輪郭が滑らかになります。                               |
 | `boxShadow(x, y, width, height, ...)` | 前景のbox自体を描かず、柔らかい角丸box shadowを描画します。                                                           |
+| `textShadow(font, text, x, y, ...)` | 前景文字を描かず、設定可能なglyph shadowを描画します。                                                                |
 | `text(font, text, x, y, color, dropShadow)` | 読み込み済みの `Mine2DFont` で文字列を描画します。                                                                     |
 | `withMaterial(material) { ... }` | ブロック内だけ既定のポリゴンMaterialを変更し、終了後に元へ戻します。                                                |
 
@@ -161,6 +162,17 @@ ClientLifecycleEvents.CLIENT_STOPPING.register {
 uiFont?.let { font ->
     draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt(), dropShadow = true)
 
+    draw.textShadow(
+        font,
+        "Custom shadow",
+        16,
+        36,
+        color = 0xA0000000.toInt(),
+        offsetY = 2f,
+        blurRadius = 2f,
+    )
+    draw.text(font, "Custom shadow", 16, 36, 0xFFFFFFFF.toInt())
+
     val width = font.width("Mine2DEngine")
     val lineHeight = font.lineHeight
 }
@@ -184,8 +196,10 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
 - `Div` と `Button` は直接の子要素を縦または横に並べます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
-- `color`、`font`、`dropShadow` は祖先から継承され、子要素で上書きできます。`color` または
-  `dropShadow` が `null` の場合は親を継承し、ルートではそれぞれ不透明な白と有効が既定値です。
+- `color`、`font`、`dropShadow`、`textShadow` は祖先から継承され、子要素で上書きできます。
+  `null` の値は親を継承します。ルートではcolorが不透明な白、`dropShadow`が有効、
+  `textShadow`がnullとなり、Minecraft標準の文字shadowが維持されます。`dropShadow = false`で
+  継承した標準／カスタム文字shadowのどちらも無効化できます。
 - 段落内の改行は複数行になります。
 
 ```kotlin
@@ -197,6 +211,7 @@ import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
 import io.github.aiwao.mine2dengine.layout.UiPaint
 import io.github.aiwao.mine2dengine.layout.UiStyle
+import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
 
@@ -213,6 +228,11 @@ val root = div(
             offsetY = 3f,
             blurRadius = 5f,
             cornerRadius = 6f,
+        ),
+        textShadow = UiTextShadow(
+            color = 0xA0000000.toInt(),
+            offsetY = 2f,
+            blurRadius = 1f,
         ),
         horizontalAlignment = UiHorizontalAlignment.CENTER,
         verticalAlignment = UiVerticalAlignment.CENTER,
@@ -278,7 +298,7 @@ hoverableLayout.render(draw)
 ```
 
 動的スタイルは `div`、`p` / `paragraph`、`button` で利用できます。既存レイアウトを再描画すると
-継承される文字色などに加え、背景PaintやMaterialなどの描画プロパティも更新されます。これらの
+継承される文字色やshadow、背景Paint、Materialなどの描画プロパティも更新されます。これらの
 描画プロパティだけを変える場合は再レイアウト不要です。解決後のスタイルによってサイズ、
 余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。`element.style` に
 代入すると、動的スタイルはその静的な値で置き換えられます。
@@ -311,6 +331,13 @@ layout.render(draw, left = 24f, top = 32f)
 scissorが適用されます。Layout外で単独利用する場合は、前景boxの前に
 `Mine2DEngine.boxShadow(...)` を呼び出します。この組み込み効果が追従するのは矩形または
 角丸矩形です。任意のalpha形状に沿う影には、カスタムshaderまたはオフスクリーンmaskを使用してください。
+
+`UiTextShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius` を
+指定できます。他の文字プロパティと同様に子孫へ継承され、レイアウトやヒット領域には影響しません。
+設定済みかつ`dropShadow`が有効な場合は、Minecraft標準の文字shadowを置き換えます。blurが0なら
+glyph描画は1回、正のblurでは1行あたり最大25回のglyph描画による上限付きGaussian近似を使います。
+毎フレーム多数描画する文字では小さなblurを推奨します。Layout外では、前景の`text(...)`の直前に
+`Mine2DEngine.textShadow(...)`を呼び出します。
 
 ## カスタムシェーダー
 

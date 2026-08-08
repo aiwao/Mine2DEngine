@@ -103,6 +103,7 @@ Coordinates are GUI coordinates, and colors are Minecraft ARGB integers (`0xAARR
 | `line(startX, startY, endX, endY, width, color)` | Draws a filled line with butt caps. |
 | `circle(centerX, centerY, radius, color, segments)` | Draws a filled regular-polygon approximation of a circle. More segments produce a smoother edge. |
 | `boxShadow(x, y, width, height, ...)` | Draws a soft rounded-box shadow without drawing the box itself. |
+| `textShadow(font, text, x, y, ...)` | Draws a configurable glyph shadow without drawing the foreground text. |
 | `text(font, text, x, y, color, dropShadow)` | Draws text using a loaded `Mine2DFont`. |
 | `withMaterial(material) { ... }` | Temporarily changes the default polygon material and restores it after the block. |
 
@@ -161,6 +162,17 @@ Draw and measure text with the loaded font:
 uiFont?.let { font ->
     draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt(), dropShadow = true)
 
+    draw.textShadow(
+        font,
+        "Custom shadow",
+        16,
+        36,
+        color = 0xA0000000.toInt(),
+        offsetY = 2f,
+        blurRadius = 2f,
+    )
+    draw.text(font, "Custom shadow", 16, 36, 0xFFFFFFFF.toInt())
+
     val width = font.width("Mine2DEngine")
     val lineHeight = font.lineHeight
 }
@@ -183,9 +195,10 @@ The layout package builds trees from `Div`, `Paragraph`, and `Button`. It follow
 - When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
 - `Div` and `Button` place direct children vertically or horizontally.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
-- `color`, `font`, and `dropShadow` are inherited from ancestors and may be overridden by a child.
-  A null `color` or `dropShadow` inherits the parent; at the root they default to opaque white and
-  enabled, respectively.
+- `color`, `font`, `dropShadow`, and `textShadow` are inherited from ancestors and may be overridden
+  by a child. A null value inherits the parent. At the root, color defaults to opaque white,
+  `dropShadow` is enabled, and `textShadow` is null, which preserves Minecraft's built-in text
+  shadow. Set `dropShadow = false` to disable either kind of inherited text shadow.
 - Paragraph newlines create multiple lines.
 
 ```kotlin
@@ -197,6 +210,7 @@ import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
 import io.github.aiwao.mine2dengine.layout.UiPaint
 import io.github.aiwao.mine2dengine.layout.UiStyle
+import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
 
@@ -213,6 +227,11 @@ val root = div(
             offsetY = 3f,
             blurRadius = 5f,
             cornerRadius = 6f,
+        ),
+        textShadow = UiTextShadow(
+            color = 0xA0000000.toInt(),
+            offsetY = 2f,
+            blurRadius = 1f,
         ),
         horizontalAlignment = UiHorizontalAlignment.CENTER,
         verticalAlignment = UiVerticalAlignment.CENTER,
@@ -278,7 +297,8 @@ hoverableLayout.render(draw)
 ```
 
 Dynamic styles are supported by `div`, `p` / `paragraph`, and `button`. Redrawing an existing
-layout refreshes drawing properties such as inherited text colors, background paint, and materials.
+layout refreshes drawing properties such as inherited text colors, shadows, background paint, and
+materials.
 Drawing-only changes do not require relayout. Recalculate the
 layout when the resolved style changes sizing, spacing, direction, alignment, or font. Assigning
 `element.style` replaces its dynamic style with that static value.
@@ -311,6 +331,13 @@ paint-only overflow: they do not change the element's geometry or hit area. The 
 current GUI pose and scissor. For a standalone shadow outside the layout engine, call
 `Mine2DEngine.boxShadow(...)` before drawing its foreground box. This built-in effect follows a
 rectangle or rounded rectangle; use a custom shader or off-screen mask for an arbitrary alpha shape.
+
+`UiTextShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, and non-negative `blurRadius`.
+It is inherited with other text properties and does not affect layout or hit bounds. When it is set
+and `dropShadow` is enabled, it replaces Minecraft's built-in text shadow. A zero blur uses one glyph
+draw; a positive blur uses a bounded Gaussian approximation of at most 25 glyph draws per line.
+Use modest blur radii for text rendered many times per frame. Outside the layout engine, call
+`Mine2DEngine.textShadow(...)` immediately before the foreground `text(...)` call.
 
 ## Custom shaders
 
