@@ -65,6 +65,8 @@ private fun calculateLayout(
         val noneDisplayStates = mutableListOf<UiNoneDisplayState>()
         val measured = measure(
             element = root,
+            parentContentWidth = null,
+            absoluteContainingWidth = null,
             inheritedTextStyle = ResolvedUiTextStyle(),
             inheritedDescendantStyle = { _ -> null },
             parentChildStyle = { null },
@@ -112,6 +114,8 @@ private data class MeasuredNode(
 
 private fun measure(
     element: UiElement,
+    parentContentWidth: Float?,
+    absoluteContainingWidth: Float?,
     inheritedTextStyle: ResolvedUiTextStyle,
     inheritedDescendantStyle: (UiElement) -> UiStyle?,
     parentChildStyle: () -> UiStyle?,
@@ -126,6 +130,35 @@ private fun measure(
         )?.withOverrides(element.style) ?: element.style
     }
     val style = styleProvider()
+    val percentageBase = when (style.position) {
+        UiPosition.STATIC, UiPosition.RELATIVE -> parentContentWidth
+        UiPosition.ABSOLUTE -> absoluteContainingWidth
+    }
+    val resolvedWidth = style.width?.resolve(percentageBase)
+    val definiteContentWidth = resolvedWidth?.let {
+        contentLength(
+            specifiedLength = it,
+            naturalLength = 0f,
+            padding = style.padding.horizontal,
+            boxSizing = style.boxSizing,
+        )
+    } ?: if (
+        style.position == UiPosition.ABSOLUTE &&
+        absoluteContainingWidth != null &&
+        style.left != null &&
+        style.right != null
+    ) {
+        (absoluteContainingWidth - style.left - style.right - style.margin.horizontal -
+            style.padding.horizontal).coerceAtLeast(0f)
+    } else {
+        null
+    }
+    val boundsWidth = definiteContentWidth?.let { it + style.padding.horizontal }
+    val descendantAbsoluteContainingWidth = when {
+        absoluteContainingWidth == null -> boundsWidth
+        style.position != UiPosition.STATIC -> boundsWidth
+        else -> absoluteContainingWidth
+    }
     val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
     val noneDisplay = evaluatedNoneDisplays[element] ?: style.noneDisplay()
     noneDisplayStates += UiNoneDisplayState(
@@ -157,6 +190,8 @@ private fun measure(
             .map { child ->
                 measure(
                     element = child,
+                    parentContentWidth = definiteContentWidth,
+                    absoluteContainingWidth = descendantAbsoluteContainingWidth,
                     inheritedTextStyle = resolvedTextStyle,
                     inheritedDescendantStyle = descendantStyle,
                     parentChildStyle = { element.childStyle?.invoke(child) },
@@ -186,7 +221,7 @@ private fun measure(
         styleProvider = styleProvider,
         contentSize = UiSize(
             width = contentLength(
-                specifiedLength = style.width,
+                specifiedLength = resolvedWidth,
                 naturalLength = naturalSize.width,
                 padding = style.padding.horizontal,
                 boxSizing = style.boxSizing,

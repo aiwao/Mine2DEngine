@@ -195,6 +195,9 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 - `boxSizing` controls whether a non-null `width` or `height` specifies the content box or the
   complete padded box. It defaults to `UiBoxSizing.CONTENT_BOX`; use `UiBoxSizing.BORDER_BOX` to
   include padding in the specified size. A `null` size still shrinks to the text or children.
+- Set `width` with `Float.px` (for example, `120f.px`) or `Float.percent` (for example,
+  `50f.percent`). A percentage uses the resolved containing-block width, normally the content
+  width of its parent.
 - Padding is inside the painted background; margin is outside it.
 - `position` supports `UiPosition.STATIC`, `RELATIVE`, and `ABSOLUTE`. The nullable `left`, `top`,
   `right`, and `bottom` values represent CSS `auto` when null. Relative elements move from their
@@ -238,11 +241,13 @@ import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
+import io.github.aiwao.mine2dengine.layout.percent
+import io.github.aiwao.mine2dengine.layout.px
 
 val root = div(
     UiStyle(
         font = font,
-        width = 180f,
+        width = 180f.px,
         height = 100f,
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
@@ -293,6 +298,7 @@ val root = div(
 
     div(
         UiStyle(
+            width = 100f.percent,
             direction = UiDirection.HORIZONTAL,
             margin = UiEdges(top = 6f, right = 0f, bottom = 0f, left = 0f),
         ),
@@ -340,7 +346,7 @@ element's current state whenever layout or rendering uses it, so states such as 
 val hoverable = div(
     style = { element ->
         UiStyle(
-            width = 120f,
+            width = 120f.px,
             height = 24f,
             backgroundColor = if (element.hovering) {
                 0xFFFFFFFF.toInt()
@@ -461,7 +467,7 @@ Paragraph text uses Minecraft's text rendering path and is not affected by the b
 ```kotlin
 val panel = div(
     UiStyle(
-        width = 120f,
+        width = 120f.px,
         height = 40f,
         backgroundColor = 0xFFFFFFFF.toInt(),
         backgroundMaterial = roundedPanel,
