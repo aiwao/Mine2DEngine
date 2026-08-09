@@ -197,6 +197,12 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   `UiBoxSizing.BORDER_BOX` を指定すると、指定寸法にpaddingが含まれます。寸法が `null` の場合は
   どちらでも文字列または子要素に合わせて縮みます。
 - パディングは描画される背景の内側、マージンは外側です。
+- `position` は `UiPosition.STATIC`、`RELATIVE`、`ABSOLUTE` に対応します。nullを指定した
+  `left`、`top`、`right`、`bottom` はCSSの `auto` として扱われます。relative要素は通常位置から
+  移動しますが、元の占有領域は変わりません。absolute要素は通常フローから外れ、最も近い
+  non-static祖先のpadding box（なければルートbox）を基準に配置されます。横または縦の両側を
+  指定し、対応する幅または高さがnullなら、その範囲まで自動的に伸びます。ルート自体は
+  `LayoutEngine.layout` に渡した座標に配置されます。
 - 要素の背景を描画するかどうかは `backgroundColor` だけで決まります。nullではない場合は
   `backgroundMaterial` を使い、背景Materialが未指定ならrendererの現在のMaterialを使います。
   `backgroundMaterial` だけを指定しても何も描画されません。
@@ -228,6 +234,7 @@ import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiDropShadow
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
+import io.github.aiwao.mine2dengine.layout.UiPosition
 import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
@@ -240,6 +247,7 @@ val root = div(
         height = 100f,
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
+        position = UiPosition.RELATIVE,
         backgroundColor = 0xD0202020.toInt(),
         boxShadow = UiBoxShadow(
             color = 0x80000000.toInt(),
@@ -256,6 +264,14 @@ val root = div(
         verticalAlignment = UiVerticalAlignment.CENTER,
     ),
 ) {
+    p(
+        "v2",
+        UiStyle(
+            position = UiPosition.ABSOLUTE,
+            top = 6f,
+            right = 6f,
+        ),
+    )
     p(
         "Mine2DEngine",
         UiStyle(
@@ -344,7 +360,8 @@ hoverableLayout.render(draw)
 動的スタイルは `div` と `p` / `paragraph` で利用できます。既存レイアウトを再描画すると
 継承される文字色やshadow、背景色、背景Materialなどの描画プロパティも更新されます。これらの
 描画プロパティだけを変える場合は再レイアウト不要です。解決後の `style`、`descendantStyle`、
-`childStyle` によってサイズ、余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。
+`childStyle` によってサイズ、余白、方向、配置、position、inset、フォントが変わる場合は、
+レイアウトを再計算してください。
 `element.style` に代入すると、動的スタイルはその静的な値で置き換えられます。
 
 `div` と `p` / `paragraph` を含むすべての要素で `onClick`、`onMouseMove`、`onDrag`、`onMouseOver`、`onMouseOut` を利用できます。要素の `disabled` プロパティを `true` にすると、再び有効にするまで `onClick` コールバックは呼び出されません。読み取り専用の `hovering` プロパティで、カーソルが要素内にあるかを確認できます。返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやポインター入力の通知ができます。Minecraft の `MouseButtonEvent` を `mouseClick` に渡すと、イベントの座標で最前面のクリック可能な要素を特定してドラッグ状態を開始し、そのイベントを要素の `onClick` に渡します。`mouseMove` にマウス座標を渡すと、`hovering` の更新、境界をまたいだ際のコールバック、座標上で最前面の `onMouseMove`、ドラッグ中の要素の `onDrag` が呼び出されます。`onDrag` が受け取る `MouseButtonEvent` の座標は現在のマウス座標で、ボタンと修飾キーの情報はドラッグを開始した `mouseClick` のイベントから引き継がれます。ドラッグは要素の領域外でも継続し、`mouseRelease` を呼ぶと終了します。

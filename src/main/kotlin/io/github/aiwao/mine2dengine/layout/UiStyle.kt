@@ -31,12 +31,23 @@ enum class UiBoxSizing {
     BORDER_BOX,
 }
 
+/** Determines whether an element participates in normal flow and how its offsets are applied. */
+enum class UiPosition {
+    STATIC,
+    RELATIVE,
+    ABSOLUTE,
+}
+
 /**
  * Visual and layout properties shared by every UI element.
  *
  * [boxSizing] determines whether a non-null [width] or [height] describes the content box or the
  * complete padded box. Padding is painted inside the background, while margin remains outside it,
  * following the CSS box model.
+ * [position] follows CSS static, relative, and absolute positioning. [left], [top], [right], and
+ * [bottom] are nullable so that null represents CSS `auto`. Relative elements keep their normal
+ * flow space, while absolute elements do not contribute to their container's size or gap. The
+ * root's outer position is always controlled by [LayoutEngine.layout].
  * [gap] adds space between adjacent direct children without adding space at the
  * edges of the content box.
  * [noneDisplay] is evaluated during layout, rendering, and pointer queries.
@@ -67,6 +78,11 @@ data class UiStyle(
     val verticalAlignment: UiVerticalAlignment = UiVerticalAlignment.TOP,
     val width: Float? = null,
     val height: Float? = null,
+    val position: UiPosition = UiPosition.STATIC,
+    val left: Float? = null,
+    val top: Float? = null,
+    val right: Float? = null,
+    val bottom: Float? = null,
     val font: Mine2DFont? = null,
     val gap: Float = 0f,
     val boxSizing: UiBoxSizing = UiBoxSizing.CONTENT_BOX,
@@ -85,6 +101,18 @@ data class UiStyle(
         }
         require(height == null || height.isFinite() && height >= 0f) {
             "Height must be null or finite and non-negative: $height"
+        }
+        require(left == null || left.isFinite()) {
+            "Left must be null or finite: $left"
+        }
+        require(top == null || top.isFinite()) {
+            "Top must be null or finite: $top"
+        }
+        require(right == null || right.isFinite()) {
+            "Right must be null or finite: $right"
+        }
+        require(bottom == null || bottom.isFinite()) {
+            "Bottom must be null or finite: $bottom"
         }
         require(gap.isFinite() && gap >= 0f) {
             "Gap must be finite and non-negative: $gap"
@@ -126,6 +154,11 @@ internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
         ?: verticalAlignment,
     width = overrides.width ?: width,
     height = overrides.height ?: height,
+    position = overrides.position.takeUnless { it == UiPosition.STATIC } ?: position,
+    left = overrides.left ?: left,
+    top = overrides.top ?: top,
+    right = overrides.right ?: right,
+    bottom = overrides.bottom ?: bottom,
     font = overrides.font ?: font,
     gap = overrides.gap.takeUnless { it == 0f } ?: gap,
     boxSizing = overrides.boxSizing.takeUnless { it == UiBoxSizing.CONTENT_BOX } ?: boxSizing,

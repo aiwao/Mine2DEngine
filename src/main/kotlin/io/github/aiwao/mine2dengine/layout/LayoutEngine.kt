@@ -247,24 +247,30 @@ private fun measureChildren(
     direction: UiDirection,
     gap: Float,
 ): UiSize {
-    val totalGap = gap * (children.size - 1).coerceAtLeast(0)
+    val normalChildren = children.filter { it.style.position != UiPosition.ABSOLUTE }
+    val totalGap = gap * (normalChildren.size - 1).coerceAtLeast(0)
     return when (direction) {
         UiDirection.VERTICAL -> UiSize(
-            width = children.maxOfOrNull { it.outerSize.width } ?: 0f,
-            height = children.sumOf { it.outerSize.height.toDouble() }.toFloat() + totalGap,
+            width = normalChildren.maxOfOrNull { it.outerSize.width } ?: 0f,
+            height = normalChildren.sumOf { it.outerSize.height.toDouble() }.toFloat() + totalGap,
         )
 
         UiDirection.HORIZONTAL -> UiSize(
-            width = children.sumOf { it.outerSize.width.toDouble() }.toFloat() + totalGap,
-            height = children.maxOfOrNull { it.outerSize.height } ?: 0f,
+            width = normalChildren.sumOf { it.outerSize.width.toDouble() }.toFloat() + totalGap,
+            height = normalChildren.maxOfOrNull { it.outerSize.height } ?: 0f,
         )
     }
 }
 
-private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): UiLayoutNode {
+private fun place(
+    measured: MeasuredNode,
+    staticOuterLeft: Float,
+    staticOuterTop: Float,
+    absoluteContainingBlock: UiRect? = null,
+): UiLayoutNode {
     val style = measured.style
     if (!measured.displayed) {
-        val emptyBounds = UiRect(outerLeft, outerTop, 0f, 0f)
+        val emptyBounds = UiRect(staticOuterLeft, staticOuterTop, 0f, 0f)
         return UiLayoutNode(
             element = measured.element,
             outerBounds = emptyBounds,
@@ -278,77 +284,192 @@ private fun place(measured: MeasuredNode, outerLeft: Float, outerTop: Float): Ui
         )
     }
 
+    val positioned = if (style.position == UiPosition.ABSOLUTE) {
+        measured.stretchedTo(absoluteContainingBlock)
+    } else {
+        measured
+    }
+    val outerLeft = positionedOuterLeft(
+        measured = positioned,
+        staticOuterLeft = staticOuterLeft,
+        containingBlock = absoluteContainingBlock,
+    )
+    val outerTop = positionedOuterTop(
+        measured = positioned,
+        staticOuterTop = staticOuterTop,
+        containingBlock = absoluteContainingBlock,
+    )
+
     val bounds = UiRect(
         left = outerLeft + style.margin.left,
         top = outerTop + style.margin.top,
-        width = measured.boundsSize.width,
-        height = measured.boundsSize.height,
+        width = positioned.boundsSize.width,
+        height = positioned.boundsSize.height,
     )
     val contentBounds = UiRect(
         left = bounds.left + style.padding.left,
         top = bounds.top + style.padding.top,
-        width = measured.contentSize.width,
-        height = measured.contentSize.height,
+        width = positioned.contentSize.width,
+        height = positioned.contentSize.height,
     )
 
-    val children = placeChildren(measured, contentBounds)
+    val descendantContainingBlock = when {
+        absoluteContainingBlock == null -> bounds
+        style.position != UiPosition.STATIC -> bounds
+        else -> absoluteContainingBlock
+    }
+    val children = placeChildren(positioned, contentBounds, descendantContainingBlock)
     return UiLayoutNode(
-        element = measured.element,
-        outerBounds = UiRect(outerLeft, outerTop, measured.outerSize.width, measured.outerSize.height),
+        element = positioned.element,
+        outerBounds = UiRect(
+            outerLeft,
+            outerTop,
+            positioned.outerSize.width,
+            positioned.outerSize.height,
+        ),
         bounds = bounds,
         contentBounds = contentBounds,
         children = children,
-        font = measured.textStyle.font,
-        color = measured.textStyle.color,
-        textShadow = measured.textStyle.textShadow,
-        displayed = measured.displayed,
+        font = positioned.textStyle.font,
+        color = positioned.textStyle.color,
+        textShadow = positioned.textStyle.textShadow,
+        displayed = positioned.displayed,
     ).also { node ->
-        node.styleProvider = measured.styleProvider
+        node.styleProvider = positioned.styleProvider
     }
 }
 
-private fun placeChildren(measured: MeasuredNode, contentBounds: UiRect): List<UiLayoutNode> {
+private fun placeChildren(
+    measured: MeasuredNode,
+    contentBounds: UiRect,
+    absoluteContainingBlock: UiRect,
+): List<UiLayoutNode> {
     if (measured.children.isEmpty()) return emptyList()
 
     val style = measured.style
+    val normalChildren = measured.children.filter { it.style.position != UiPosition.ABSOLUTE }
     return when (style.direction) {
         UiDirection.VERTICAL -> {
-            val childrenHeight = measured.children
+            val childrenHeight = normalChildren
                 .sumOf { it.outerSize.height.toDouble() }
-                .toFloat() + style.gap * (measured.children.size - 1)
+                .toFloat() + style.gap * (normalChildren.size - 1).coerceAtLeast(0)
             var top = contentBounds.top + alignedTop(
                 availableHeight = contentBounds.height,
                 itemHeight = childrenHeight,
                 alignment = style.verticalAlignment,
             )
+            var placedNormalChildren = 0
             measured.children.map { child ->
                 val left = contentBounds.left + alignedLeft(
                     availableWidth = contentBounds.width,
                     itemWidth = child.outerSize.width,
                     alignment = style.horizontalAlignment,
                 )
-                place(child, left, top).also { top += child.outerSize.height + style.gap }
+                place(child, left, top, absoluteContainingBlock).also {
+                    if (child.style.position != UiPosition.ABSOLUTE) {
+                        placedNormalChildren++
+                        top += child.outerSize.height
+                        if (placedNormalChildren < normalChildren.size) top += style.gap
+                    }
+                }
             }
         }
 
         UiDirection.HORIZONTAL -> {
-            val childrenWidth = measured.children
+            val childrenWidth = normalChildren
                 .sumOf { it.outerSize.width.toDouble() }
-                .toFloat() + style.gap * (measured.children.size - 1)
+                .toFloat() + style.gap * (normalChildren.size - 1).coerceAtLeast(0)
             var left = contentBounds.left + alignedLeft(
                 availableWidth = contentBounds.width,
                 itemWidth = childrenWidth,
                 alignment = style.horizontalAlignment,
             )
+            var placedNormalChildren = 0
             measured.children.map { child ->
                 val top = contentBounds.top + alignedTop(
                     availableHeight = contentBounds.height,
                     itemHeight = child.outerSize.height,
                     alignment = style.verticalAlignment,
                 )
-                place(child, left, top).also { left += child.outerSize.width + style.gap }
+                place(child, left, top, absoluteContainingBlock).also {
+                    if (child.style.position != UiPosition.ABSOLUTE) {
+                        placedNormalChildren++
+                        left += child.outerSize.width
+                        if (placedNormalChildren < normalChildren.size) left += style.gap
+                    }
+                }
             }
         }
+    }
+}
+
+private fun MeasuredNode.stretchedTo(containingBlock: UiRect?): MeasuredNode {
+    containingBlock ?: return this
+
+    val stretchedWidth = if (style.width == null && style.left != null && style.right != null) {
+        (containingBlock.width - style.left - style.right - style.margin.horizontal -
+            style.padding.horizontal).coerceAtLeast(0f)
+    } else {
+        contentSize.width
+    }
+    val stretchedHeight = if (style.height == null && style.top != null && style.bottom != null) {
+        (containingBlock.height - style.top - style.bottom - style.margin.vertical -
+            style.padding.vertical).coerceAtLeast(0f)
+    } else {
+        contentSize.height
+    }
+    if (stretchedWidth == contentSize.width && stretchedHeight == contentSize.height) return this
+
+    return copy(contentSize = UiSize(stretchedWidth, stretchedHeight))
+}
+
+private fun positionedOuterLeft(
+    measured: MeasuredNode,
+    staticOuterLeft: Float,
+    containingBlock: UiRect?,
+): Float = when (measured.style.position) {
+    UiPosition.STATIC -> staticOuterLeft
+    UiPosition.RELATIVE -> if (containingBlock == null) {
+        staticOuterLeft
+    } else {
+        staticOuterLeft + when {
+            measured.style.left != null -> measured.style.left
+            measured.style.right != null -> -measured.style.right
+            else -> 0f
+        }
+    }
+
+    UiPosition.ABSOLUTE -> when {
+        containingBlock == null -> staticOuterLeft
+        measured.style.left != null -> containingBlock.left + measured.style.left
+        measured.style.right != null ->
+            containingBlock.right - measured.style.right - measured.outerSize.width
+        else -> staticOuterLeft
+    }
+}
+
+private fun positionedOuterTop(
+    measured: MeasuredNode,
+    staticOuterTop: Float,
+    containingBlock: UiRect?,
+): Float = when (measured.style.position) {
+    UiPosition.STATIC -> staticOuterTop
+    UiPosition.RELATIVE -> if (containingBlock == null) {
+        staticOuterTop
+    } else {
+        staticOuterTop + when {
+            measured.style.top != null -> measured.style.top
+            measured.style.bottom != null -> -measured.style.bottom
+            else -> 0f
+        }
+    }
+
+    UiPosition.ABSOLUTE -> when {
+        containingBlock == null -> staticOuterTop
+        measured.style.top != null -> containingBlock.top + measured.style.top
+        measured.style.bottom != null ->
+            containingBlock.bottom - measured.style.bottom - measured.outerSize.height
+        else -> staticOuterTop
     }
 }
 
