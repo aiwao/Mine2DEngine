@@ -2,6 +2,7 @@ package io.github.aiwao.mine2dengine.layout
 
 import io.github.aiwao.mine2dengine.Mine2DEngine
 import io.github.aiwao.mine2dengine.Mine2DFont
+import io.github.aiwao.mine2dengine.Mine2DMaterial
 import io.github.aiwao.mine2dengine.Mine2DUniformRect
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.MouseButtonInfo
@@ -24,7 +25,7 @@ data class UiLayoutNode(
     val element: UiElement,
     /** Includes the element's margin and begins at its layout coordinate. */
     val outerBounds: UiRect,
-    /** The rectangle painted by the element's background paint. */
+    /** The rectangle painted when the element has a background color. */
     val bounds: UiRect,
     /** The area available to text or children after padding. */
     val contentBounds: UiRect,
@@ -309,15 +310,15 @@ class UiLayout internal constructor(
                 )
             }
         }
-        style.background?.let { paint ->
+        style.drawBackground(renderer.material) { color, material ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
                 renderer.quad(
                     node.bounds.left,
                     node.bounds.top,
                     node.bounds.width,
                     node.bounds.height,
-                    paint.color,
-                    paint.material ?: renderer.material,
+                    color,
+                    material,
                     renderer.uniformContext(
                         elementBounds = node.bounds.toUniformRect(),
                         contentBounds = node.contentBounds.toUniformRect(),
@@ -394,6 +395,15 @@ class UiLayout internal constructor(
         requireNotNull(node.font) {
             "${node.element.javaClass.simpleName} requires a font in its style or an ancestor style"
         }
+}
+
+internal fun UiStyle.drawBackground(
+    rendererMaterial: Mine2DMaterial,
+    draw: (color: Int, material: Mine2DMaterial) -> Unit,
+) {
+    backgroundColor?.let { color ->
+        draw(color, backgroundMaterial ?: rendererMaterial)
+    }
 }
 
 private fun UiLayoutNode.translated(deltaX: Float, deltaY: Float): UiLayoutNode = copy(

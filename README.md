@@ -190,6 +190,9 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
   complete padded box. It defaults to `UiBoxSizing.CONTENT_BOX`; use `UiBoxSizing.BORDER_BOX` to
   include padding in the specified size. A `null` size still shrinks to the text or children.
 - Padding is inside the painted background; margin is outside it.
+- `backgroundColor` is the sole condition for drawing an element background. When it is non-null,
+  the background uses `backgroundMaterial`, or the renderer's current material when no background
+  material is specified. `backgroundMaterial` alone does not draw anything.
 - `boxShadow` paints a soft rounded-box shadow behind an element. It is local to that element and
   does not affect layout size or pointer bounds.
 - `dropShadow` follows the composited alpha of an element's background, text, and descendants, like
@@ -215,7 +218,6 @@ import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiDropShadow
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
-import io.github.aiwao.mine2dengine.layout.UiPaint
 import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
@@ -228,7 +230,7 @@ val root = div(
         height = 100f,
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
-        background = UiPaint(color = 0xD0202020.toInt()),
+        backgroundColor = 0xD0202020.toInt(),
         boxShadow = UiBoxShadow(
             color = 0x80000000.toInt(),
             offsetY = 3f,
@@ -312,13 +314,11 @@ val hoverable = div(
         UiStyle(
             width = 120f,
             height = 24f,
-            background = UiPaint(
-                color = if (element.hovering) {
-                    0xFFFFFFFF.toInt()
-                } else {
-                    0xFF000000.toInt()
-                },
-            ),
+            backgroundColor = if (element.hovering) {
+                0xFFFFFFFF.toInt()
+            } else {
+                0xFF000000.toInt()
+            },
         )
     },
 )
@@ -330,8 +330,8 @@ hoverableLayout.render(draw)
 ```
 
 Dynamic styles are supported by `div` and `p` / `paragraph`. Redrawing an existing
-layout refreshes drawing properties such as inherited text colors, shadows, background paint, and
-materials.
+layout refreshes drawing properties such as inherited text colors, shadows, background colors, and
+background materials.
 Drawing-only changes do not require relayout. Recalculate the
 layout when the resolved `style` or `childStyle` changes sizing, spacing, direction, alignment, or
 font. Assigning `element.style` replaces its dynamic style with that static value.
@@ -420,17 +420,22 @@ layout(std140) uniform Mine2DMaterial {
 };
 ```
 
-Assign a material to an individual layout background through `UiPaint`. Background paint is not inherited by children. A paint without a material uses the `Mine2DEngine.material` active during rendering. Paragraph text uses Minecraft's text rendering path and is not affected by the background material.
+Set an individual layout background with the independent `UiStyle.backgroundColor` and
+`UiStyle.backgroundMaterial` properties. A non-null color draws the background with the specified
+material, or with the `Mine2DEngine.material` active during rendering when the material is null. A
+material without a color does not create a background. These properties are local to the element
+and are not inherited by children. During `childStyle` composition they are overridden
+independently, so an element can replace a supplied material while retaining a supplied color;
+`null` means unspecified during this composition and cannot explicitly clear a material.
+Paragraph text uses Minecraft's text rendering path and is not affected by the background material.
 
 ```kotlin
 val panel = div(
     UiStyle(
         width = 120f,
         height = 40f,
-        background = UiPaint(
-            color = 0xFFFFFFFF.toInt(),
-            material = roundedPanel,
-        ),
+        backgroundColor = 0xFFFFFFFF.toInt(),
+        backgroundMaterial = roundedPanel,
     ),
 )
 ```

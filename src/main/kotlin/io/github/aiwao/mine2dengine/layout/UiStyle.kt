@@ -1,6 +1,7 @@
 package io.github.aiwao.mine2dengine.layout
 
 import io.github.aiwao.mine2dengine.Mine2DFont
+import io.github.aiwao.mine2dengine.Mine2DMaterial
 
 private val DEFAULT_NONE_DISPLAY: () -> Boolean = { false }
 
@@ -44,7 +45,9 @@ enum class UiBoxSizing {
  * CSS `display: none`.
  * [horizontalAlignment] and [verticalAlignment] position direct children in a
  * container and text inside a paragraph's content box.
- * [background] paints only this element's bounds and is not inherited.
+ * A non-null [backgroundColor] paints only this element's bounds and is not inherited. The draw
+ * uses [backgroundMaterial], or the renderer's current material when it is null. A
+ * [backgroundMaterial] without a [backgroundColor] does not draw a background.
  * [boxShadow] paints behind this element and is not inherited or included in layout and hit bounds.
  * [dropShadow] filters the composited pixels of this element and its descendants. It is not
  * inherited or included in layout and hit bounds.
@@ -55,7 +58,8 @@ enum class UiBoxSizing {
  */
 data class UiStyle(
     val color: Int? = null,
-    val background: UiPaint? = null,
+    val backgroundColor: Int? = null,
+    val backgroundMaterial: Mine2DMaterial? = null,
     val margin: UiEdges = UiEdges(),
     val padding: UiEdges = UiEdges(),
     val direction: UiDirection = UiDirection.VERTICAL,
@@ -102,10 +106,15 @@ internal fun UiStyle.resolveTextStyle(parent: ResolvedUiTextStyle): ResolvedUiTe
         textShadow = textShadow ?: parent.textShadow,
     )
 
-/** Applies the explicitly non-default values in [overrides] to this style. */
+/**
+ * Applies the explicitly non-default values in [overrides] to this style.
+ *
+ * Nullable background values are resolved independently, with null meaning unspecified.
+ */
 internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
     color = overrides.color ?: color,
-    background = overrides.background ?: background,
+    backgroundColor = overrides.backgroundColor ?: backgroundColor,
+    backgroundMaterial = overrides.backgroundMaterial ?: backgroundMaterial,
     margin = overrides.margin.takeUnless { it == UiEdges() } ?: margin,
     padding = overrides.padding.takeUnless { it == UiEdges() } ?: padding,
     direction = overrides.direction.takeUnless { it == UiDirection.VERTICAL } ?: direction,
