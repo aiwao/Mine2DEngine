@@ -7,7 +7,6 @@ import io.github.aiwao.mine2dengine.Mine2DUniformRect
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.MouseButtonInfo
 import java.util.IdentityHashMap
-import kotlin.math.roundToInt
 
 internal data class UiNoneDisplayState(
     val element: UiElement,
@@ -373,8 +372,8 @@ class UiLayout internal constructor(
                     renderer.textShadow(
                         font = font,
                         text = line,
-                        x = x.roundToInt(),
-                        y = y.roundToInt(),
+                        x = x,
+                        y = y,
                         color = shadow.color,
                         offsetX = shadow.offsetX,
                         offsetY = shadow.offsetY,
@@ -384,8 +383,8 @@ class UiLayout internal constructor(
             renderer.text(
                 font,
                 line,
-                x.roundToInt(),
-                y.roundToInt(),
+                x,
+                y,
                 resolvedTextStyle.color,
             )
         }

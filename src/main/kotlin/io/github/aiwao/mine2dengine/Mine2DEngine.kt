@@ -247,8 +247,8 @@ class Mine2DEngine(
     fun textShadow(
         font: Mine2DFont,
         text: String,
-        x: Int,
-        y: Int,
+        x: Float,
+        y: Float,
         color: Int = 0x80000000.toInt(),
         offsetX: Float = 0f,
         offsetY: Float = 0f,
@@ -289,8 +289,8 @@ class Mine2DEngine(
     fun text(
         font: Mine2DFont,
         text: String,
-        x: Int,
-        y: Int,
+        x: Float,
+        y: Float,
         color: Int,
     ) {
         font.checkOpen()
@@ -449,22 +449,31 @@ class Mine2DEngine(
     private fun enqueueText(
         font: Mine2DFont,
         text: String,
-        x: Int,
-        y: Int,
+        x: Float,
+        y: Float,
         color: Int,
         offsetX: Float,
         offsetY: Float,
     ) {
-        if (offsetX == 0f && offsetY == 0f) {
-            graphics.text(font.renderer, text, x, y, color, false)
+        require(x.isFinite() && y.isFinite()) { "Text coordinates must be finite" }
+        val translatedX = x + offsetX
+        val translatedY = y + offsetY
+        require(translatedX.isFinite() && translatedY.isFinite()) {
+            "Translated text coordinates must be finite"
+        }
+
+        val integerX = translatedX.toInt()
+        val integerY = translatedY.toInt()
+        if (translatedX == integerX.toFloat() && translatedY == integerY.toFloat()) {
+            graphics.text(font.renderer, text, integerX, integerY, color, false)
             return
         }
 
         val pose = graphics.pose()
         pose.pushMatrix()
         try {
-            pose.translate(offsetX, offsetY)
-            graphics.text(font.renderer, text, x, y, color, false)
+            pose.translate(translatedX, translatedY)
+            graphics.text(font.renderer, text, 0, 0, color, false)
         } finally {
             pose.popMatrix()
         }

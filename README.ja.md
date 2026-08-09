@@ -160,23 +160,25 @@ ClientLifecycleEvents.CLIENT_STOPPING.register {
 
 ```kotlin
 uiFont?.let { font ->
-    draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt())
+    draw.text(font, "Mine2DEngine", 16f, 16f, 0xFFFFFFFF.toInt())
 
     draw.textShadow(
         font,
         "Custom shadow",
-        16,
-        36,
+        16f,
+        36f,
         color = 0xA0000000.toInt(),
         offsetY = 2f,
         blurRadius = 2f,
     )
-    draw.text(font, "Custom shadow", 16, 36, 0xFFFFFFFF.toInt())
+    draw.text(font, "Custom shadow", 16f, 36f, 0xFFFFFFFF.toInt())
 
     val width = font.width("Mine2DEngine")
     val lineHeight = font.lineHeight
 }
 ```
+
+テキスト座標、水平advance、行の高さは浮動小数のGUI単位で扱われます。
 
 `Mine2DFont.load`、`width`、`close` はレンダースレッド上で実行する必要があります。フレームごとにフォントを読み込まないでください。リソースの再読み込み時にフォントを作り直す場合は、先に以前のインスタンスを閉じます。
 

@@ -14,9 +14,9 @@ class Mine2DTextMeasurer(
     private val font: Mine2DFont,
 ) : UiTextMeasurer {
     override val lineHeight: Float
-        get() = font.lineHeight.toFloat()
+        get() = font.lineHeight
 
-    override fun width(text: String): Float = font.width(text).toFloat()
+    override fun width(text: String): Float = font.width(text)
 }
 
 /**
