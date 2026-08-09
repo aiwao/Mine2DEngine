@@ -206,9 +206,9 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   alpha形状へ影を付けます。要素内だけの指定であり、レイアウトやヒット領域には影響しません。
 - `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
 - `Div` は直接の子要素を縦または横に並べます。
-- `Div` の `childStyle` は、CSS の `.parent *` と同様に、各子孫を受け取って `UiStyle` を
+- `Div` の `descendantStyle` は、CSS の `.parent *` と同様に、各子孫を受け取って `UiStyle` を
   解決します。子孫の型や現在の状態を参照できます。子孫自身のstyleにあるデフォルト以外の値が
-  優先されます。ネストしたコンテナにnullではない `childStyle` がある場合、その配下では近い
+  優先されます。ネストしたコンテナにnullではない `descendantStyle` がある場合、その配下では近い
   指定が優先されます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
 - `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
@@ -300,7 +300,7 @@ layout.render(draw)
 val labels = div(
     tag = "section",
     style = UiStyle(font = font),
-    childStyle = { child ->
+    descendantStyle = { child ->
         UiStyle(
             dropShadow = if (child.tag == "p") UiDropShadow() else null,
         )
@@ -340,7 +340,7 @@ hoverableLayout.render(draw)
 
 動的スタイルは `div` と `p` / `paragraph` で利用できます。既存レイアウトを再描画すると
 継承される文字色やshadow、背景色、背景Materialなどの描画プロパティも更新されます。これらの
-描画プロパティだけを変える場合は再レイアウト不要です。解決後の `style` または `childStyle` に
+描画プロパティだけを変える場合は再レイアウト不要です。解決後の `style` または `descendantStyle` に
 よってサイズ、余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。
 `element.style` に代入すると、動的スタイルはその静的な値で置き換えられます。
 
@@ -431,7 +431,7 @@ Layoutの要素別背景は、独立した `UiStyle.backgroundColor` と
 `UiStyle.backgroundMaterial` で指定します。背景色がnullではない場合は指定したMaterialで描画し、
 Materialがnullなら描画時の `Mine2DEngine.material` を使用します。背景色がnullなら、Materialだけを
 指定しても背景は描画されません。これらのプロパティは要素内だけの指定であり、子へ継承されません。
-`childStyle` の合成時にはそれぞれ独立して上書きされるため、指定済みの背景色を維持したまま要素側で
+`descendantStyle` の合成時にはそれぞれ独立して上書きされるため、指定済みの背景色を維持したまま要素側で
 Materialだけを変更できます。この合成ではnullは未指定を意味し、Materialを明示的に解除することは
 できません。Paragraphの文字列はMinecraftのテキスト描画経路を使うため、背景Materialの対象外です。
 

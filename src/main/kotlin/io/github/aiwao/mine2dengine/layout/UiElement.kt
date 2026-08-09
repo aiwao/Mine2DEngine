@@ -55,7 +55,7 @@ sealed class UiContainer(
     override var onDrag: ((MouseButtonEvent) -> Unit)? = null,
     override var onMouseOver: (() -> Unit)? = null,
     override var onMouseOut: (() -> Unit)? = null,
-    childStyle: ((UiElement) -> UiStyle)? = null,
+    descendantStyle: ((UiElement) -> UiStyle)? = null,
 ) : UiElement(tag, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
     val children: MutableList<UiElement> = children.toMutableList()
 
@@ -64,9 +64,9 @@ sealed class UiContainer(
      *
      * The provider receives the descendant being styled and is evaluated whenever its style is
      * used. A descendant's own non-default style values take precedence. A descendant container's
-     * non-null child style also takes precedence for its own descendants.
+     * non-null descendant style also takes precedence for its own descendants.
      */
-    var childStyle: ((UiElement) -> UiStyle)? = childStyle
+    var descendantStyle: ((UiElement) -> UiStyle)? = descendantStyle
 
     fun <T : UiElement> add(element: T): T {
         children += element
@@ -80,7 +80,7 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
-        childStyle: ((UiElement) -> UiStyle)? = null,
+        descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
         content: Div.() -> Unit = {},
     ): Div = add(
@@ -91,7 +91,7 @@ sealed class UiContainer(
             onDrag = onDrag,
             onMouseOver = onMouseOver,
             onMouseOut = onMouseOut,
-            childStyle = childStyle,
+            descendantStyle = descendantStyle,
             tag = tag,
         ).apply(content),
     )
@@ -104,7 +104,7 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
-        childStyle: ((UiElement) -> UiStyle)? = null,
+        descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
         content: Div.() -> Unit = {},
     ): Div = add(
@@ -114,7 +114,7 @@ sealed class UiContainer(
             onDrag = onDrag,
             onMouseOver = onMouseOver,
             onMouseOut = onMouseOut,
-            childStyle = childStyle,
+            descendantStyle = descendantStyle,
             tag = tag,
         ).withStyleProvider(style).apply(content),
     )
@@ -187,7 +187,7 @@ class Div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    childStyle: ((UiElement) -> UiStyle)? = null,
+    descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
 ) : UiContainer(
     tag,
@@ -198,7 +198,7 @@ class Div(
     onDrag,
     onMouseOver,
     onMouseOut,
-    childStyle,
+    descendantStyle,
 )
 
 /** A text element corresponding to an HTML p. Newlines create multiple lines. */
@@ -221,7 +221,7 @@ fun div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    childStyle: ((UiElement) -> UiStyle)? = null,
+    descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
     content: Div.() -> Unit = {},
 ): Div = Div(
@@ -231,7 +231,7 @@ fun div(
     onDrag = onDrag,
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
-    childStyle = childStyle,
+    descendantStyle = descendantStyle,
     tag = tag,
 ).apply(content)
 
@@ -243,7 +243,7 @@ fun div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    childStyle: ((UiElement) -> UiStyle)? = null,
+    descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
     content: Div.() -> Unit = {},
 ): Div = Div(
@@ -252,7 +252,7 @@ fun div(
     onDrag = onDrag,
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
-    childStyle = childStyle,
+    descendantStyle = descendantStyle,
     tag = tag,
 ).withStyleProvider(style).apply(content)
 

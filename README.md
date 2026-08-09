@@ -205,9 +205,9 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
   CSS `filter: drop-shadow()`. It is local to that element and does not affect layout or hit bounds.
 - When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
 - `Div` places direct children vertically or horizontally.
-- `childStyle` on a `Div` receives each descendant and resolves its `UiStyle`, like CSS
+- `descendantStyle` on a `Div` receives each descendant and resolves its `UiStyle`, like CSS
   `.parent *`. It can inspect the descendant's type and current state. Non-default values in a
-  descendant's own style take precedence. A non-null `childStyle` on a nested container takes
+  descendant's own style take precedence. A non-null `descendantStyle` on a nested container takes
   precedence below that container.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
 - `color`, `font`, and `textShadow` are inherited from ancestors and may be overridden by a child.
@@ -300,7 +300,7 @@ be specified with the `tag` constructor argument:
 val labels = div(
     tag = "section",
     style = UiStyle(font = font),
-    childStyle = { child ->
+    descendantStyle = { child ->
         UiStyle(
             dropShadow = if (child.tag == "p") UiDropShadow() else null,
         )
@@ -342,7 +342,7 @@ Dynamic styles are supported by `div` and `p` / `paragraph`. Redrawing an existi
 layout refreshes drawing properties such as inherited text colors, shadows, background colors, and
 background materials.
 Drawing-only changes do not require relayout. Recalculate the
-layout when the resolved `style` or `childStyle` changes sizing, spacing, direction, alignment, or
+layout when the resolved `style` or `descendantStyle` changes sizing, spacing, direction, alignment, or
 font. Assigning `element.style` replaces its dynamic style with that static value.
 
 Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div` and `p` / `paragraph`. Set an element's `disabled` property to `true` to prevent its `onClick` callback from running until it is enabled again. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `mouseClick`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. The `MouseButtonEvent` passed to `onDrag` uses the current mouse coordinates and retains the button and modifier information from the `mouseClick` event that started the drag. A drag continues outside the element's bounds until `mouseRelease` is called:
@@ -433,7 +433,7 @@ Set an individual layout background with the independent `UiStyle.backgroundColo
 `UiStyle.backgroundMaterial` properties. A non-null color draws the background with the specified
 material, or with the `Mine2DEngine.material` active during rendering when the material is null. A
 material without a color does not create a background. These properties are local to the element
-and are not inherited by children. During `childStyle` composition they are overridden
+and are not inherited by children. During `descendantStyle` composition they are overridden
 independently, so an element can replace a supplied material while retaining a supplied color;
 `null` means unspecified during this composition and cannot explicitly clear a material.
 Paragraph text uses Minecraft's text rendering path and is not affected by the background material.

@@ -66,7 +66,7 @@ private fun calculateLayout(
         val measured = measure(
             element = root,
             inheritedTextStyle = ResolvedUiTextStyle(),
-            inheritedChildStyle = { _ -> null },
+            inheritedDescendantStyle = { _ -> null },
             textMeasurer = textMeasurer,
             noneDisplayStates = noneDisplayStates,
             evaluatedNoneDisplays = evaluatedNoneDisplays,
@@ -112,13 +112,13 @@ private data class MeasuredNode(
 private fun measure(
     element: UiElement,
     inheritedTextStyle: ResolvedUiTextStyle,
-    inheritedChildStyle: (UiElement) -> UiStyle?,
+    inheritedDescendantStyle: (UiElement) -> UiStyle?,
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
     noneDisplayStates: MutableList<UiNoneDisplayState>,
     evaluatedNoneDisplays: Map<UiElement, Boolean>,
 ): MeasuredNode {
     val styleProvider = {
-        inheritedChildStyle(element)?.withOverrides(element.style) ?: element.style
+        inheritedDescendantStyle(element)?.withOverrides(element.style) ?: element.style
     }
     val style = styleProvider()
     val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
@@ -143,12 +143,12 @@ private fun measure(
 
     val children = if (element is UiContainer) {
         val descendantStyle = { descendant: UiElement ->
-            val inheritedStyle = inheritedChildStyle(descendant)
-            val childStyle = element.childStyle?.invoke(descendant)
+            val inheritedStyle = inheritedDescendantStyle(descendant)
+            val containerStyle = element.descendantStyle?.invoke(descendant)
             when {
-                inheritedStyle == null -> childStyle
-                childStyle == null -> inheritedStyle
-                else -> inheritedStyle.withOverrides(childStyle)
+                inheritedStyle == null -> containerStyle
+                containerStyle == null -> inheritedStyle
+                else -> inheritedStyle.withOverrides(containerStyle)
             }
         }
         element.children
@@ -156,7 +156,7 @@ private fun measure(
                 measure(
                     element = child,
                     inheritedTextStyle = resolvedTextStyle,
-                    inheritedChildStyle = descendantStyle,
+                    inheritedDescendantStyle = descendantStyle,
                     textMeasurer = textMeasurer,
                     noneDisplayStates = noneDisplayStates,
                     evaluatedNoneDisplays = evaluatedNoneDisplays,

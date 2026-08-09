@@ -332,7 +332,7 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `child style receives and dynamically styles every descendant`() {
+    fun `descendant style receives and dynamically styles every descendant`() {
         val outerEvaluations = mutableListOf<UiElement>()
         val nestedEvaluations = mutableListOf<UiElement>()
         val paragraphShadow = UiDropShadow()
@@ -346,7 +346,7 @@ class LayoutEngineTest {
                 dropShadow = paragraphShadow.takeIf { shadowsEnabled && child is Paragraph },
             )
         }
-        val nestedChildStyle: (UiElement) -> UiStyle = { child ->
+        val nestedDescendantStyle: (UiElement) -> UiStyle = { child ->
             nestedEvaluations += child
             UiStyle(
                 color = 0xFF445566.toInt(),
@@ -360,13 +360,13 @@ class LayoutEngineTest {
         lateinit var styledParagraph: Paragraph
         val root = div(
             style = UiStyle(width = 80f, height = 60f),
-            childStyle = descendantStyle,
+            descendantStyle = descendantStyle,
         ) {
             directParagraph = p("direct", UiStyle(width = 1f))
             nestedDiv = div {
                 nestedParagraph = p("nested", UiStyle(width = 2f))
             }
-            styledDiv = div(style = UiStyle(), childStyle = nestedChildStyle) {
+            styledDiv = div(style = UiStyle(), descendantStyle = nestedDescendantStyle) {
                 styledParagraph = p("styled")
             }
         }
