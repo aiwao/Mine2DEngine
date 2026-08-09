@@ -78,8 +78,10 @@ internal class TextShadowGlyphRenderState private constructor(
                 minV = geometry.minV,
                 maxU = geometry.maxU,
                 maxV = geometry.maxV,
-                uPerGuiUnit = geometry.uPerGuiUnit,
-                vPerGuiUnit = geometry.vPerGuiUnit,
+                uPerGuiX = geometry.uPerGuiX,
+                vPerGuiX = geometry.vPerGuiX,
+                uPerGuiY = geometry.uPerGuiY,
+                vPerGuiY = geometry.vPerGuiY,
                 blurRadius = blurRadius,
                 grayscale = renderable.guiPipeline() === RenderPipelines.GUI_TEXT_GRAYSCALE,
             )

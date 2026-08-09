@@ -103,8 +103,11 @@ internal data class Mine2DTextShadowGlyphGeometry(
     val minV: Float,
     val maxU: Float,
     val maxV: Float,
-    val uPerGuiUnit: Float,
-    val vPerGuiUnit: Float,
+    /** UV deltas for one GUI unit along X, followed by one GUI unit along Y. */
+    val uPerGuiX: Float,
+    val vPerGuiX: Float,
+    val uPerGuiY: Float,
+    val vPerGuiY: Float,
 )
 
 /** Expands glyph quads while preserving their atlas-to-GUI coordinate mapping for shader blur. */
@@ -119,44 +122,73 @@ internal fun calculateTextShadowGlyphGeometry(
         "Text shadow glyph geometry must contain complete quads"
     }
     if (vertices.isEmpty()) return null
+    require(
+        vertices.all { vertex ->
+            vertex.x.isFinite() && vertex.y.isFinite() && vertex.z.isFinite() &&
+                vertex.u.isFinite() && vertex.v.isFinite()
+        },
+    ) { "Text shadow glyph vertices must be finite" }
 
     val minU = vertices.minOf(Mine2DTextShadowVertex::u)
     val minV = vertices.minOf(Mine2DTextShadowVertex::v)
     val maxU = vertices.maxOf(Mine2DTextShadowVertex::u)
     val maxV = vertices.maxOf(Mine2DTextShadowVertex::v)
     val firstQuad = vertices.take(TEXT_SHADOW_QUAD_VERTEX_COUNT)
-    val leftX = firstQuad.filter { vertex -> closestToMinimum(vertex.u, minU, maxU) }
-        .map(Mine2DTextShadowVertex::x)
-        .average()
-    val rightX = firstQuad.filterNot { vertex -> closestToMinimum(vertex.u, minU, maxU) }
-        .map(Mine2DTextShadowVertex::x)
-        .average()
-    val topY = firstQuad.filter { vertex -> closestToMinimum(vertex.v, minV, maxV) }
-        .map(Mine2DTextShadowVertex::y)
-        .average()
-    val bottomY = firstQuad.filterNot { vertex -> closestToMinimum(vertex.v, minV, maxV) }
-        .map(Mine2DTextShadowVertex::y)
-        .average()
-    val glyphWidth = abs(rightX - leftX).toFloat()
-    val glyphHeight = abs(bottomY - topY).toFloat()
+    val minX = firstQuad.minOf(Mine2DTextShadowVertex::x)
+    val minY = firstQuad.minOf(Mine2DTextShadowVertex::y)
+    val maxX = firstQuad.maxOf(Mine2DTextShadowVertex::x)
+    val maxY = firstQuad.maxOf(Mine2DTextShadowVertex::y)
+    val glyphWidth = maxX - minX
+    val glyphHeight = maxY - minY
     val uRange = maxU - minU
     val vRange = maxV - minV
     require(
-        glyphWidth > 0f && glyphHeight > 0f &&
-            uRange.isFinite() && uRange > 0f && vRange.isFinite() && vRange > 0f,
+        glyphWidth.isFinite() && glyphWidth > 0f &&
+            glyphHeight.isFinite() && glyphHeight > 0f &&
+            uRange.isFinite() && uRange > 0f &&
+            vRange.isFinite() && vRange > 0f,
     ) { "Text shadow glyph must have finite, non-empty position and UV bounds" }
 
-    val uPerGuiUnit = uRange / glyphWidth
-    val vPerGuiUnit = vRange / glyphHeight
-    val expanded = vertices.map { vertex ->
-        val horizontalDirection = if (closestToMinimum(vertex.u, minU, maxU)) -1f else 1f
-        val verticalDirection = if (closestToMinimum(vertex.v, minV, maxV)) -1f else 1f
-        vertex.copy(
-            x = vertex.x + horizontalDirection * blurRadius,
-            y = vertex.y + verticalDirection * blurRadius,
-            u = vertex.u + horizontalDirection * uPerGuiUnit * blurRadius,
-            v = vertex.v + verticalDirection * vPerGuiUnit * blurRadius,
-        )
+    val leftVertices = firstQuad.filter { vertex -> closestToMinimum(vertex.x, minX, maxX) }
+    val rightVertices = firstQuad.filterNot { vertex -> closestToMinimum(vertex.x, minX, maxX) }
+    val topVertices = firstQuad.filter { vertex -> closestToMinimum(vertex.y, minY, maxY) }
+    val bottomVertices = firstQuad.filterNot { vertex -> closestToMinimum(vertex.y, minY, maxY) }
+    val uPerGuiX = (rightVertices.averageU() - leftVertices.averageU()) / glyphWidth
+    val vPerGuiX = (rightVertices.averageV() - leftVertices.averageV()) / glyphWidth
+    val uPerGuiY = (bottomVertices.averageU() - topVertices.averageU()) / glyphHeight
+    val vPerGuiY = (bottomVertices.averageV() - topVertices.averageV()) / glyphHeight
+    val uvDeterminant = uPerGuiX * vPerGuiY - uPerGuiY * vPerGuiX
+    require(
+        uPerGuiX.isFinite() && vPerGuiX.isFinite() &&
+            uPerGuiY.isFinite() && vPerGuiY.isFinite() &&
+            uvDeterminant.isFinite() && uvDeterminant != 0f,
+    ) { "Text shadow glyph position-to-UV mapping must be finite and non-degenerate" }
+
+    val expanded = vertices.chunked(TEXT_SHADOW_QUAD_VERTEX_COUNT).flatMap { quad ->
+        val quadMinX = quad.minOf(Mine2DTextShadowVertex::x)
+        val quadMinY = quad.minOf(Mine2DTextShadowVertex::y)
+        val quadMaxX = quad.maxOf(Mine2DTextShadowVertex::x)
+        val quadMaxY = quad.maxOf(Mine2DTextShadowVertex::y)
+        require(quadMinX < quadMaxX && quadMinY < quadMaxY) {
+            "Text shadow glyph quads must have non-empty position bounds"
+        }
+
+        quad.map { vertex ->
+            val horizontalDirection =
+                if (closestToMinimum(vertex.x, quadMinX, quadMaxX)) -1f else 1f
+            val verticalDirection =
+                if (closestToMinimum(vertex.y, quadMinY, quadMaxY)) -1f else 1f
+            vertex.copy(
+                x = vertex.x + horizontalDirection * blurRadius,
+                y = vertex.y + verticalDirection * blurRadius,
+                u = vertex.u +
+                    horizontalDirection * uPerGuiX * blurRadius +
+                    verticalDirection * uPerGuiY * blurRadius,
+                v = vertex.v +
+                    horizontalDirection * vPerGuiX * blurRadius +
+                    verticalDirection * vPerGuiY * blurRadius,
+            )
+        }
     }
 
     return Mine2DTextShadowGlyphGeometry(
@@ -165,10 +197,18 @@ internal fun calculateTextShadowGlyphGeometry(
         minV = minV,
         maxU = maxU,
         maxV = maxV,
-        uPerGuiUnit = uPerGuiUnit,
-        vPerGuiUnit = vPerGuiUnit,
+        uPerGuiX = uPerGuiX,
+        vPerGuiX = vPerGuiX,
+        uPerGuiY = uPerGuiY,
+        vPerGuiY = vPerGuiY,
     )
 }
+
+private fun List<Mine2DTextShadowVertex>.averageU(): Float =
+    map(Mine2DTextShadowVertex::u).average().toFloat()
+
+private fun List<Mine2DTextShadowVertex>.averageV(): Float =
+    map(Mine2DTextShadowVertex::v).average().toFloat()
 
 private fun closestToMinimum(value: Float, minimum: Float, maximum: Float): Boolean =
     abs(value - minimum) <= abs(value - maximum)

@@ -199,15 +199,17 @@ object Mine2DMaterials {
         minV: Float,
         maxU: Float,
         maxV: Float,
-        uPerGuiUnit: Float,
-        vPerGuiUnit: Float,
+        uPerGuiX: Float,
+        vPerGuiX: Float,
+        uPerGuiY: Float,
+        vPerGuiY: Float,
         blurRadius: Float,
         grayscale: Boolean,
     ): Mine2DMaterial = Mine2DShaders.TEXT_SHADOW.material {
         set(Mine2DShaders.TEXT_SHADOW_UV_BOUNDS, Vector4f(minU, minV, maxU, maxV))
         set(
             Mine2DShaders.TEXT_SHADOW_UV_PER_GUI_UNIT,
-            Vector2f(uPerGuiUnit, vPerGuiUnit),
+            Vector4f(uPerGuiX, vPerGuiX, uPerGuiY, vPerGuiY),
         )
         set(Mine2DShaders.SHADOW_BLUR_RADIUS, blurRadius)
         set(Mine2DShaders.TEXT_SHADOW_GRAYSCALE, if (grayscale) 1 else 0)

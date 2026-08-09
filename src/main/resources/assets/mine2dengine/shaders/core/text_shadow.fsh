@@ -6,7 +6,7 @@
 uniform sampler2D Sampler0;
 layout(std140) uniform Mine2DTextShadow {
     vec4 UvBounds;
-    vec2 UvPerGuiUnit;
+    vec4 UvPerGuiUnit;
     float BlurRadius;
     int Grayscale;
 };
@@ -39,7 +39,9 @@ float blurredGlyphAlpha() {
         for (int x = -SAMPLE_RADIUS; x <= SAMPLE_RADIUS; ++x) {
             vec2 guiOffset = vec2(x, y) * (BlurRadius / float(SAMPLE_RADIUS));
             float weight = shadowGaussianWeight(dot(guiOffset, guiOffset), BlurRadius);
-            alphaSum += glyphAlpha(texCoord0 + guiOffset * UvPerGuiUnit) * weight;
+            vec2 uvOffset =
+                guiOffset.x * UvPerGuiUnit.xy + guiOffset.y * UvPerGuiUnit.zw;
+            alphaSum += glyphAlpha(texCoord0 + uvOffset) * weight;
             weightSum += weight;
         }
     }
