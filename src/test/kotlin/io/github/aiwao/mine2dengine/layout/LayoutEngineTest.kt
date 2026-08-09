@@ -115,6 +115,10 @@ class LayoutEngineTest {
             UiTextShadow::class.java,
             UiStyle::class.java.getMethod("getTextShadow").returnType,
         )
+        assertEquals(
+            UiPosition::class.java,
+            UiStyle::class.java.getMethod("getPosition").returnType,
+        )
     }
 
     @Test
@@ -128,6 +132,11 @@ class LayoutEngineTest {
         assertEquals(null, UiStyle().dropShadow)
         assertEquals(null, UiStyle().textShadow)
         assertEquals(UiBoxSizing.CONTENT_BOX, UiStyle().boxSizing)
+        assertEquals(UiPosition.STATIC, UiStyle().position)
+        assertNull(UiStyle().left)
+        assertNull(UiStyle().top)
+        assertNull(UiStyle().right)
+        assertNull(UiStyle().bottom)
         assertFalse(UiStyle().noneDisplay())
         assertEquals(UiStyle.DEFAULT_COLOR, layout.root.color)
         assertNull(layout.root.textShadow)
@@ -728,6 +737,223 @@ class LayoutEngineTest {
         assertEquals(3f, layout.nodeOf(first)!!.outerBounds.top)
         assertEquals(17f, layout.nodeOf(second)!!.outerBounds.top)
         assertEquals(33f, layout.nodeOf(third)!!.outerBounds.top)
+    }
+
+    @Test
+    fun `static offsets are ignored and relative offsets preserve normal flow space`() {
+        lateinit var staticParagraph: Paragraph
+        lateinit var relativeParagraph: Paragraph
+        lateinit var lastParagraph: Paragraph
+        val root = div(UiStyle(gap = 3f)) {
+            staticParagraph = p(
+                "a",
+                UiStyle(left = 100f, top = 100f, right = 100f, bottom = 100f),
+            )
+            relativeParagraph = p(
+                "b",
+                UiStyle(
+                    position = UiPosition.RELATIVE,
+                    left = 7f,
+                    top = 4f,
+                    right = 100f,
+                    bottom = 100f,
+                ),
+            )
+            lastParagraph = p("c")
+        }
+
+        val layout = calculateLayout(root, left = 2f, top = 3f, textMeasurer)
+
+        assertEquals(UiSize(5f, 36f), layout.size)
+        assertEquals(UiRect(2f, 3f, 5f, 10f), layout.nodeOf(staticParagraph)!!.outerBounds)
+        assertEquals(UiRect(9f, 20f, 5f, 10f), layout.nodeOf(relativeParagraph)!!.outerBounds)
+        assertEquals(UiRect(2f, 29f, 5f, 10f), layout.nodeOf(lastParagraph)!!.outerBounds)
+    }
+
+    @Test
+    fun `relative right and bottom offsets move an element in the opposite direction`() {
+        lateinit var paragraph: Paragraph
+        val root = div {
+            paragraph = p(
+                "a",
+                UiStyle(
+                    position = UiPosition.RELATIVE,
+                    right = 4f,
+                    bottom = 2f,
+                ),
+            )
+        }
+
+        val layout = calculateLayout(root, left = 5f, top = 7f, textMeasurer)
+
+        assertEquals(UiRect(1f, 5f, 5f, 10f), layout.nodeOf(paragraph)!!.outerBounds)
+        assertEquals(UiSize(5f, 10f), layout.size)
+    }
+
+    @Test
+    fun `root position offsets do not override the layout origin`() {
+        UiPosition.entries.forEach { position ->
+            val root = div(
+                UiStyle(
+                    width = 20f,
+                    height = 10f,
+                    position = position,
+                    left = 100f,
+                    top = 200f,
+                    right = 300f,
+                    bottom = 400f,
+                ),
+            )
+
+            val layout = calculateLayout(root, left = 5f, top = 7f, textMeasurer)
+
+            assertEquals(UiRect(5f, 7f, 20f, 10f), layout.root.outerBounds)
+        }
+    }
+
+    @Test
+    fun `absolute children use insets and do not participate in flow or gap`() {
+        lateinit var first: Paragraph
+        lateinit var absolute: Paragraph
+        lateinit var last: Paragraph
+        val root = div(
+            UiStyle(
+                direction = UiDirection.HORIZONTAL,
+                gap = 4f,
+            ),
+        ) {
+            first = p("a")
+            absolute = p(
+                "absolute",
+                UiStyle(
+                    position = UiPosition.ABSOLUTE,
+                    left = 20f,
+                    top = 15f,
+                ),
+            )
+            last = p("bc")
+        }
+
+        val layout = calculateLayout(root, left = 2f, top = 3f, textMeasurer)
+
+        assertEquals(UiSize(19f, 10f), layout.size)
+        assertEquals(2f, layout.nodeOf(first)!!.outerBounds.left)
+        assertEquals(11f, layout.nodeOf(last)!!.outerBounds.left)
+        assertEquals(UiRect(22f, 18f, 40f, 10f), layout.nodeOf(absolute)!!.outerBounds)
+        assertSame(absolute, layout.elementAt(22f, 18f))
+    }
+
+    @Test
+    fun `absolute right and bottom insets anchor the outer box`() {
+        lateinit var paragraph: Paragraph
+        val root = div(UiStyle(width = 100f, height = 50f)) {
+            paragraph = p(
+                "a",
+                UiStyle(
+                    width = 20f,
+                    height = 10f,
+                    position = UiPosition.ABSOLUTE,
+                    right = 8f,
+                    bottom = 6f,
+                ),
+            )
+        }
+
+        val layout = calculateLayout(root, left = 5f, top = 7f, textMeasurer)
+
+        assertEquals(UiRect(77f, 41f, 20f, 10f), layout.nodeOf(paragraph)!!.outerBounds)
+    }
+
+    @Test
+    fun `absolute children use the nearest non-static ancestor as their containing block`() {
+        lateinit var staticContainer: Div
+        lateinit var absolute: Div
+        val root = div(
+            UiStyle(
+                width = 100f,
+                height = 100f,
+                position = UiPosition.RELATIVE,
+            ),
+        ) {
+            div(UiStyle(width = 10f, height = 20f))
+            staticContainer = div(UiStyle(width = 40f, height = 40f)) {
+                absolute = div(
+                    UiStyle(
+                        width = 10f,
+                        height = 10f,
+                        position = UiPosition.ABSOLUTE,
+                        left = 8f,
+                        top = 9f,
+                    ),
+                )
+            }
+        }
+
+        val layout = calculateLayout(root, left = 5f, top = 7f, textMeasurer)
+
+        assertEquals(27f, layout.nodeOf(staticContainer)!!.outerBounds.top)
+        assertEquals(UiRect(13f, 16f, 10f, 10f), layout.nodeOf(absolute)!!.outerBounds)
+    }
+
+    @Test
+    fun `paired absolute insets stretch an automatic size inside the containing block`() {
+        lateinit var absolute: Div
+        val root = div(
+            UiStyle(
+                width = 100f,
+                height = 60f,
+                padding = UiEdges(5f),
+                position = UiPosition.RELATIVE,
+            ),
+        ) {
+            absolute = div(
+                UiStyle(
+                    position = UiPosition.ABSOLUTE,
+                    left = 10f,
+                    top = 8f,
+                    right = 15f,
+                    bottom = 12f,
+                    margin = UiEdges(2f),
+                    padding = UiEdges(3f),
+                ),
+            )
+        }
+
+        val layout = calculateLayout(root, left = 2f, top = 3f, textMeasurer)
+        val node = layout.nodeOf(absolute)!!
+
+        assertEquals(UiRect(12f, 11f, 85f, 50f), node.outerBounds)
+        assertEquals(UiRect(14f, 13f, 81f, 46f), node.bounds)
+        assertEquals(UiRect(17f, 16f, 75f, 40f), node.contentBounds)
+    }
+
+    @Test
+    fun `position styles compose and offsets accept negative finite values`() {
+        val base = UiStyle(
+            position = UiPosition.ABSOLUTE,
+            left = 1f,
+            top = 2f,
+            right = 3f,
+            bottom = 4f,
+        )
+
+        val result = base.withOverrides(
+            UiStyle(
+                position = UiPosition.RELATIVE,
+                left = -5f,
+                bottom = -6f,
+            ),
+        )
+
+        assertEquals(UiPosition.RELATIVE, result.position)
+        assertEquals(-5f, result.left)
+        assertEquals(2f, result.top)
+        assertEquals(3f, result.right)
+        assertEquals(-6f, result.bottom)
+        assertFailsWith<IllegalArgumentException> { UiStyle(left = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { UiStyle(top = Float.POSITIVE_INFINITY) }
+        assertFailsWith<IllegalArgumentException> { UiStyle(right = Float.NEGATIVE_INFINITY) }
+        assertFailsWith<IllegalArgumentException> { UiStyle(bottom = Float.NaN) }
     }
 
     @Test

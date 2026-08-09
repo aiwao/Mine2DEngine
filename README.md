@@ -196,6 +196,12 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
   complete padded box. It defaults to `UiBoxSizing.CONTENT_BOX`; use `UiBoxSizing.BORDER_BOX` to
   include padding in the specified size. A `null` size still shrinks to the text or children.
 - Padding is inside the painted background; margin is outside it.
+- `position` supports `UiPosition.STATIC`, `RELATIVE`, and `ABSOLUTE`. The nullable `left`, `top`,
+  `right`, and `bottom` values represent CSS `auto` when null. Relative elements move from their
+  normal position without changing the space they occupy. Absolute elements are removed from
+  normal flow and use the padded box of their nearest non-static ancestor, or the root box when
+  there is none. Paired horizontal or vertical insets stretch an automatic width or height.
+  The root itself remains at the coordinates passed to `LayoutEngine.layout`.
 - `backgroundColor` is the sole condition for drawing an element background. When it is non-null,
   the background uses `backgroundMaterial`, or the renderer's current material when no background
   material is specified. `backgroundMaterial` alone does not draw anything.
@@ -227,6 +233,7 @@ import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiDropShadow
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
+import io.github.aiwao.mine2dengine.layout.UiPosition
 import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
@@ -239,6 +246,7 @@ val root = div(
         height = 100f,
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
+        position = UiPosition.RELATIVE,
         backgroundColor = 0xD0202020.toInt(),
         boxShadow = UiBoxShadow(
             color = 0x80000000.toInt(),
@@ -255,6 +263,14 @@ val root = div(
         verticalAlignment = UiVerticalAlignment.CENTER,
     ),
 ) {
+    p(
+        "v2",
+        UiStyle(
+            position = UiPosition.ABSOLUTE,
+            top = 6f,
+            right = 6f,
+        ),
+    )
     p(
         "Mine2DEngine",
         UiStyle(
@@ -346,8 +362,8 @@ layout refreshes drawing properties such as inherited text colors, shadows, back
 background materials.
 Drawing-only changes do not require relayout. Recalculate the
 layout when the resolved `style`, `descendantStyle`, or `childStyle` changes sizing, spacing,
-direction, alignment, or font. Assigning `element.style` replaces its dynamic style with that
-static value.
+direction, alignment, positioning, insets, or font. Assigning `element.style` replaces its dynamic
+style with that static value.
 
 Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div` and `p` / `paragraph`. Set an element's `disabled` property to `true` to prevent its `onClick` callback from running until it is enabled again. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `mouseClick`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. The `MouseButtonEvent` passed to `onDrag` uses the current mouse coordinates and retains the button and modifier information from the `mouseClick` event that started the drag. A drag continues outside the element's bounds until `mouseRelease` is called:
 
