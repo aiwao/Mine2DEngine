@@ -3,6 +3,8 @@ package io.github.aiwao.mine2dengine.layout
 import com.mojang.blaze3d.font.GlyphProvider
 import io.github.aiwao.mine2dengine.Mine2DEngine
 import io.github.aiwao.mine2dengine.Mine2DFont
+import io.github.aiwao.mine2dengine.Mine2DMaterial
+import io.github.aiwao.mine2dengine.Mine2DMaterials
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet
 import net.minecraft.client.gui.font.FontSet
 import net.minecraft.client.gui.font.GlyphStitcher
@@ -55,8 +57,12 @@ class LayoutEngineTest {
             UiStyle::class.java.getMethod("getFont").returnType,
         )
         assertEquals(
-            UiPaint::class.java,
-            UiStyle::class.java.getMethod("getBackground").returnType,
+            Int::class.javaObjectType,
+            UiStyle::class.java.getMethod("getBackgroundColor").returnType,
+        )
+        assertEquals(
+            Mine2DMaterial::class.java,
+            UiStyle::class.java.getMethod("getBackgroundMaterial").returnType,
         )
         assertEquals(
             UiBoxShadow::class.java,
@@ -77,7 +83,8 @@ class LayoutEngineTest {
         val layout = calculateLayout(Paragraph("default"), left = 0f, top = 0f, textMeasurer)
 
         assertEquals(null, UiStyle().color)
-        assertEquals(null, UiStyle().background)
+        assertEquals(null, UiStyle().backgroundColor)
+        assertEquals(null, UiStyle().backgroundMaterial)
         assertEquals(null, UiStyle().boxShadow)
         assertEquals(null, UiStyle().dropShadow)
         assertEquals(null, UiStyle().textShadow)
@@ -85,6 +92,79 @@ class LayoutEngineTest {
         assertFalse(UiStyle().noneDisplay())
         assertEquals(UiStyle.DEFAULT_COLOR, layout.root.color)
         assertNull(layout.root.textShadow)
+    }
+
+    @Test
+    fun `null background color and material do not draw a background`() {
+        val draws = backgroundDraws(UiStyle())
+
+        assertTrue(draws.isEmpty())
+    }
+
+    @Test
+    fun `background color uses the renderer material when no material is specified`() {
+        val rendererMaterial = Mine2DMaterials.COLOR
+        val draws = backgroundDraws(
+            UiStyle(backgroundColor = 0xFF123456.toInt()),
+            rendererMaterial,
+        )
+
+        assertEquals(1, draws.size)
+        assertEquals(0xFF123456.toInt(), draws.single().first)
+        assertSame(rendererMaterial, draws.single().second)
+    }
+
+    @Test
+    fun `background material without a color does not draw a background`() {
+        val draws = backgroundDraws(
+            UiStyle(backgroundMaterial = Mine2DMaterials.COLOR.with {}),
+        )
+
+        assertTrue(draws.isEmpty())
+    }
+
+    @Test
+    fun `background color and material draw with the specified material`() {
+        val backgroundMaterial = Mine2DMaterials.COLOR.with {}
+        val draws = backgroundDraws(
+            UiStyle(
+                backgroundColor = 0xFFABCDEF.toInt(),
+                backgroundMaterial = backgroundMaterial,
+            ),
+        )
+
+        assertEquals(1, draws.size)
+        assertEquals(0xFFABCDEF.toInt(), draws.single().first)
+        assertSame(backgroundMaterial, draws.single().second)
+    }
+
+    @Test
+    fun `overriding only background color preserves the existing material`() {
+        val backgroundMaterial = Mine2DMaterials.COLOR.with {}
+        val base = UiStyle(
+            backgroundColor = 0xFF000000.toInt(),
+            backgroundMaterial = backgroundMaterial,
+        )
+
+        val result = base.withOverrides(UiStyle(backgroundColor = 0xFFFFFFFF.toInt()))
+
+        assertEquals(0xFFFFFFFF.toInt(), result.backgroundColor)
+        assertSame(backgroundMaterial, result.backgroundMaterial)
+    }
+
+    @Test
+    fun `overriding only background material preserves the existing color`() {
+        val originalMaterial = Mine2DMaterials.COLOR
+        val replacementMaterial = originalMaterial.with {}
+        val base = UiStyle(
+            backgroundColor = 0xFF123456.toInt(),
+            backgroundMaterial = originalMaterial,
+        )
+
+        val result = base.withOverrides(UiStyle(backgroundMaterial = replacementMaterial))
+
+        assertEquals(0xFF123456.toInt(), result.backgroundColor)
+        assertSame(replacementMaterial, result.backgroundMaterial)
     }
 
     @Test
@@ -161,28 +241,55 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `dynamic styles can replace an element background paint without relayout`() {
+    fun `dynamic styles can replace background color and material without relayout`() {
+        val restingMaterial = Mine2DMaterials.COLOR
+        val hoveringMaterial = restingMaterial.with {}
         val root = div(
             style = { element ->
                 UiStyle(
                     width = 20f,
                     height = 20f,
-                    background = UiPaint(
-                        color = if (element.hovering) {
-                            0xFFFFFFFF.toInt()
-                        } else {
-                            0xFF000000.toInt()
-                        },
-                    ),
+                    backgroundColor = if (element.hovering) {
+                        0xFFFFFFFF.toInt()
+                    } else {
+                        0xFF000000.toInt()
+                    },
+                    backgroundMaterial = if (element.hovering) {
+                        hoveringMaterial
+                    } else {
+                        restingMaterial
+                    },
                 )
             },
         )
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
-        assertEquals(0xFF000000.toInt(), root.style.background?.color)
+        assertEquals(0xFF000000.toInt(), root.style.backgroundColor)
+        assertSame(restingMaterial, root.style.backgroundMaterial)
+        assertSame(root, layout.elementAt(10f, 10f))
         layout.mouseMove(10.0, 10.0)
-        assertEquals(0xFFFFFFFF.toInt(), root.style.background?.color)
+        assertEquals(0xFFFFFFFF.toInt(), root.style.backgroundColor)
+        assertSame(hoveringMaterial, root.style.backgroundMaterial)
         assertEquals(UiSize(20f, 20f), layout.size)
+        assertSame(root, layout.elementAt(10f, 10f))
+    }
+
+    @Test
+    fun `background properties do not affect layout size or pointer bounds`() {
+        val root = div(
+            UiStyle(
+                width = 20f,
+                height = 10f,
+                backgroundColor = 0xFFFFFFFF.toInt(),
+                backgroundMaterial = Mine2DMaterials.COLOR.with {},
+            ),
+        )
+        val layout = calculateLayout(root, left = 5f, top = 7f, textMeasurer)
+
+        assertEquals(UiSize(20f, 10f), layout.size)
+        assertEquals(UiRect(5f, 7f, 20f, 10f), layout.root.bounds)
+        assertSame(root, layout.elementAt(24f, 16f))
+        assertNull(layout.elementAt(25f, 17f))
     }
 
     @Test
@@ -1087,5 +1194,14 @@ class LayoutEngineTest {
         )
         constructor.isAccessible = true
         return constructor.newInstance(location, 11f, 1f, glyphProvider, fontSet)
+    }
+
+    private fun backgroundDraws(
+        style: UiStyle,
+        rendererMaterial: Mine2DMaterial = Mine2DMaterials.COLOR,
+    ): List<Pair<Int, Mine2DMaterial>> = buildList {
+        style.drawBackground(rendererMaterial) { color, material ->
+            add(color to material)
+        }
     }
 }

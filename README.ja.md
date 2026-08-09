@@ -191,6 +191,9 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   `UiBoxSizing.BORDER_BOX` を指定すると、指定寸法にpaddingが含まれます。寸法が `null` の場合は
   どちらでも文字列または子要素に合わせて縮みます。
 - パディングは描画される背景の内側、マージンは外側です。
+- 要素の背景を描画するかどうかは `backgroundColor` だけで決まります。nullではない場合は
+  `backgroundMaterial` を使い、背景Materialが未指定ならrendererの現在のMaterialを使います。
+  `backgroundMaterial` だけを指定しても何も描画されません。
 - `boxShadow` は要素の背後に柔らかい角丸box shadowを描画します。要素内だけの指定であり、
   レイアウト寸法やポインター判定領域には影響しません。
 - `dropShadow` はCSSの `filter: drop-shadow()` と同様に、要素の背景・文字・子孫を合成した
@@ -216,7 +219,6 @@ import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiDropShadow
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
-import io.github.aiwao.mine2dengine.layout.UiPaint
 import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
@@ -229,7 +231,7 @@ val root = div(
         height = 100f,
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
-        background = UiPaint(color = 0xD0202020.toInt()),
+        backgroundColor = 0xD0202020.toInt(),
         boxShadow = UiBoxShadow(
             color = 0x80000000.toInt(),
             offsetY = 3f,
@@ -312,13 +314,11 @@ val hoverable = div(
         UiStyle(
             width = 120f,
             height = 24f,
-            background = UiPaint(
-                color = if (element.hovering) {
-                    0xFFFFFFFF.toInt()
-                } else {
-                    0xFF000000.toInt()
-                },
-            ),
+            backgroundColor = if (element.hovering) {
+                0xFFFFFFFF.toInt()
+            } else {
+                0xFF000000.toInt()
+            },
         )
     },
 )
@@ -330,7 +330,7 @@ hoverableLayout.render(draw)
 ```
 
 動的スタイルは `div` と `p` / `paragraph` で利用できます。既存レイアウトを再描画すると
-継承される文字色やshadow、背景Paint、Materialなどの描画プロパティも更新されます。これらの
+継承される文字色やshadow、背景色、背景Materialなどの描画プロパティも更新されます。これらの
 描画プロパティだけを変える場合は再レイアウト不要です。解決後の `style` または `childStyle` に
 よってサイズ、余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。
 `element.style` に代入すると、動的スタイルはその静的な値で置き換えられます。
@@ -418,17 +418,21 @@ layout(std140) uniform Mine2DMaterial {
 };
 ```
 
-Layoutの要素別背景にはMaterialを含む `UiPaint` を指定します。背景Paintは子へ継承されません。Materialを省略したPaintは、描画時の `Mine2DEngine.material` を使用します。Paragraphの文字列はMinecraftのテキスト描画経路を使うため、背景Materialの対象外です。
+Layoutの要素別背景は、独立した `UiStyle.backgroundColor` と
+`UiStyle.backgroundMaterial` で指定します。背景色がnullではない場合は指定したMaterialで描画し、
+Materialがnullなら描画時の `Mine2DEngine.material` を使用します。背景色がnullなら、Materialだけを
+指定しても背景は描画されません。これらのプロパティは要素内だけの指定であり、子へ継承されません。
+`childStyle` の合成時にはそれぞれ独立して上書きされるため、指定済みの背景色を維持したまま要素側で
+Materialだけを変更できます。この合成ではnullは未指定を意味し、Materialを明示的に解除することは
+できません。Paragraphの文字列はMinecraftのテキスト描画経路を使うため、背景Materialの対象外です。
 
 ```kotlin
 val panel = div(
     UiStyle(
         width = 120f,
         height = 40f,
-        background = UiPaint(
-            color = 0xFFFFFFFF.toInt(),
-            material = roundedPanel,
-        ),
+        backgroundColor = 0xFFFFFFFF.toInt(),
+        backgroundMaterial = roundedPanel,
     ),
 )
 ```
