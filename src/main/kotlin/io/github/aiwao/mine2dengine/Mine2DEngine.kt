@@ -2,13 +2,16 @@ package io.github.aiwao.mine2dengine
 
 import io.github.aiwao.mine2dengine.internal.render.Mine2DTextShadowContext
 import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowContext
+import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import org.joml.Matrix3x2f
+import org.joml.Matrix3x2fc
 import org.joml.Vector2f
 import org.joml.Vector2fc
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.round
 import kotlin.math.sin
 import kotlin.require
 
@@ -310,6 +313,20 @@ class Mine2DEngine(
 
     internal fun uniformTimeSeconds(): Float = Mine2DClock.seconds()
 
+    /** Aligns only the transformed vertical text origin to the framebuffer pixel grid. */
+    internal fun pixelAlignedTextOriginY(x: Float, y: Float): Vector2f {
+        val guiHeight = graphics.guiHeight()
+        val framebufferHeight = Minecraft.getInstance().window.height
+        if (guiHeight <= 0 || framebufferHeight <= 0) return Vector2f(x, y)
+
+        return alignTextOriginYToPixelGrid(
+            x = x,
+            y = y,
+            pose = graphics.pose(),
+            pixelsPerGuiUnitY = framebufferHeight.toFloat() / guiHeight,
+        )
+    }
+
     internal fun uniformContext(
         elementBounds: Mine2DUniformRect,
         contentBounds: Mine2DUniformRect,
@@ -478,4 +495,24 @@ class Mine2DEngine(
             pose.popMatrix()
         }
     }
+}
+
+internal fun alignTextOriginYToPixelGrid(
+    x: Float,
+    y: Float,
+    pose: Matrix3x2fc,
+    pixelsPerGuiUnitY: Float,
+): Vector2f {
+    val original = Vector2f(x, y)
+    if (!pixelsPerGuiUnitY.isFinite() || pixelsPerGuiUnitY <= 0f) return original
+    val determinant = pose.determinant()
+    if (!determinant.isFinite() || determinant == 0f) return original
+
+    val transformed = pose.transformPosition(x, y, Vector2f())
+    if (!transformed.y.isFinite()) return original
+    val physicalY = transformed.y * pixelsPerGuiUnitY
+    if (!physicalY.isFinite()) return original
+    transformed.y = round(physicalY) / pixelsPerGuiUnitY
+
+    return pose.invert(Matrix3x2f()).transformPosition(transformed, Vector2f())
 }

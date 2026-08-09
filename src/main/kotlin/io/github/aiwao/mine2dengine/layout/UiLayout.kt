@@ -372,13 +372,14 @@ class UiLayout internal constructor(
                 lineHeight = textMeasurer.lineHeight,
                 rendererOffsetFromLineTop = font.rendererOffsetFromLineTop,
             )
+            val textOrigin = renderer.pixelAlignedTextOriginY(x, y)
             resolvedTextStyle.textShadow
                 ?.let { shadow ->
                     renderer.textShadow(
                         font = font,
                         text = line,
-                        x = x,
-                        y = y,
+                        x = textOrigin.x,
+                        y = textOrigin.y,
                         color = shadow.color,
                         offsetX = shadow.offsetX,
                         offsetY = shadow.offsetY,
@@ -388,8 +389,8 @@ class UiLayout internal constructor(
             renderer.text(
                 font,
                 line,
-                x,
-                y,
+                textOrigin.x,
+                textOrigin.y,
                 resolvedTextStyle.color,
             )
         }

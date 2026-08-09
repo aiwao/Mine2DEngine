@@ -52,4 +52,16 @@ class Mine2DFontMetricsTest {
             ),
         )
     }
+
+    @Test
+    fun `two-times oversampling can produce a quarter-unit renderer offset`() {
+        val metrics = calculateFontMetrics(
+            ascender26Dot6 = 1_216L,
+            descender26Dot6 = -256L,
+            lineHeight26Dot6 = 1_408L,
+            oversample = 2f,
+        )
+
+        assertEquals(2.25f, metrics.rendererOffsetFromLineTop)
+    }
 }
