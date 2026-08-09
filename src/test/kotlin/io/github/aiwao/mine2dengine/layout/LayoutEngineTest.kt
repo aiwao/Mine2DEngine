@@ -404,6 +404,60 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `child style receives and dynamically styles only direct children`() {
+        val childEvaluations = mutableListOf<UiElement>()
+        var directChildHeight = 10f
+        val descendantBackground = 0xFF112233.toInt()
+        val childBackground = 0xFF445566.toInt()
+        lateinit var directParagraph: Paragraph
+        lateinit var nestedDiv: Div
+        lateinit var nestedParagraph: Paragraph
+        val root = div(
+            style = UiStyle(width = 80f, height = 60f),
+            descendantStyle = {
+                UiStyle(
+                    width = 20f,
+                    height = 8f,
+                    backgroundColor = descendantBackground,
+                )
+            },
+            childStyle = { child ->
+                childEvaluations += child
+                UiStyle(
+                    width = 12f,
+                    height = directChildHeight,
+                    backgroundColor = childBackground,
+                )
+            },
+        ) {
+            directParagraph = p("direct", UiStyle(width = 1f))
+            nestedDiv = div {
+                nestedParagraph = p("nested")
+            }
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(listOf(directParagraph, nestedDiv), childEvaluations)
+        val directParagraphStyle = layout.nodeOf(directParagraph)!!.styleProvider()
+        assertEquals(1f, directParagraphStyle.width)
+        assertEquals(10f, directParagraphStyle.height)
+        assertEquals(childBackground, directParagraphStyle.backgroundColor)
+        val nestedDivStyle = layout.nodeOf(nestedDiv)!!.styleProvider()
+        assertEquals(12f, nestedDivStyle.width)
+        assertEquals(10f, nestedDivStyle.height)
+        assertEquals(childBackground, nestedDivStyle.backgroundColor)
+        val nestedParagraphStyle = layout.nodeOf(nestedParagraph)!!.styleProvider()
+        assertEquals(20f, nestedParagraphStyle.width)
+        assertEquals(8f, nestedParagraphStyle.height)
+        assertEquals(descendantBackground, nestedParagraphStyle.backgroundColor)
+
+        directChildHeight = 14f
+        assertEquals(14f, layout.nodeOf(nestedDiv)!!.styleProvider().height)
+        assertEquals(8f, layout.nodeOf(nestedParagraph)!!.styleProvider().height)
+    }
+
+    @Test
     fun `box shadow does not affect layout or pointer bounds`() {
         val root = div(
             UiStyle(

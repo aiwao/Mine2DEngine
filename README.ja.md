@@ -210,6 +210,9 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   解決します。子孫の型や現在の状態を参照できます。子孫自身のstyleにあるデフォルト以外の値が
   優先されます。ネストしたコンテナにnullではない `descendantStyle` がある場合、その配下では近い
   指定が優先されます。
+- `childStyle` はCSSの `.parent > *` と同様に、直接の子だけのstyleを解決します。両方が適用される
+  場合は `childStyle` が `descendantStyle` より優先され、子自身のデフォルト以外のstyleがさらに
+  優先されます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
 - `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
   親を継承します。ルートではcolorが不透明な白、文字shadowはなしが既定値です。継承したshadowを
@@ -340,8 +343,8 @@ hoverableLayout.render(draw)
 
 動的スタイルは `div` と `p` / `paragraph` で利用できます。既存レイアウトを再描画すると
 継承される文字色やshadow、背景色、背景Materialなどの描画プロパティも更新されます。これらの
-描画プロパティだけを変える場合は再レイアウト不要です。解決後の `style` または `descendantStyle` に
-よってサイズ、余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。
+描画プロパティだけを変える場合は再レイアウト不要です。解決後の `style`、`descendantStyle`、
+`childStyle` によってサイズ、余白、方向、配置、フォントが変わる場合は、レイアウトを再計算してください。
 `element.style` に代入すると、動的スタイルはその静的な値で置き換えられます。
 
 `div` と `p` / `paragraph` を含むすべての要素で `onClick`、`onMouseMove`、`onDrag`、`onMouseOver`、`onMouseOut` を利用できます。要素の `disabled` プロパティを `true` にすると、再び有効にするまで `onClick` コールバックは呼び出されません。読み取り専用の `hovering` プロパティで、カーソルが要素内にあるかを確認できます。返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやポインター入力の通知ができます。Minecraft の `MouseButtonEvent` を `mouseClick` に渡すと、イベントの座標で最前面のクリック可能な要素を特定してドラッグ状態を開始し、そのイベントを要素の `onClick` に渡します。`mouseMove` にマウス座標を渡すと、`hovering` の更新、境界をまたいだ際のコールバック、座標上で最前面の `onMouseMove`、ドラッグ中の要素の `onDrag` が呼び出されます。`onDrag` が受け取る `MouseButtonEvent` の座標は現在のマウス座標で、ボタンと修飾キーの情報はドラッグを開始した `mouseClick` のイベントから引き継がれます。ドラッグは要素の領域外でも継続し、`mouseRelease` を呼ぶと終了します。
@@ -431,9 +434,10 @@ Layoutの要素別背景は、独立した `UiStyle.backgroundColor` と
 `UiStyle.backgroundMaterial` で指定します。背景色がnullではない場合は指定したMaterialで描画し、
 Materialがnullなら描画時の `Mine2DEngine.material` を使用します。背景色がnullなら、Materialだけを
 指定しても背景は描画されません。これらのプロパティは要素内だけの指定であり、子へ継承されません。
-`descendantStyle` の合成時にはそれぞれ独立して上書きされるため、指定済みの背景色を維持したまま要素側で
-Materialだけを変更できます。この合成ではnullは未指定を意味し、Materialを明示的に解除することは
-できません。Paragraphの文字列はMinecraftのテキスト描画経路を使うため、背景Materialの対象外です。
+`descendantStyle` または `childStyle` の合成時にはそれぞれ独立して上書きされるため、指定済みの
+背景色を維持したまま要素側でMaterialだけを変更できます。この合成ではnullは未指定を意味し、
+Materialを明示的に解除することはできません。Paragraphの文字列はMinecraftのテキスト描画経路を
+使うため、背景Materialの対象外です。
 
 ```kotlin
 val panel = div(

@@ -56,6 +56,7 @@ sealed class UiContainer(
     override var onMouseOver: (() -> Unit)? = null,
     override var onMouseOut: (() -> Unit)? = null,
     descendantStyle: ((UiElement) -> UiStyle)? = null,
+    childStyle: ((UiElement) -> UiStyle)? = null,
 ) : UiElement(tag, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
     val children: MutableList<UiElement> = children.toMutableList()
 
@@ -67,6 +68,15 @@ sealed class UiContainer(
      * non-null descendant style also takes precedence for its own descendants.
      */
     var descendantStyle: ((UiElement) -> UiStyle)? = descendantStyle
+
+    /**
+     * Resolves a style for every direct child, like the CSS selector `.parent > *`.
+     *
+     * The provider receives the child being styled and is evaluated whenever its style is used.
+     * It takes precedence over [descendantStyle], while the child's own non-default style values
+     * take precedence over both.
+     */
+    var childStyle: ((UiElement) -> UiStyle)? = childStyle
 
     fun <T : UiElement> add(element: T): T {
         children += element
@@ -82,6 +92,7 @@ sealed class UiContainer(
         onMouseOut: (() -> Unit)? = null,
         descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
+        childStyle: ((UiElement) -> UiStyle)? = null,
         content: Div.() -> Unit = {},
     ): Div = add(
         Div(
@@ -92,6 +103,7 @@ sealed class UiContainer(
             onMouseOver = onMouseOver,
             onMouseOut = onMouseOut,
             descendantStyle = descendantStyle,
+            childStyle = childStyle,
             tag = tag,
         ).apply(content),
     )
@@ -106,6 +118,7 @@ sealed class UiContainer(
         onMouseOut: (() -> Unit)? = null,
         descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
+        childStyle: ((UiElement) -> UiStyle)? = null,
         content: Div.() -> Unit = {},
     ): Div = add(
         Div(
@@ -115,6 +128,7 @@ sealed class UiContainer(
             onMouseOver = onMouseOver,
             onMouseOut = onMouseOut,
             descendantStyle = descendantStyle,
+            childStyle = childStyle,
             tag = tag,
         ).withStyleProvider(style).apply(content),
     )
@@ -189,6 +203,7 @@ class Div(
     onMouseOut: (() -> Unit)? = null,
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
+    childStyle: ((UiElement) -> UiStyle)? = null,
 ) : UiContainer(
     tag,
     style,
@@ -199,6 +214,7 @@ class Div(
     onMouseOver,
     onMouseOut,
     descendantStyle,
+    childStyle,
 )
 
 /** A text element corresponding to an HTML p. Newlines create multiple lines. */
@@ -223,6 +239,7 @@ fun div(
     onMouseOut: (() -> Unit)? = null,
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
+    childStyle: ((UiElement) -> UiStyle)? = null,
     content: Div.() -> Unit = {},
 ): Div = Div(
     style = style,
@@ -232,6 +249,7 @@ fun div(
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
     descendantStyle = descendantStyle,
+    childStyle = childStyle,
     tag = tag,
 ).apply(content)
 
@@ -245,6 +263,7 @@ fun div(
     onMouseOut: (() -> Unit)? = null,
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
+    childStyle: ((UiElement) -> UiStyle)? = null,
     content: Div.() -> Unit = {},
 ): Div = Div(
     onClick = onClick,
@@ -253,6 +272,7 @@ fun div(
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
     descendantStyle = descendantStyle,
+    childStyle = childStyle,
     tag = tag,
 ).withStyleProvider(style).apply(content)
 
