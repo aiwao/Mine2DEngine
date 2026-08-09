@@ -160,23 +160,29 @@ Draw and measure text with the loaded font:
 
 ```kotlin
 uiFont?.let { font ->
-    draw.text(font, "Mine2DEngine", 16, 16, 0xFFFFFFFF.toInt())
+    draw.text(font, "Mine2DEngine", 16f, 16f, 0xFFFFFFFF.toInt())
 
     draw.textShadow(
         font,
         "Custom shadow",
-        16,
-        36,
+        16f,
+        36f,
         color = 0xA0000000.toInt(),
         offsetY = 2f,
         blurRadius = 2f,
     )
-    draw.text(font, "Custom shadow", 16, 36, 0xFFFFFFFF.toInt())
+    draw.text(font, "Custom shadow", 16f, 36f, 0xFFFFFFFF.toInt())
 
     val width = font.width("Mine2DEngine")
     val lineHeight = font.lineHeight
 }
 ```
+
+Text coordinates, horizontal advances, and line heights use floating-point GUI units.
+Layout line boxes use the TrueType font's ascender, descender, and baseline interval, including
+when text is vertically centered.
+Paragraph layout remains floating-point; its final vertical glyph origin is aligned to the
+framebuffer pixel grid so linear filtering does not blur a subpixel baseline.
 
 `Mine2DFont.load`, `width`, and `close` must run on the render thread. Do not load a font once per frame. If you recreate a font during a resource reload, close the previous instance first.
 

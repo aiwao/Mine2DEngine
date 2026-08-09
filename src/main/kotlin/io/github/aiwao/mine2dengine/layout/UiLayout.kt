@@ -7,7 +7,6 @@ import io.github.aiwao.mine2dengine.Mine2DUniformRect
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.MouseButtonInfo
 import java.util.IdentityHashMap
-import kotlin.math.roundToInt
 
 internal data class UiNoneDisplayState(
     val element: UiElement,
@@ -367,14 +366,20 @@ class UiLayout internal constructor(
                 itemWidth = lineWidth,
                 alignment = style.horizontalAlignment,
             ) + contentBounds.left
-            val y = textTop + index * textMeasurer.lineHeight
+            val y = textRendererY(
+                lineBoxTop = textTop,
+                lineIndex = index,
+                lineHeight = textMeasurer.lineHeight,
+                rendererOffsetFromLineTop = font.rendererOffsetFromLineTop,
+            )
+            val textOrigin = renderer.pixelAlignedTextOriginY(x, y)
             resolvedTextStyle.textShadow
                 ?.let { shadow ->
                     renderer.textShadow(
                         font = font,
                         text = line,
-                        x = x.roundToInt(),
-                        y = y.roundToInt(),
+                        x = textOrigin.x,
+                        y = textOrigin.y,
                         color = shadow.color,
                         offsetX = shadow.offsetX,
                         offsetY = shadow.offsetY,
@@ -384,8 +389,8 @@ class UiLayout internal constructor(
             renderer.text(
                 font,
                 line,
-                x.roundToInt(),
-                y.roundToInt(),
+                textOrigin.x,
+                textOrigin.y,
                 resolvedTextStyle.color,
             )
         }
@@ -396,6 +401,13 @@ class UiLayout internal constructor(
             "${node.element.javaClass.simpleName} requires a font in its style or an ancestor style"
         }
 }
+
+internal fun textRendererY(
+    lineBoxTop: Float,
+    lineIndex: Int,
+    lineHeight: Float,
+    rendererOffsetFromLineTop: Float,
+): Float = lineBoxTop + rendererOffsetFromLineTop + lineIndex * lineHeight
 
 internal fun UiStyle.drawBackground(
     rendererMaterial: Mine2DMaterial,

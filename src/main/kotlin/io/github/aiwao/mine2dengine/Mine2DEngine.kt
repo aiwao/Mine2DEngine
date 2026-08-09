@@ -2,13 +2,16 @@ package io.github.aiwao.mine2dengine
 
 import io.github.aiwao.mine2dengine.internal.render.Mine2DTextShadowContext
 import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowContext
+import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import org.joml.Matrix3x2f
+import org.joml.Matrix3x2fc
 import org.joml.Vector2f
 import org.joml.Vector2fc
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.round
 import kotlin.math.sin
 import kotlin.require
 
@@ -247,8 +250,8 @@ class Mine2DEngine(
     fun textShadow(
         font: Mine2DFont,
         text: String,
-        x: Int,
-        y: Int,
+        x: Float,
+        y: Float,
         color: Int = 0x80000000.toInt(),
         offsetX: Float = 0f,
         offsetY: Float = 0f,
@@ -289,8 +292,8 @@ class Mine2DEngine(
     fun text(
         font: Mine2DFont,
         text: String,
-        x: Int,
-        y: Int,
+        x: Float,
+        y: Float,
         color: Int,
     ) {
         font.checkOpen()
@@ -309,6 +312,20 @@ class Mine2DEngine(
     }
 
     internal fun uniformTimeSeconds(): Float = Mine2DClock.seconds()
+
+    /** Aligns only the transformed vertical text origin to the framebuffer pixel grid. */
+    internal fun pixelAlignedTextOriginY(x: Float, y: Float): Vector2f {
+        val guiHeight = graphics.guiHeight()
+        val framebufferHeight = Minecraft.getInstance().window.height
+        if (guiHeight <= 0 || framebufferHeight <= 0) return Vector2f(x, y)
+
+        return alignTextOriginYToPixelGrid(
+            x = x,
+            y = y,
+            pose = graphics.pose(),
+            pixelsPerGuiUnitY = framebufferHeight.toFloat() / guiHeight,
+        )
+    }
 
     internal fun uniformContext(
         elementBounds: Mine2DUniformRect,
@@ -449,24 +466,53 @@ class Mine2DEngine(
     private fun enqueueText(
         font: Mine2DFont,
         text: String,
-        x: Int,
-        y: Int,
+        x: Float,
+        y: Float,
         color: Int,
         offsetX: Float,
         offsetY: Float,
     ) {
-        if (offsetX == 0f && offsetY == 0f) {
-            graphics.text(font.renderer, text, x, y, color, false)
+        require(x.isFinite() && y.isFinite()) { "Text coordinates must be finite" }
+        val translatedX = x + offsetX
+        val translatedY = y + offsetY
+        require(translatedX.isFinite() && translatedY.isFinite()) {
+            "Translated text coordinates must be finite"
+        }
+
+        val integerX = translatedX.toInt()
+        val integerY = translatedY.toInt()
+        if (translatedX == integerX.toFloat() && translatedY == integerY.toFloat()) {
+            graphics.text(font.renderer, text, integerX, integerY, color, false)
             return
         }
 
         val pose = graphics.pose()
         pose.pushMatrix()
         try {
-            pose.translate(offsetX, offsetY)
-            graphics.text(font.renderer, text, x, y, color, false)
+            pose.translate(translatedX, translatedY)
+            graphics.text(font.renderer, text, 0, 0, color, false)
         } finally {
             pose.popMatrix()
         }
     }
+}
+
+internal fun alignTextOriginYToPixelGrid(
+    x: Float,
+    y: Float,
+    pose: Matrix3x2fc,
+    pixelsPerGuiUnitY: Float,
+): Vector2f {
+    val original = Vector2f(x, y)
+    if (!pixelsPerGuiUnitY.isFinite() || pixelsPerGuiUnitY <= 0f) return original
+    val determinant = pose.determinant()
+    if (!determinant.isFinite() || determinant == 0f) return original
+
+    val transformed = pose.transformPosition(x, y, Vector2f())
+    if (!transformed.y.isFinite()) return original
+    val physicalY = transformed.y * pixelsPerGuiUnitY
+    if (!physicalY.isFinite()) return original
+    transformed.y = round(physicalY) / pixelsPerGuiUnitY
+
+    return pose.invert(Matrix3x2f()).transformPosition(transformed, Vector2f())
 }
