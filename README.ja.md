@@ -293,13 +293,16 @@ layout.render(draw)
 ```
 
 たとえば、次の指定では、ネストした `Div` 内も含めて段落の子孫だけにdrop shadowを適用します。
+各要素では読み取り専用のHTML互換 `tag` を参照でき、子孫の選択に利用できます。デフォルト値は
+`div` が `"div"`、`p` / `paragraph` が `"p"` で、コンストラクタ引数 `tag` から指定できます。
 
 ```kotlin
 val labels = div(
+    tag = "section",
     style = UiStyle(font = font),
     childStyle = { child ->
         UiStyle(
-            dropShadow = if (child is Paragraph) UiDropShadow() else null,
+            dropShadow = if (child.tag == "p") UiDropShadow() else null,
         )
     },
 ) {

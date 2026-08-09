@@ -292,14 +292,17 @@ layout.render(draw)
 ```
 
 For example, this applies a drop shadow only to paragraph descendants, including the one inside
-the nested `Div`:
+the nested `Div`. Every element exposes its read-only HTML-compatible `tag`, which can be used when
+selecting descendants. It defaults to `"div"` for `div` and `"p"` for `p` / `paragraph`, and can
+be specified with the `tag` constructor argument:
 
 ```kotlin
 val labels = div(
+    tag = "section",
     style = UiStyle(font = font),
     childStyle = { child ->
         UiStyle(
-            dropShadow = if (child is Paragraph) UiDropShadow() else null,
+            dropShadow = if (child.tag == "p") UiDropShadow() else null,
         )
     },
 ) {

@@ -31,6 +31,44 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `elements expose their tag`() {
+        lateinit var childDiv: Div
+        lateinit var dynamicDiv: Div
+        lateinit var shortParagraph: Paragraph
+        lateinit var longParagraph: Paragraph
+        lateinit var dynamicParagraph: Paragraph
+        val root = div(tag = "main") {
+            childDiv = div(tag = "section")
+            dynamicDiv = div(style = { UiStyle() }, tag = "article")
+            shortParagraph = p("p", tag = "label")
+            longParagraph = paragraph("paragraph", tag = "strong")
+            dynamicParagraph = p("dynamic", style = { UiStyle() }, tag = "span")
+        }
+
+        assertEquals("main", root.tag)
+        assertEquals("section", childDiv.tag)
+        assertEquals("article", dynamicDiv.tag)
+        assertEquals("label", shortParagraph.tag)
+        assertEquals("strong", longParagraph.tag)
+        assertEquals("span", dynamicParagraph.tag)
+        assertEquals("aside", Div(tag = "aside").tag)
+        assertEquals("small", Paragraph("text", tag = "small").tag)
+    }
+
+    @Test
+    fun `elements use their default tag`() {
+        val root = div {
+            assertEquals("div", div().tag)
+            assertEquals("p", p("p").tag)
+            assertEquals("p", paragraph("paragraph").tag)
+        }
+
+        assertEquals("div", root.tag)
+        assertEquals("div", Div().tag)
+        assertEquals("p", Paragraph("text").tag)
+    }
+
+    @Test
     fun `layout engine calculates and layouts render themselves`() {
         val layoutMethod = LayoutEngine::class.java.getMethod(
             "layout",
