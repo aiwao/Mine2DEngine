@@ -55,6 +55,7 @@ sealed class UiContainer(
     override var onDrag: ((MouseButtonEvent) -> Unit)? = null,
     override var onMouseOver: (() -> Unit)? = null,
     override var onMouseOut: (() -> Unit)? = null,
+    descendantStyle: ((UiElement) -> UiStyle)? = null,
     childStyle: ((UiElement) -> UiStyle)? = null,
 ) : UiElement(tag, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
     val children: MutableList<UiElement> = children.toMutableList()
@@ -64,7 +65,16 @@ sealed class UiContainer(
      *
      * The provider receives the descendant being styled and is evaluated whenever its style is
      * used. A descendant's own non-default style values take precedence. A descendant container's
-     * non-null child style also takes precedence for its own descendants.
+     * non-null descendant style also takes precedence for its own descendants.
+     */
+    var descendantStyle: ((UiElement) -> UiStyle)? = descendantStyle
+
+    /**
+     * Resolves a style for every direct child, like the CSS selector `.parent > *`.
+     *
+     * The provider receives the child being styled and is evaluated whenever its style is used.
+     * It takes precedence over [descendantStyle], while the child's own non-default style values
+     * take precedence over both.
      */
     var childStyle: ((UiElement) -> UiStyle)? = childStyle
 
@@ -80,8 +90,9 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
-        childStyle: ((UiElement) -> UiStyle)? = null,
+        descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
+        childStyle: ((UiElement) -> UiStyle)? = null,
         content: Div.() -> Unit = {},
     ): Div = add(
         Div(
@@ -91,6 +102,7 @@ sealed class UiContainer(
             onDrag = onDrag,
             onMouseOver = onMouseOver,
             onMouseOut = onMouseOut,
+            descendantStyle = descendantStyle,
             childStyle = childStyle,
             tag = tag,
         ).apply(content),
@@ -104,8 +116,9 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
-        childStyle: ((UiElement) -> UiStyle)? = null,
+        descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
+        childStyle: ((UiElement) -> UiStyle)? = null,
         content: Div.() -> Unit = {},
     ): Div = add(
         Div(
@@ -114,6 +127,7 @@ sealed class UiContainer(
             onDrag = onDrag,
             onMouseOver = onMouseOver,
             onMouseOut = onMouseOut,
+            descendantStyle = descendantStyle,
             childStyle = childStyle,
             tag = tag,
         ).withStyleProvider(style).apply(content),
@@ -187,8 +201,9 @@ class Div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    childStyle: ((UiElement) -> UiStyle)? = null,
+    descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
+    childStyle: ((UiElement) -> UiStyle)? = null,
 ) : UiContainer(
     tag,
     style,
@@ -198,6 +213,7 @@ class Div(
     onDrag,
     onMouseOver,
     onMouseOut,
+    descendantStyle,
     childStyle,
 )
 
@@ -221,8 +237,9 @@ fun div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    childStyle: ((UiElement) -> UiStyle)? = null,
+    descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
+    childStyle: ((UiElement) -> UiStyle)? = null,
     content: Div.() -> Unit = {},
 ): Div = Div(
     style = style,
@@ -231,6 +248,7 @@ fun div(
     onDrag = onDrag,
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
+    descendantStyle = descendantStyle,
     childStyle = childStyle,
     tag = tag,
 ).apply(content)
@@ -243,8 +261,9 @@ fun div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    childStyle: ((UiElement) -> UiStyle)? = null,
+    descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
+    childStyle: ((UiElement) -> UiStyle)? = null,
     content: Div.() -> Unit = {},
 ): Div = Div(
     onClick = onClick,
@@ -252,6 +271,7 @@ fun div(
     onDrag = onDrag,
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
+    descendantStyle = descendantStyle,
     childStyle = childStyle,
     tag = tag,
 ).withStyleProvider(style).apply(content)

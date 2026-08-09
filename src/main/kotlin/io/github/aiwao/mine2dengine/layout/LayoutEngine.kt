@@ -66,7 +66,8 @@ private fun calculateLayout(
         val measured = measure(
             element = root,
             inheritedTextStyle = ResolvedUiTextStyle(),
-            inheritedChildStyle = { _ -> null },
+            inheritedDescendantStyle = { _ -> null },
+            parentChildStyle = { null },
             textMeasurer = textMeasurer,
             noneDisplayStates = noneDisplayStates,
             evaluatedNoneDisplays = evaluatedNoneDisplays,
@@ -112,13 +113,17 @@ private data class MeasuredNode(
 private fun measure(
     element: UiElement,
     inheritedTextStyle: ResolvedUiTextStyle,
-    inheritedChildStyle: (UiElement) -> UiStyle?,
+    inheritedDescendantStyle: (UiElement) -> UiStyle?,
+    parentChildStyle: () -> UiStyle?,
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
     noneDisplayStates: MutableList<UiNoneDisplayState>,
     evaluatedNoneDisplays: Map<UiElement, Boolean>,
 ): MeasuredNode {
     val styleProvider = {
-        inheritedChildStyle(element)?.withOverrides(element.style) ?: element.style
+        combineStyles(
+            inheritedDescendantStyle(element),
+            parentChildStyle(),
+        )?.withOverrides(element.style) ?: element.style
     }
     val style = styleProvider()
     val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
@@ -143,20 +148,18 @@ private fun measure(
 
     val children = if (element is UiContainer) {
         val descendantStyle = { descendant: UiElement ->
-            val inheritedStyle = inheritedChildStyle(descendant)
-            val childStyle = element.childStyle?.invoke(descendant)
-            when {
-                inheritedStyle == null -> childStyle
-                childStyle == null -> inheritedStyle
-                else -> inheritedStyle.withOverrides(childStyle)
-            }
+            combineStyles(
+                inheritedDescendantStyle(descendant),
+                element.descendantStyle?.invoke(descendant),
+            )
         }
         element.children
             .map { child ->
                 measure(
                     element = child,
                     inheritedTextStyle = resolvedTextStyle,
-                    inheritedChildStyle = descendantStyle,
+                    inheritedDescendantStyle = descendantStyle,
+                    parentChildStyle = { element.childStyle?.invoke(child) },
                     textMeasurer = textMeasurer,
                     noneDisplayStates = noneDisplayStates,
                     evaluatedNoneDisplays = evaluatedNoneDisplays,
@@ -199,6 +202,12 @@ private fun measure(
         textStyle = resolvedTextStyle,
         displayed = true,
     )
+}
+
+private fun combineStyles(base: UiStyle?, overrides: UiStyle?): UiStyle? = when {
+    base == null -> overrides
+    overrides == null -> base
+    else -> base.withOverrides(overrides)
 }
 
 private fun contentLength(
