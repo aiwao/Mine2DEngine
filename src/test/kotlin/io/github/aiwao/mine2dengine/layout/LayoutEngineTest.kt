@@ -3,6 +3,7 @@ package io.github.aiwao.mine2dengine.layout
 import com.mojang.blaze3d.font.GlyphProvider
 import io.github.aiwao.mine2dengine.Mine2DEngine
 import io.github.aiwao.mine2dengine.Mine2DFont
+import io.github.aiwao.mine2dengine.Mine2DFontMetrics
 import io.github.aiwao.mine2dengine.Mine2DMaterial
 import io.github.aiwao.mine2dengine.Mine2DMaterials
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet
@@ -1189,11 +1190,19 @@ class LayoutEngineTest {
             Identifier::class.java,
             Float::class.javaPrimitiveType,
             Float::class.javaPrimitiveType,
+            Mine2DFontMetrics::class.java,
             GlyphProvider::class.java,
             FontSet::class.java,
         )
         constructor.isAccessible = true
-        return constructor.newInstance(location, 11f, 1f, glyphProvider, fontSet)
+        return constructor.newInstance(
+            location,
+            11f,
+            1f,
+            Mine2DFontMetrics(ascender = 8f, descender = -2f, lineHeight = 10f),
+            glyphProvider,
+            fontSet,
+        )
     }
 
     private fun backgroundDraws(

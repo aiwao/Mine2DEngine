@@ -366,7 +366,12 @@ class UiLayout internal constructor(
                 itemWidth = lineWidth,
                 alignment = style.horizontalAlignment,
             ) + contentBounds.left
-            val y = textTop + index * textMeasurer.lineHeight
+            val y = textRendererY(
+                lineBoxTop = textTop,
+                lineIndex = index,
+                lineHeight = textMeasurer.lineHeight,
+                rendererOffsetFromLineTop = font.rendererOffsetFromLineTop,
+            )
             resolvedTextStyle.textShadow
                 ?.let { shadow ->
                     renderer.textShadow(
@@ -395,6 +400,13 @@ class UiLayout internal constructor(
             "${node.element.javaClass.simpleName} requires a font in its style or an ancestor style"
         }
 }
+
+internal fun textRendererY(
+    lineBoxTop: Float,
+    lineIndex: Int,
+    lineHeight: Float,
+    rendererOffsetFromLineTop: Float,
+): Float = lineBoxTop + rendererOffsetFromLineTop + lineIndex * lineHeight
 
 internal fun UiStyle.drawBackground(
     rendererMaterial: Mine2DMaterial,

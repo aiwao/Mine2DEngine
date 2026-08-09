@@ -179,6 +179,8 @@ uiFont?.let { font ->
 ```
 
 Text coordinates, horizontal advances, and line heights use floating-point GUI units.
+Layout line boxes use the TrueType font's ascender, descender, and baseline interval, including
+when text is vertically centered.
 
 `Mine2DFont.load`, `width`, and `close` must run on the render thread. Do not load a font once per frame. If you recreate a font during a resource reload, close the previous instance first.
 
