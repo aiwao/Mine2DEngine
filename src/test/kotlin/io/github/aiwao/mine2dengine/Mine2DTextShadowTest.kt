@@ -14,8 +14,10 @@ class Mine2DTextShadowTest {
         assertEquals(0.4f, geometry.minV)
         assertEquals(0.35f, geometry.maxU)
         assertEquals(0.6f, geometry.maxV)
-        assertEquals(0.025f, geometry.uPerGuiUnit, absoluteTolerance = 0.00001f)
-        assertEquals(0.025f, geometry.vPerGuiUnit, absoluteTolerance = 0.00001f)
+        assertEquals(0.025f, geometry.uPerGuiX, absoluteTolerance = 0.00001f)
+        assertEquals(0f, geometry.vPerGuiX, absoluteTolerance = 0.00001f)
+        assertEquals(0f, geometry.uPerGuiY, absoluteTolerance = 0.00001f)
+        assertEquals(0.025f, geometry.vPerGuiY, absoluteTolerance = 0.00001f)
         val expected = listOf(
             vertex(0f, 13f, 0.2f, 0.65f),
             vertex(0f, 1f, 0.2f, 0.35f),
@@ -29,6 +31,28 @@ class Mine2DTextShadowTest {
             assertEquals(expectedVertex.v, actualVertex.v, absoluteTolerance = 0.00001f)
             assertEquals(expectedVertex.color, actualVertex.color)
             assertEquals(expectedVertex.light, actualVertex.light)
+        }
+    }
+
+    @Test
+    fun `rotated effect UVs expand without collapsing their position bounds`() {
+        val geometry = calculateTextShadowGlyphGeometry(effectQuad(), blurRadius = 2f)!!
+
+        assertEquals(0f, geometry.uPerGuiX, absoluteTolerance = 0.00001f)
+        assertEquals(1f / 30f, geometry.vPerGuiX, absoluteTolerance = 0.00001f)
+        assertEquals(-0.1f, geometry.uPerGuiY, absoluteTolerance = 0.00001f)
+        assertEquals(0f, geometry.vPerGuiY, absoluteTolerance = 0.00001f)
+        val expected = listOf(
+            vertex(0f, 6f, 0.05f, 1f / 3f),
+            vertex(10f, 6f, 0.05f, 2f / 3f),
+            vertex(10f, 1f, 0.55f, 2f / 3f),
+            vertex(0f, 1f, 0.55f, 1f / 3f),
+        )
+        expected.zip(geometry.vertices).forEach { (expectedVertex, actualVertex) ->
+            assertEquals(expectedVertex.x, actualVertex.x)
+            assertEquals(expectedVertex.y, actualVertex.y)
+            assertEquals(expectedVertex.u, actualVertex.u, absoluteTolerance = 0.00001f)
+            assertEquals(expectedVertex.v, actualVertex.v, absoluteTolerance = 0.00001f)
         }
     }
 
@@ -58,6 +82,14 @@ class Mine2DTextShadowTest {
         vertex(2f, 3f, 0.25f, 0.4f),
         vertex(6f, 3f, 0.35f, 0.4f),
         vertex(6f, 11f, 0.35f, 0.6f),
+    )
+
+    /** Matches Minecraft 26.2's BakedSheetGlyph.buildEffect vertex and UV ordering. */
+    private fun effectQuad(): List<Mine2DTextShadowVertex> = listOf(
+        vertex(2f, 4f, 0.25f, 0.4f),
+        vertex(8f, 4f, 0.25f, 0.6f),
+        vertex(8f, 3f, 0.35f, 0.6f),
+        vertex(2f, 3f, 0.35f, 0.4f),
     )
 
     private fun vertex(

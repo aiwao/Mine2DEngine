@@ -229,8 +229,10 @@ class Mine2DMaterialTest {
             minV = 0.2f,
             maxU = 0.3f,
             maxV = 0.4f,
-            uPerGuiUnit = 0.01f,
-            vPerGuiUnit = 0.02f,
+            uPerGuiX = 0.01f,
+            vPerGuiX = 0.02f,
+            uPerGuiY = 0.03f,
+            vPerGuiY = 0.04f,
             blurRadius = 6f,
             grayscale = true,
         )
@@ -238,9 +240,9 @@ class Mine2DMaterialTest {
         val buffer = ByteBuffer.wrap(data).order(ByteOrder.nativeOrder())
 
         assertFloatSequence(buffer, 0, 0.1f, 0.2f, 0.3f, 0.4f)
-        assertFloatSequence(buffer, 16, 0.01f, 0.02f)
-        assertEquals(6f, buffer.getFloat(24))
-        assertEquals(1, buffer.getInt(28))
+        assertFloatSequence(buffer, 16, 0.01f, 0.02f, 0.03f, 0.04f)
+        assertEquals(6f, buffer.getFloat(32))
+        assertEquals(1, buffer.getInt(36))
     }
 
     private fun shader(

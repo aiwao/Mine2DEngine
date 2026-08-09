@@ -245,7 +245,7 @@ object Mine2DShaders {
     )
 
     internal val TEXT_SHADOW_UV_BOUNDS = Mine2DUniform.vec4("UvBounds")
-    internal val TEXT_SHADOW_UV_PER_GUI_UNIT = Mine2DUniform.vec2("UvPerGuiUnit")
+    internal val TEXT_SHADOW_UV_PER_GUI_UNIT = Mine2DUniform.vec4("UvPerGuiUnit")
     internal val TEXT_SHADOW_GRAYSCALE = Mine2DUniform.int("Grayscale")
     private val TEXT_SHADOW_UNIFORM_BLOCK = Mine2DUniformBlock(
         "Mine2DTextShadow",
