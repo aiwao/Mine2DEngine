@@ -229,9 +229,9 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 - A `StyleSheet` passed to `LayoutEngine.layout` applies rules to matching element tags or class
   names. Targets in one rule are a selector list (OR). Class rules take precedence over tag rules,
   later rules win at equal specificity, and an element's own specified style values win last.
-- `TargetCombinator(left, combinator, right)` joins selectors with the CSS combinators `" "`
-  (descendant), `">"` (direct child), `"+"` (immediately following sibling), and `"~"` (following
-  siblings). Combinators can be nested into a chain; `combine`, `descendant`, `child`,
+- `TargetCombinator(left, combinator, right)` joins selectors with `StyleSheetCombinator`:
+  `DESCENDANT` (`" "`), `CHILD` (`">"`), `ADJACENT_SIBLING` (`"+"`), and `GENERAL_SIBLING`
+  (`"~"`). Combinators can be nested into a chain; `combine`, `descendant`, `child`,
   `adjacentSibling`, and `generalSibling` are builder alternatives.
 - `className` is an HTML-compatible, whitespace-separated class attribute. Its parsed names are
   also available through the read-only `classes` set.
@@ -245,6 +245,7 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
 import io.github.aiwao.mine2dengine.layout.Paragraph
 import io.github.aiwao.mine2dengine.layout.StyleSheet
+import io.github.aiwao.mine2dengine.layout.StyleSheetCombinator
 import io.github.aiwao.mine2dengine.layout.StyleSheetObject
 import io.github.aiwao.mine2dengine.layout.TargetClass
 import io.github.aiwao.mine2dengine.layout.TargetCombinator
@@ -373,7 +374,7 @@ object ExampleStyleSheet : StyleSheet {
             target = arrayOf(
                 TargetCombinator(
                     left = TargetClass("screen"),
-                    combinator = ">",
+                    combinator = StyleSheetCombinator.CHILD,
                     right = TargetTag("p"),
                 ),
             ),

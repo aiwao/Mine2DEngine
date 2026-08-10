@@ -13,51 +13,48 @@ data class TargetTag(
     val tag: String,
 ) : StyleSheetTarget
 
+/** A supported CSS relationship between the left and right sides of a selector. */
+enum class StyleSheetCombinator(
+    val symbol: String,
+) {
+    DESCENDANT(" "),
+    CHILD(">"),
+    ADJACENT_SIBLING("+"),
+    GENERAL_SIBLING("~"),
+}
+
 /**
  * Selects [right] elements related to a matching [left] element by [combinator].
  *
- * Supported combinators have their CSS meanings: `" "` selects descendants, `">"` direct
- * children, `"+"` immediately following siblings, and `"~"` any following sibling. Combinators
- * can be nested to represent a selector chain.
+ * Combinators can be nested to represent a selector chain.
  */
 data class TargetCombinator(
     val left: StyleSheetTarget,
-    val combinator: String,
+    val combinator: StyleSheetCombinator,
     val right: StyleSheetTarget,
-) : StyleSheetTarget {
-    init {
-        require(combinator in SUPPORTED_COMBINATORS) {
-            "Unsupported style-sheet combinator: '$combinator'"
-        }
-    }
-
-    companion object {
-        /** All combinator strings accepted by [TargetCombinator]. */
-        val SUPPORTED_COMBINATORS: Set<String> = setOf(" ", ">", "+", "~")
-    }
-}
+) : StyleSheetTarget
 
 /** Combines this selector with [target] using a CSS [combinator]. */
 fun StyleSheetTarget.combine(
-    combinator: String,
+    combinator: StyleSheetCombinator,
     target: StyleSheetTarget,
 ): TargetCombinator = TargetCombinator(this, combinator, target)
 
 /** Selects matching descendants of this selector. */
 infix fun StyleSheetTarget.descendant(target: StyleSheetTarget): TargetCombinator =
-    combine(" ", target)
+    combine(StyleSheetCombinator.DESCENDANT, target)
 
 /** Selects matching direct children of this selector. */
 infix fun StyleSheetTarget.child(target: StyleSheetTarget): TargetCombinator =
-    combine(">", target)
+    combine(StyleSheetCombinator.CHILD, target)
 
 /** Selects a matching sibling immediately following this selector. */
 infix fun StyleSheetTarget.adjacentSibling(target: StyleSheetTarget): TargetCombinator =
-    combine("+", target)
+    combine(StyleSheetCombinator.ADJACENT_SIBLING, target)
 
 /** Selects matching siblings following this selector. */
 infix fun StyleSheetTarget.generalSibling(target: StyleSheetTarget): TargetCombinator =
-    combine("~", target)
+    combine(StyleSheetCombinator.GENERAL_SIBLING, target)
 
 /** One CSS-like rule. Any selector in [target] can make [style] apply. */
 data class StyleSheetObject(
@@ -134,9 +131,13 @@ private fun StyleSheetTarget.matches(context: StyleSheetElementContext): Boolean
 private fun TargetCombinator.relatedContexts(
     context: StyleSheetElementContext,
 ): Sequence<StyleSheetElementContext> = when (combinator) {
-    " " -> generateSequence(context.parent, StyleSheetElementContext::parent)
-    ">" -> listOfNotNull(context.parent).asSequence()
-    "+" -> listOfNotNull(context.previousSibling).asSequence()
-    "~" -> generateSequence(context.previousSibling, StyleSheetElementContext::previousSibling)
-    else -> error("Unsupported style-sheet combinator: '$combinator'")
+    StyleSheetCombinator.DESCENDANT ->
+        generateSequence(context.parent, StyleSheetElementContext::parent)
+
+    StyleSheetCombinator.CHILD -> listOfNotNull(context.parent).asSequence()
+    StyleSheetCombinator.ADJACENT_SIBLING ->
+        listOfNotNull(context.previousSibling).asSequence()
+
+    StyleSheetCombinator.GENERAL_SIBLING ->
+        generateSequence(context.previousSibling, StyleSheetElementContext::previousSibling)
 }

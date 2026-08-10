@@ -134,22 +134,33 @@ class LayoutEngineTest {
 
     @Test
     fun `style sheet target accepts the four CSS combinators`() {
-        assertEquals(setOf(" ", ">", "+", "~"), TargetCombinator.SUPPORTED_COMBINATORS)
+        assertEquals(
+            listOf(" ", ">", "+", "~"),
+            StyleSheetCombinator.entries.map(StyleSheetCombinator::symbol),
+        )
 
         val parent = TargetClass("parent")
         val rightTarget = TargetTag("p")
-        assertEquals(TargetCombinator(parent, " ", rightTarget), parent descendant rightTarget)
-        assertEquals(TargetCombinator(parent, ">", rightTarget), parent child rightTarget)
         assertEquals(
-            TargetCombinator(parent, "+", rightTarget),
+            TargetCombinator(parent, StyleSheetCombinator.DESCENDANT, rightTarget),
+            parent descendant rightTarget,
+        )
+        assertEquals(
+            TargetCombinator(parent, StyleSheetCombinator.CHILD, rightTarget),
+            parent child rightTarget,
+        )
+        assertEquals(
+            TargetCombinator(parent, StyleSheetCombinator.ADJACENT_SIBLING, rightTarget),
             parent adjacentSibling rightTarget,
         )
-        assertEquals(TargetCombinator(parent, "~", rightTarget), parent generalSibling rightTarget)
-        assertEquals(TargetCombinator(parent, ">", rightTarget), parent.combine(">", rightTarget))
-
-        assertFailsWith<IllegalArgumentException> {
-            TargetCombinator(parent, "||", rightTarget)
-        }
+        assertEquals(
+            TargetCombinator(parent, StyleSheetCombinator.GENERAL_SIBLING, rightTarget),
+            parent generalSibling rightTarget,
+        )
+        assertEquals(
+            TargetCombinator(parent, StyleSheetCombinator.CHILD, rightTarget),
+            parent.combine(StyleSheetCombinator.CHILD, rightTarget),
+        )
     }
 
     @Test
