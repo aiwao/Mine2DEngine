@@ -226,6 +226,11 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 - `childStyle` works like CSS `.parent > *` and resolves styles only for direct children. When both
   selectors apply, `childStyle` takes precedence over `descendantStyle`, followed by the child's own
   specified style values.
+- A `StyleSheet` passed to `LayoutEngine.layout` applies rules to matching element tags or class
+  names. Targets in one rule are a selector list (OR). Class rules take precedence over tag rules,
+  later rules win at equal specificity, and an element's own specified style values win last.
+- `className` is an HTML-compatible, whitespace-separated class attribute. Its parsed names are
+  also available through the read-only `classes` set.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
 - `color`, `font`, and `textShadow` are inherited from ancestors and may be overridden by a child.
   A null value inherits the parent. At the root, color defaults to opaque white and text shadow
@@ -235,6 +240,10 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
 import io.github.aiwao.mine2dengine.layout.Paragraph
+import io.github.aiwao.mine2dengine.layout.StyleSheet
+import io.github.aiwao.mine2dengine.layout.StyleSheetObject
+import io.github.aiwao.mine2dengine.layout.TargetClass
+import io.github.aiwao.mine2dengine.layout.TargetTag
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
@@ -341,6 +350,32 @@ val labels = div(
         p("Second")
     }
 }
+```
+
+CSS-like rules can be shared independently of the element tree. Wrap `newStyle` calls in an
+initializer; each call appends one rule to `styles`:
+
+```kotlin
+object ExampleStyleSheet : StyleSheet {
+    override val styles = mutableListOf<StyleSheetObject>()
+
+    init {
+        newStyle(
+            target = arrayOf(TargetClass("example-class"), TargetTag("div")),
+            style = UiStyle(color = 0xFFFF0000.toInt()),
+        )
+    }
+}
+
+val styledRoot = div(
+    tag = "div",
+    className = "screen",
+    style = UiStyle(font = font),
+) {
+    p("Red Text")
+}
+
+val styledLayout = LayoutEngine.layout(styledRoot, ExampleStyleSheet)
 ```
 
 `style` can also be a function that receives the concrete element. It is resolved from the

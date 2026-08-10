@@ -222,6 +222,11 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - `childStyle` はCSSの `.parent > *` と同様に、直接の子だけのstyleを解決します。両方が適用される
   場合は `childStyle` が `descendantStyle` より優先され、子自身のデフォルト以外のstyleがさらに
   優先されます。
+- `LayoutEngine.layout` に `StyleSheet` を渡すと、要素のtagまたはclassに一致するルールが適用
+  されます。1ルール内のtargetはセレクターリスト（OR条件）です。classルールはtagルールより
+  優先され、詳細度が同じなら後のルール、最後に要素自身の指定済みstyleが優先されます。
+- `className` はHTML互換の空白区切りclass属性です。分割後のclassは読み取り専用の `classes`
+  Setからも参照できます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
 - `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
   親を継承します。ルートではcolorが不透明な白、文字shadowはなしが既定値です。継承したshadowを
@@ -231,6 +236,10 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
 import io.github.aiwao.mine2dengine.layout.Paragraph
+import io.github.aiwao.mine2dengine.layout.StyleSheet
+import io.github.aiwao.mine2dengine.layout.StyleSheetObject
+import io.github.aiwao.mine2dengine.layout.TargetClass
+import io.github.aiwao.mine2dengine.layout.TargetTag
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
@@ -336,6 +345,32 @@ val labels = div(
         p("Second")
     }
 }
+```
+
+CSS風のルールは要素ツリーと分離して共有できます。`newStyle` は `styles` にルールを追加するため、
+初期化ブロック内で呼び出します。
+
+```kotlin
+object ExampleStyleSheet : StyleSheet {
+    override val styles = mutableListOf<StyleSheetObject>()
+
+    init {
+        newStyle(
+            target = arrayOf(TargetClass("example-class"), TargetTag("div")),
+            style = UiStyle(color = 0xFFFF0000.toInt()),
+        )
+    }
+}
+
+val styledRoot = div(
+    tag = "div",
+    className = "screen",
+    style = UiStyle(font = font),
+) {
+    p("Red Text")
+}
+
+val styledLayout = LayoutEngine.layout(styledRoot, ExampleStyleSheet)
 ```
 
 `style` には具体的な要素を受け取る関数も指定できます。レイアウトまたは描画で使われるたびに
