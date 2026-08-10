@@ -133,6 +133,52 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `style sheet wildcard matches every element with zero specificity`() {
+        val wildcardColor = 0xFF112233.toInt()
+        val paragraphColor = 0xFF445566.toInt()
+        val sheet = styleSheet(
+            arrayOf(TargetTag("p")) to UiStyle(backgroundColor = paragraphColor),
+            arrayOf(TargetWildcard) to UiStyle(
+                backgroundColor = wildcardColor,
+                padding = UiEdges(1f),
+            ),
+            arrayOf(TargetClass("scope") child TargetWildcard) to UiStyle(width = 8f.px),
+        )
+        lateinit var directParagraph: Paragraph
+        lateinit var directDiv: Div
+        lateinit var nestedParagraph: Paragraph
+        val root = div(className = "scope") {
+            directParagraph = p("direct")
+            directDiv = div {
+                nestedParagraph = p("nested")
+            }
+        }
+
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        val rootStyle = layout.root.styleProvider()
+        val directParagraphStyle = layout.nodeOf(directParagraph)!!.styleProvider()
+        val directDivStyle = layout.nodeOf(directDiv)!!.styleProvider()
+        val nestedParagraphStyle = layout.nodeOf(nestedParagraph)!!.styleProvider()
+        assertEquals(wildcardColor, rootStyle.backgroundColor)
+        assertEquals(UiEdges(1f), rootStyle.padding)
+        assertNull(rootStyle.width)
+        assertEquals(paragraphColor, directParagraphStyle.backgroundColor)
+        assertEquals(UiEdges(1f), directParagraphStyle.padding)
+        assertEquals(8f.px, directParagraphStyle.width)
+        assertEquals(wildcardColor, directDivStyle.backgroundColor)
+        assertEquals(8f.px, directDivStyle.width)
+        assertEquals(paragraphColor, nestedParagraphStyle.backgroundColor)
+        assertNull(nestedParagraphStyle.width)
+    }
+
+    @Test
     fun `style sheet target accepts the four CSS combinators`() {
         assertEquals(
             listOf(" ", ">", "+", "~"),

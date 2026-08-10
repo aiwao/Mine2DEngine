@@ -229,6 +229,8 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 - A `StyleSheet` passed to `LayoutEngine.layout` applies rules to matching element tags or class
   names. Targets in one rule are a selector list (OR). Class rules take precedence over tag rules,
   later rules win at equal specificity, and an element's own specified style values win last.
+- `TargetWildcard` is the CSS universal selector `*`. It matches every element and adds no
+  specificity, including when used in a chain such as `.parent > *`.
 - `TargetCombinator(left, combinator, right)` joins selectors with `StyleSheetCombinator`:
   `DESCENDANT` (`" "`), `CHILD` (`">"`), `ADJACENT_SIBLING` (`"+"`), and `GENERAL_SIBLING`
   (`"~"`). Combinators can be nested into a chain; `combine`, `descendant`, `child`,
@@ -250,6 +252,7 @@ import io.github.aiwao.mine2dengine.layout.StyleSheetObject
 import io.github.aiwao.mine2dengine.layout.TargetClass
 import io.github.aiwao.mine2dengine.layout.TargetCombinator
 import io.github.aiwao.mine2dengine.layout.TargetTag
+import io.github.aiwao.mine2dengine.layout.TargetWildcard
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
@@ -375,7 +378,7 @@ object ExampleStyleSheet : StyleSheet {
                 TargetCombinator(
                     left = TargetClass("screen"),
                     combinator = StyleSheetCombinator.CHILD,
-                    right = TargetTag("p"),
+                    right = TargetWildcard,
                 ),
             ),
             style = UiStyle(backgroundColor = 0xFF202020.toInt()),

@@ -13,6 +13,9 @@ data class TargetTag(
     val tag: String,
 ) : StyleSheetTarget
 
+/** Selects every element, like the CSS universal selector `*`. */
+data object TargetWildcard : StyleSheetTarget
+
 /** A supported CSS relationship between the left and right sides of a selector. */
 enum class StyleSheetCombinator(
     val symbol: String,
@@ -119,12 +122,14 @@ private val StyleSheetTarget.specificity: StyleSheetSpecificity
     get() = when (this) {
         is TargetClass -> StyleSheetSpecificity(classCount = 1)
         is TargetTag -> StyleSheetSpecificity(tagCount = 1)
+        TargetWildcard -> StyleSheetSpecificity()
         is TargetCombinator -> left.specificity + right.specificity
     }
 
 private fun StyleSheetTarget.matches(context: StyleSheetElementContext): Boolean = when (this) {
     is TargetClass -> className in context.element.classes
     is TargetTag -> context.element.tag == tag
+    TargetWildcard -> true
     is TargetCombinator -> right.matches(context) && relatedContexts(context).any(left::matches)
 }
 

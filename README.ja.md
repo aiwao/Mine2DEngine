@@ -225,6 +225,8 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - `LayoutEngine.layout` に `StyleSheet` を渡すと、要素のtagまたはclassに一致するルールが適用
   されます。1ルール内のtargetはセレクターリスト（OR条件）です。classルールはtagルールより
   優先され、詳細度が同じなら後のルール、最後に要素自身の指定済みstyleが優先されます。
+- `TargetWildcard` はCSSのユニバーサルセレクター `*` です。すべての要素に一致し、詳細度には
+  加算されません。`.parent > *` のように結合子内でも利用できます。
 - `TargetCombinator(left, combinator, right)` では `StyleSheetCombinator` の `DESCENDANT`
   (`" "`)、`CHILD` (`">"`)、`ADJACENT_SIBLING` (`"+"`)、`GENERAL_SIBLING` (`"~"`) を利用
   できます。結合子はネストしてチェーン化でき、
@@ -246,6 +248,7 @@ import io.github.aiwao.mine2dengine.layout.StyleSheetObject
 import io.github.aiwao.mine2dengine.layout.TargetClass
 import io.github.aiwao.mine2dengine.layout.TargetCombinator
 import io.github.aiwao.mine2dengine.layout.TargetTag
+import io.github.aiwao.mine2dengine.layout.TargetWildcard
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
@@ -370,7 +373,7 @@ object ExampleStyleSheet : StyleSheet {
                 TargetCombinator(
                     left = TargetClass("screen"),
                     combinator = StyleSheetCombinator.CHILD,
-                    right = TargetTag("p"),
+                    right = TargetWildcard,
                 ),
             ),
             style = UiStyle(backgroundColor = 0xFF202020.toInt()),
