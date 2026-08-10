@@ -196,6 +196,9 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   ボックスのどちらを指定するかを決めます。既定値は `UiBoxSizing.CONTENT_BOX` です。
   `UiBoxSizing.BORDER_BOX` を指定すると、指定寸法にpaddingが含まれます。寸法が `null` の場合は
   どちらでも文字列または子要素に合わせて縮みます。
+- `width` と `height` は `Float.px`（例: `120f.px`）または `Float.percent`
+  （例: `50f.percent`）で指定します。パーセント値は、通常は親要素の対応するcontent寸法となる、
+  解決済みの包含ブロック寸法を基準にします。
 - パディングは描画される背景の内側、マージンは外側です。
 - `position` は `UiPosition.STATIC`、`RELATIVE`、`ABSOLUTE` に対応します。nullを指定した
   `left`、`top`、`right`、`bottom` はCSSの `auto` として扱われます。relative要素は通常位置から
@@ -239,12 +242,14 @@ import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
+import io.github.aiwao.mine2dengine.layout.percent
+import io.github.aiwao.mine2dengine.layout.px
 
 val root = div(
     UiStyle(
         font = font,
-        width = 180f,
-        height = 100f,
+        width = 180f.px,
+        height = 100f.px,
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
         position = UiPosition.RELATIVE,
@@ -294,6 +299,7 @@ val root = div(
 
     div(
         UiStyle(
+            width = 100f.percent,
             direction = UiDirection.HORIZONTAL,
             margin = UiEdges(top = 6f, right = 0f, bottom = 0f, left = 0f),
         ),
@@ -340,8 +346,8 @@ val labels = div(
 val hoverable = div(
     style = { element ->
         UiStyle(
-            width = 120f,
-            height = 24f,
+            width = 120f.px,
+            height = 24f.px,
             backgroundColor = if (element.hovering) {
                 0xFFFFFFFF.toInt()
             } else {
@@ -459,8 +465,8 @@ Materialを明示的に解除することはできません。Paragraphの文字
 ```kotlin
 val panel = div(
     UiStyle(
-        width = 120f,
-        height = 40f,
+        width = 120f.px,
+        height = 40f.px,
         backgroundColor = 0xFFFFFFFF.toInt(),
         backgroundMaterial = roundedPanel,
     ),

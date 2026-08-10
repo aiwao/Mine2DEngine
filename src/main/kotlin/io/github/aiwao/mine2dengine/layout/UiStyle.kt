@@ -38,12 +38,51 @@ enum class UiPosition {
     ABSOLUTE,
 }
 
+/** Unit used by CSS-like [UiStyle.width] and [UiStyle.height] values. */
+enum class UiLengthUnit {
+    PX,
+    PERCENT,
+}
+
+/** A non-negative, finite CSS-like length used by [UiStyle.width] and [UiStyle.height]. */
+data class UiLength(
+    val value: Float,
+    val unit: UiLengthUnit,
+) {
+    init {
+        require(value.isFinite() && value >= 0f) {
+            "Length must be finite and non-negative: $value"
+        }
+    }
+}
+
+/** Treats this value as a pixel length. */
+val Float.px: UiLength
+    get() = UiLength(this, UiLengthUnit.PX)
+
+/** Treats this value as a percentage of the corresponding containing-block dimension. */
+val Float.percent: UiLength
+    get() = UiLength(this, UiLengthUnit.PERCENT)
+
+internal fun UiLength.resolve(percentageBase: Float?): Float? {
+    val resolved = when (unit) {
+        UiLengthUnit.PX -> value
+        UiLengthUnit.PERCENT -> percentageBase?.let { it * (value / 100f) }
+    }
+    require(resolved == null || resolved.isFinite()) {
+        "Resolved length must be finite: $resolved"
+    }
+    return resolved
+}
+
 /**
  * Visual and layout properties shared by every UI element.
  *
- * [boxSizing] determines whether a non-null [width] or [height] describes the content box or the
- * complete padded box. Padding is painted inside the background, while margin remains outside it,
- * following the CSS box model.
+ * [width] and [height] accept pixel and percentage [UiLength] values through [Float.px] and
+ * [Float.percent]. Percentages use the corresponding resolved containing-block dimension, which is
+ * normally the matching content dimension of the parent. [boxSizing] determines whether a non-null
+ * [width] or [height] describes the content box or the complete padded box. Padding is painted
+ * inside the background, while margin remains outside it, following the CSS box model.
  * [position] follows CSS static, relative, and absolute positioning. [left], [top], [right], and
  * [bottom] are nullable so that null represents CSS `auto`. Relative elements keep their normal
  * flow space, while absolute elements do not contribute to their container's size or gap. The
@@ -76,8 +115,8 @@ data class UiStyle(
     val direction: UiDirection = UiDirection.VERTICAL,
     val horizontalAlignment: UiHorizontalAlignment = UiHorizontalAlignment.LEFT,
     val verticalAlignment: UiVerticalAlignment = UiVerticalAlignment.TOP,
-    val width: Float? = null,
-    val height: Float? = null,
+    val width: UiLength? = null,
+    val height: UiLength? = null,
     val position: UiPosition = UiPosition.STATIC,
     val left: Float? = null,
     val top: Float? = null,
@@ -96,12 +135,6 @@ data class UiStyle(
     }
 
     init {
-        require(width == null || width.isFinite() && width >= 0f) {
-            "Width must be null or finite and non-negative: $width"
-        }
-        require(height == null || height.isFinite() && height >= 0f) {
-            "Height must be null or finite and non-negative: $height"
-        }
         require(left == null || left.isFinite()) {
             "Left must be null or finite: $left"
         }
