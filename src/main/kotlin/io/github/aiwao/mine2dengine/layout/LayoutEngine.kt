@@ -66,7 +66,9 @@ private fun calculateLayout(
         val measured = measure(
             element = root,
             parentContentWidth = null,
+            parentContentHeight = null,
             absoluteContainingWidth = null,
+            absoluteContainingHeight = null,
             inheritedTextStyle = ResolvedUiTextStyle(),
             inheritedDescendantStyle = { _ -> null },
             parentChildStyle = { null },
@@ -115,7 +117,9 @@ private data class MeasuredNode(
 private fun measure(
     element: UiElement,
     parentContentWidth: Float?,
+    parentContentHeight: Float?,
     absoluteContainingWidth: Float?,
+    absoluteContainingHeight: Float?,
     inheritedTextStyle: ResolvedUiTextStyle,
     inheritedDescendantStyle: (UiElement) -> UiStyle?,
     parentChildStyle: () -> UiStyle?,
@@ -130,11 +134,16 @@ private fun measure(
         )?.withOverrides(element.style) ?: element.style
     }
     val style = styleProvider()
-    val percentageBase = when (style.position) {
+    val percentageWidthBase = when (style.position) {
         UiPosition.STATIC, UiPosition.RELATIVE -> parentContentWidth
         UiPosition.ABSOLUTE -> absoluteContainingWidth
     }
-    val resolvedWidth = style.width?.resolve(percentageBase)
+    val percentageHeightBase = when (style.position) {
+        UiPosition.STATIC, UiPosition.RELATIVE -> parentContentHeight
+        UiPosition.ABSOLUTE -> absoluteContainingHeight
+    }
+    val resolvedWidth = style.width?.resolve(percentageWidthBase)
+    val resolvedHeight = style.height?.resolve(percentageHeightBase)
     val definiteContentWidth = resolvedWidth?.let {
         contentLength(
             specifiedLength = it,
@@ -153,11 +162,35 @@ private fun measure(
     } else {
         null
     }
+    val definiteContentHeight = resolvedHeight?.let {
+        contentLength(
+            specifiedLength = it,
+            naturalLength = 0f,
+            padding = style.padding.vertical,
+            boxSizing = style.boxSizing,
+        )
+    } ?: if (
+        style.position == UiPosition.ABSOLUTE &&
+        absoluteContainingHeight != null &&
+        style.top != null &&
+        style.bottom != null
+    ) {
+        (absoluteContainingHeight - style.top - style.bottom - style.margin.vertical -
+            style.padding.vertical).coerceAtLeast(0f)
+    } else {
+        null
+    }
     val boundsWidth = definiteContentWidth?.let { it + style.padding.horizontal }
+    val boundsHeight = definiteContentHeight?.let { it + style.padding.vertical }
     val descendantAbsoluteContainingWidth = when {
         absoluteContainingWidth == null -> boundsWidth
         style.position != UiPosition.STATIC -> boundsWidth
         else -> absoluteContainingWidth
+    }
+    val descendantAbsoluteContainingHeight = when {
+        absoluteContainingHeight == null -> boundsHeight
+        style.position != UiPosition.STATIC -> boundsHeight
+        else -> absoluteContainingHeight
     }
     val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
     val noneDisplay = evaluatedNoneDisplays[element] ?: style.noneDisplay()
@@ -191,7 +224,9 @@ private fun measure(
                 measure(
                     element = child,
                     parentContentWidth = definiteContentWidth,
+                    parentContentHeight = definiteContentHeight,
                     absoluteContainingWidth = descendantAbsoluteContainingWidth,
+                    absoluteContainingHeight = descendantAbsoluteContainingHeight,
                     inheritedTextStyle = resolvedTextStyle,
                     inheritedDescendantStyle = descendantStyle,
                     parentChildStyle = { element.childStyle?.invoke(child) },
@@ -227,7 +262,7 @@ private fun measure(
                 boxSizing = style.boxSizing,
             ),
             height = contentLength(
-                specifiedLength = style.height,
+                specifiedLength = resolvedHeight,
                 naturalLength = naturalSize.height,
                 padding = style.padding.vertical,
                 boxSizing = style.boxSizing,

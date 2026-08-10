@@ -123,6 +123,10 @@ class LayoutEngineTest {
             UiLength::class.java,
             UiStyle::class.java.getMethod("getWidth").returnType,
         )
+        assertEquals(
+            UiLength::class.java,
+            UiStyle::class.java.getMethod("getHeight").returnType,
+        )
     }
 
     @Test
@@ -254,13 +258,13 @@ class LayoutEngineTest {
                 UiStyle(
                     color = if (element.hovering) 0xFFFFFFFF.toInt() else 0xFF000000.toInt(),
                     width = 80f.px,
-                    height = 80f,
+                    height = 80f.px,
                 )
             },
         ) {
             innerDiv = div(style = { element ->
                 evaluated("div")
-                UiStyle(width = element.children.size.toFloat().px, height = 1f)
+                UiStyle(width = element.children.size.toFloat().px, height = 1f.px)
             })
             shortParagraph = p("p", style = { element ->
                 evaluated("p")
@@ -300,7 +304,7 @@ class LayoutEngineTest {
             style = { element ->
                 UiStyle(
                     width = 20f.px,
-                    height = 20f,
+                    height = 20f.px,
                     backgroundColor = if (element.hovering) {
                         0xFFFFFFFF.toInt()
                     } else {
@@ -331,7 +335,7 @@ class LayoutEngineTest {
         val root = div(
             UiStyle(
                 width = 20f.px,
-                height = 10f,
+                height = 10f.px,
                 backgroundColor = 0xFFFFFFFF.toInt(),
                 backgroundMaterial = Mine2DMaterials.COLOR.with {},
             ),
@@ -355,7 +359,7 @@ class LayoutEngineTest {
             UiStyle(
                 color = 0xFF112233.toInt(),
                 width = 20f.px,
-                height = 10f,
+                height = 10f.px,
                 dropShadow = paragraphShadow.takeIf { shadowsEnabled && child is Paragraph },
             )
         }
@@ -372,7 +376,7 @@ class LayoutEngineTest {
         lateinit var styledDiv: Div
         lateinit var styledParagraph: Paragraph
         val root = div(
-            style = UiStyle(width = 80f.px, height = 60f),
+            style = UiStyle(width = 80f.px, height = 60f.px),
             descendantStyle = descendantStyle,
         ) {
             directParagraph = p("direct", UiStyle(width = 1f.px))
@@ -426,11 +430,11 @@ class LayoutEngineTest {
         lateinit var nestedDiv: Div
         lateinit var nestedParagraph: Paragraph
         val root = div(
-            style = UiStyle(width = 80f.px, height = 60f),
+            style = UiStyle(width = 80f.px, height = 60f.px),
             descendantStyle = {
                 UiStyle(
                     width = 20f.px,
-                    height = 8f,
+                    height = 8f.px,
                     backgroundColor = descendantBackground,
                 )
             },
@@ -438,7 +442,7 @@ class LayoutEngineTest {
                 childEvaluations += child
                 UiStyle(
                     width = 12f.px,
-                    height = directChildHeight,
+                    height = directChildHeight.px,
                     backgroundColor = childBackground,
                 )
             },
@@ -454,20 +458,20 @@ class LayoutEngineTest {
         assertEquals(listOf(directParagraph, nestedDiv), childEvaluations)
         val directParagraphStyle = layout.nodeOf(directParagraph)!!.styleProvider()
         assertEquals(1f.px, directParagraphStyle.width)
-        assertEquals(10f, directParagraphStyle.height)
+        assertEquals(10f.px, directParagraphStyle.height)
         assertEquals(childBackground, directParagraphStyle.backgroundColor)
         val nestedDivStyle = layout.nodeOf(nestedDiv)!!.styleProvider()
         assertEquals(12f.px, nestedDivStyle.width)
-        assertEquals(10f, nestedDivStyle.height)
+        assertEquals(10f.px, nestedDivStyle.height)
         assertEquals(childBackground, nestedDivStyle.backgroundColor)
         val nestedParagraphStyle = layout.nodeOf(nestedParagraph)!!.styleProvider()
         assertEquals(20f.px, nestedParagraphStyle.width)
-        assertEquals(8f, nestedParagraphStyle.height)
+        assertEquals(8f.px, nestedParagraphStyle.height)
         assertEquals(descendantBackground, nestedParagraphStyle.backgroundColor)
 
         directChildHeight = 14f
-        assertEquals(14f, layout.nodeOf(nestedDiv)!!.styleProvider().height)
-        assertEquals(8f, layout.nodeOf(nestedParagraph)!!.styleProvider().height)
+        assertEquals(14f.px, layout.nodeOf(nestedDiv)!!.styleProvider().height)
+        assertEquals(8f.px, layout.nodeOf(nestedParagraph)!!.styleProvider().height)
     }
 
     @Test
@@ -475,7 +479,7 @@ class LayoutEngineTest {
         val root = div(
             UiStyle(
                 width = 20f.px,
-                height = 10f,
+                height = 10f.px,
                 boxShadow = UiBoxShadow(
                     offsetX = 12f,
                     offsetY = 8f,
@@ -507,7 +511,7 @@ class LayoutEngineTest {
         val root = div(
             UiStyle(
                 width = 20f.px,
-                height = 10f,
+                height = 10f.px,
                 dropShadow = UiDropShadow(
                     offsetX = 12f,
                     offsetY = 8f,
@@ -646,14 +650,14 @@ class LayoutEngineTest {
         val contentBox = div(
             UiStyle(
                 width = 100f.px,
-                height = 50f,
+                height = 50f.px,
                 padding = padding,
             ),
         )
         val borderBox = div(
             UiStyle(
                 width = 100f.px,
-                height = 50f,
+                height = 50f.px,
                 padding = padding,
                 boxSizing = UiBoxSizing.BORDER_BOX,
             ),
@@ -669,7 +673,7 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `width accepts pixel and percent lengths`() {
+    fun `dimensions accept pixel and percent lengths`() {
         assertEquals(UiLengthUnit.PX, 12f.px.unit)
         assertEquals(12f, 12f.px.value)
         assertEquals(UiLengthUnit.PERCENT, 37.5f.percent.unit)
@@ -680,24 +684,29 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `percent width uses each parents content width`() {
+    fun `percent dimensions use each parent's content size`() {
         lateinit var child: Div
         lateinit var grandchild: Paragraph
         val root = div(
             UiStyle(
                 width = 200f.px,
-                padding = UiEdges(vertical = 0f, horizontal = 10f),
+                height = 160f.px,
+                padding = UiEdges(vertical = 20f, horizontal = 10f),
                 boxSizing = UiBoxSizing.BORDER_BOX,
             ),
         ) {
             child = div(
                 UiStyle(
                     width = 50f.percent,
-                    padding = UiEdges(vertical = 0f, horizontal = 5f),
+                    height = 50f.percent,
+                    padding = UiEdges(vertical = 10f, horizontal = 5f),
                     boxSizing = UiBoxSizing.BORDER_BOX,
                 ),
             ) {
-                grandchild = p("x", UiStyle(width = 50f.percent))
+                grandchild = p(
+                    "x",
+                    UiStyle(width = 50f.percent, height = 50f.percent),
+                )
             }
         }
 
@@ -706,9 +715,13 @@ class LayoutEngineTest {
         val grandchildNode = layout.nodeOf(grandchild)!!
 
         assertEquals(180f, layout.root.contentBounds.width)
+        assertEquals(120f, layout.root.contentBounds.height)
         assertEquals(90f, childNode.bounds.width)
+        assertEquals(60f, childNode.bounds.height)
         assertEquals(80f, childNode.contentBounds.width)
+        assertEquals(40f, childNode.contentBounds.height)
         assertEquals(40f, grandchildNode.bounds.width)
+        assertEquals(20f, grandchildNode.bounds.height)
     }
 
     @Test
@@ -732,7 +745,7 @@ class LayoutEngineTest {
         val root = div(
             UiStyle(
                 width = 10f.px,
-                height = 5f,
+                height = 5f.px,
                 padding = UiEdges(top = 4f, right = 7f, bottom = 3f, left = 8f),
                 boxSizing = UiBoxSizing.BORDER_BOX,
             ),
@@ -843,7 +856,7 @@ class LayoutEngineTest {
             val root = div(
                 UiStyle(
                     width = 20f.px,
-                    height = 10f,
+                    height = 10f.px,
                     position = position,
                     left = 100f,
                     top = 200f,
@@ -893,12 +906,12 @@ class LayoutEngineTest {
     @Test
     fun `absolute right and bottom insets anchor the outer box`() {
         lateinit var paragraph: Paragraph
-        val root = div(UiStyle(width = 100f.px, height = 50f)) {
+        val root = div(UiStyle(width = 100f.px, height = 50f.px)) {
             paragraph = p(
                 "a",
                 UiStyle(
                     width = 20f.px,
-                    height = 10f,
+                    height = 10f.px,
                     position = UiPosition.ABSOLUTE,
                     right = 8f,
                     bottom = 6f,
@@ -918,16 +931,16 @@ class LayoutEngineTest {
         val root = div(
             UiStyle(
                 width = 100f.px,
-                height = 100f,
+                height = 100f.px,
                 position = UiPosition.RELATIVE,
             ),
         ) {
-            div(UiStyle(width = 10f.px, height = 20f))
-            staticContainer = div(UiStyle(width = 40f.px, height = 40f)) {
+            div(UiStyle(width = 10f.px, height = 20f.px))
+            staticContainer = div(UiStyle(width = 40f.px, height = 40f.px)) {
                 absolute = div(
                     UiStyle(
                         width = 10f.px,
-                        height = 10f,
+                        height = 10f.px,
                         position = UiPosition.ABSOLUTE,
                         left = 8f,
                         top = 9f,
@@ -948,7 +961,8 @@ class LayoutEngineTest {
         val root = div(
             UiStyle(
                 width = 100f.px,
-                padding = UiEdges(vertical = 0f, horizontal = 10f),
+                height = 80f.px,
+                padding = UiEdges(10f),
                 position = UiPosition.RELATIVE,
             ),
         ) {
@@ -957,6 +971,7 @@ class LayoutEngineTest {
                     "a",
                     UiStyle(
                         width = 50f.percent,
+                        height = 25f.percent,
                         position = UiPosition.ABSOLUTE,
                     ),
                 )
@@ -966,6 +981,7 @@ class LayoutEngineTest {
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
         assertEquals(60f, layout.nodeOf(absolute)!!.bounds.width)
+        assertEquals(25f, layout.nodeOf(absolute)!!.bounds.height)
     }
 
     @Test
@@ -974,7 +990,7 @@ class LayoutEngineTest {
         val root = div(
             UiStyle(
                 width = 100f.px,
-                height = 60f,
+                height = 60f.px,
                 padding = UiEdges(5f),
                 position = UiPosition.RELATIVE,
             ),
@@ -1045,7 +1061,7 @@ class LayoutEngineTest {
             hidden = div(
                 UiStyle(
                     width = 100f.px,
-                    height = 100f,
+                    height = 100f.px,
                     margin = UiEdges(10f),
                     padding = UiEdges(10f),
                     noneDisplay = { true },
@@ -1114,7 +1130,7 @@ class LayoutEngineTest {
             text = "hidden",
             style = UiStyle(
                 width = 100f.px,
-                height = 50f,
+                height = 50f.px,
                 margin = UiEdges(10f),
                 padding = UiEdges(10f),
                 noneDisplay = { true },
@@ -1171,7 +1187,7 @@ class LayoutEngineTest {
         lateinit var second: Paragraph
         val root = div(
             UiStyle(
-                height = 50f,
+                height = 50f.px,
                 verticalAlignment = UiVerticalAlignment.BOTTOM,
                 gap = 4f,
             ),
@@ -1192,13 +1208,13 @@ class LayoutEngineTest {
         lateinit var second: Paragraph
         val root = div(
             UiStyle(
-                height = 50f,
+                height = 50f.px,
                 direction = UiDirection.HORIZONTAL,
                 verticalAlignment = UiVerticalAlignment.CENTER,
             ),
         ) {
-            first = p("a", UiStyle(height = 10f))
-            second = p("b", UiStyle(height = 20f))
+            first = p("a", UiStyle(height = 10f.px))
+            second = p("b", UiStyle(height = 20f.px))
         }
 
         val layout = calculateLayout(root, left = 2f, top = 3f, textMeasurer)
@@ -1305,11 +1321,11 @@ class LayoutEngineTest {
         lateinit var innerDiv: Div
         lateinit var root: Div
         root = div(
-            style = UiStyle(width = 50f.px, height = 50f),
+            style = UiStyle(width = 50f.px, height = 50f.px),
             onClick = { clicked += root },
         ) {
             innerDiv = div(
-                style = UiStyle(width = 30f.px, height = 30f),
+                style = UiStyle(width = 30f.px, height = 30f.px),
                 onClick = { clicked += innerDiv },
             ) {
                 paragraph = p(
@@ -1380,14 +1396,14 @@ class LayoutEngineTest {
         lateinit var siblingDiv: Div
         lateinit var root: Div
         root = div(
-            style = UiStyle(width = 50f.px, height = 50f),
+            style = UiStyle(width = 50f.px, height = 50f.px),
             onMouseMove = { x, y ->
                 moved += root
                 receivedCoordinates = x to y
             },
         ) {
             innerDiv = div(
-                style = UiStyle(width = 30f.px, height = 30f),
+                style = UiStyle(width = 30f.px, height = 30f.px),
                 onMouseMove = { _, _ -> moved += innerDiv },
             ) {
                 paragraph = p(
@@ -1430,7 +1446,7 @@ class LayoutEngineTest {
     fun `drag receives current coordinates and click button info until release`() {
         val dragEvents = mutableListOf<MouseButtonEvent>()
         lateinit var paragraph: Paragraph
-        val root = div(UiStyle(width = 50f.px, height = 50f)) {
+        val root = div(UiStyle(width = 50f.px, height = 50f.px)) {
             paragraph = p(
                 text = "Drag",
                 onDrag = { event -> dragEvents += event },
@@ -1457,7 +1473,7 @@ class LayoutEngineTest {
     fun `mouse move invokes both hover and drag callbacks while dragging`() {
         val callbacks = mutableListOf<String>()
         val root = div(
-            style = UiStyle(width = 20f.px, height = 20f),
+            style = UiStyle(width = 20f.px, height = 20f.px),
             onMouseMove = { _, _ -> callbacks += "move" },
             onDrag = { callbacks += "drag" },
         )
@@ -1474,7 +1490,7 @@ class LayoutEngineTest {
         lateinit var paragraph: Paragraph
         lateinit var root: Div
         root = div(
-            style = UiStyle(width = 50f.px, height = 50f),
+            style = UiStyle(width = 50f.px, height = 50f.px),
             onMouseOver = {
                 assertFalse(root.hovering)
                 callbacks += "root over"
@@ -1523,7 +1539,7 @@ class LayoutEngineTest {
     @Test
     fun `hovering updates even without mouse over or out callbacks`() {
         lateinit var paragraph: Paragraph
-        val root = div(UiStyle(width = 20f.px, height = 20f)) {
+        val root = div(UiStyle(width = 20f.px, height = 20f.px)) {
             paragraph = p("text")
         }
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)

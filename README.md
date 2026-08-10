@@ -195,9 +195,9 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 - `boxSizing` controls whether a non-null `width` or `height` specifies the content box or the
   complete padded box. It defaults to `UiBoxSizing.CONTENT_BOX`; use `UiBoxSizing.BORDER_BOX` to
   include padding in the specified size. A `null` size still shrinks to the text or children.
-- Set `width` with `Float.px` (for example, `120f.px`) or `Float.percent` (for example,
-  `50f.percent`). A percentage uses the resolved containing-block width, normally the content
-  width of its parent.
+- Set `width` and `height` with `Float.px` (for example, `120f.px`) or `Float.percent` (for
+  example, `50f.percent`). A percentage uses the corresponding resolved containing-block
+  dimension, normally the matching content dimension of its parent.
 - Padding is inside the painted background; margin is outside it.
 - `position` supports `UiPosition.STATIC`, `RELATIVE`, and `ABSOLUTE`. The nullable `left`, `top`,
   `right`, and `bottom` values represent CSS `auto` when null. Relative elements move from their
@@ -248,7 +248,7 @@ val root = div(
     UiStyle(
         font = font,
         width = 180f.px,
-        height = 100f,
+        height = 100f.px,
         padding = UiEdges(8f),
         boxSizing = UiBoxSizing.BORDER_BOX,
         position = UiPosition.RELATIVE,
@@ -347,7 +347,7 @@ val hoverable = div(
     style = { element ->
         UiStyle(
             width = 120f.px,
-            height = 24f,
+            height = 24f.px,
             backgroundColor = if (element.hovering) {
                 0xFFFFFFFF.toInt()
             } else {
@@ -468,7 +468,7 @@ Paragraph text uses Minecraft's text rendering path and is not affected by the b
 val panel = div(
     UiStyle(
         width = 120f.px,
-        height = 40f,
+        height = 40f.px,
         backgroundColor = 0xFFFFFFFF.toInt(),
         backgroundMaterial = roundedPanel,
     ),
