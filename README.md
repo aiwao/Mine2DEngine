@@ -226,6 +226,19 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 - `childStyle` works like CSS `.parent > *` and resolves styles only for direct children. When both
   selectors apply, `childStyle` takes precedence over `descendantStyle`, followed by the child's own
   specified style values.
+- A `StyleSheet` passed to `LayoutEngine.layout` applies rules to matching element tags, IDs, or
+  class names. `newStyle` accepts one `StyleSheetTarget`. Use `TargetAnd` for compound selectors
+  such as `button.primary`, `.card.active.large`, and `div#main`; use `TargetOr` for selector lists
+  such as `h1, h2, h3`. Specificity is compared by ID, then class, then tag; later rules win at
+  equal specificity, and an element's own specified style values win last.
+- `TargetWildcard` is the CSS universal selector `*`. It matches every element and adds no
+  specificity, including when used in a chain such as `.parent > *`.
+- `TargetCombinator(left, combinator, right)` joins selectors with `StyleSheetCombinator`:
+  `DESCENDANT` (`" "`), `CHILD` (`">"`), `ADJACENT_SIBLING` (`"+"`), and `GENERAL_SIBLING`
+  (`"~"`). Combinators can be nested into a chain; `combine`, `descendant`, `child`,
+  `adjacentSibling`, and `generalSibling` are builder alternatives.
+- `id` is an HTML-compatible element ID. `className` is an HTML-compatible, whitespace-separated
+  class attribute whose parsed names are also available through the read-only `classes` set.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
 - `color`, `font`, and `textShadow` are inherited from ancestors and may be overridden by a child.
   A null value inherits the parent. At the root, color defaults to opaque white and text shadow
@@ -235,6 +248,16 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
 import io.github.aiwao.mine2dengine.layout.Paragraph
+import io.github.aiwao.mine2dengine.layout.StyleSheet
+import io.github.aiwao.mine2dengine.layout.StyleSheetCombinator
+import io.github.aiwao.mine2dengine.layout.StyleSheetObject
+import io.github.aiwao.mine2dengine.layout.TargetAnd
+import io.github.aiwao.mine2dengine.layout.TargetClass
+import io.github.aiwao.mine2dengine.layout.TargetCombinator
+import io.github.aiwao.mine2dengine.layout.TargetId
+import io.github.aiwao.mine2dengine.layout.TargetOr
+import io.github.aiwao.mine2dengine.layout.TargetTag
+import io.github.aiwao.mine2dengine.layout.TargetWildcard
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
@@ -341,6 +364,53 @@ val labels = div(
         p("Second")
     }
 }
+```
+
+CSS-like rules can be shared independently of the element tree. Wrap `newStyle` calls in an
+initializer; each call appends one rule to `styles`:
+
+```kotlin
+object ExampleStyleSheet : StyleSheet {
+    override val styles = mutableListOf<StyleSheetObject>()
+
+    init {
+        newStyle(
+            target = TargetOr(TargetClass("example-class"), TargetTag("div")),
+            style = UiStyle(color = 0xFFFF0000.toInt()),
+        )
+        newStyle(
+            target = TargetAnd(
+                TargetClass("card"),
+                TargetClass("active"),
+                TargetClass("large"),
+            ),
+            style = UiStyle(width = 120f.px),
+        )
+        newStyle(
+            target = TargetAnd(TargetTag("div"), TargetId("main")),
+            style = UiStyle(backgroundColor = 0xFF202020.toInt()),
+        )
+        newStyle(
+            target = TargetCombinator(
+                left = TargetClass("screen"),
+                combinator = StyleSheetCombinator.CHILD,
+                right = TargetWildcard,
+            ),
+            style = UiStyle(padding = UiEdges(4f)),
+        )
+    }
+}
+
+val styledRoot = div(
+    tag = "div",
+    id = "main",
+    className = "screen",
+    style = UiStyle(font = font),
+) {
+    p("Red Text")
+}
+
+val styledLayout = LayoutEngine.layout(styledRoot, ExampleStyleSheet)
 ```
 
 `style` can also be a function that receives the concrete element. It is resolved from the

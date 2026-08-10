@@ -222,6 +222,19 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - `childStyle` はCSSの `.parent > *` と同様に、直接の子だけのstyleを解決します。両方が適用される
   場合は `childStyle` が `descendantStyle` より優先され、子自身のデフォルト以外のstyleがさらに
   優先されます。
+- `LayoutEngine.layout` に `StyleSheet` を渡すと、要素のtag、ID、classに一致するルールが適用
+  されます。`newStyle` は1つの `StyleSheetTarget` を受け取ります。`button.primary`、
+  `.card.active.large`、`div#main` のような複合セレクターには `TargetAnd`、`h1, h2, h3` の
+  ようなセレクターリストには `TargetOr` を使います。詳細度はID、class、tagの順に比較され、
+  同じなら後のルール、最後に要素自身の指定済みstyleが優先されます。
+- `TargetWildcard` はCSSのユニバーサルセレクター `*` です。すべての要素に一致し、詳細度には
+  加算されません。`.parent > *` のように結合子内でも利用できます。
+- `TargetCombinator(left, combinator, right)` では `StyleSheetCombinator` の `DESCENDANT`
+  (`" "`)、`CHILD` (`">"`)、`ADJACENT_SIBLING` (`"+"`)、`GENERAL_SIBLING` (`"~"`) を利用
+  できます。結合子はネストしてチェーン化でき、
+  `combine`、`descendant`、`child`、`adjacentSibling`、`generalSibling` でも構築できます。
+- `id` はHTML互換の要素IDです。`className` はHTML互換の空白区切りclass属性で、分割後の
+  classは読み取り専用の `classes` Setからも参照できます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
 - `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
   親を継承します。ルートではcolorが不透明な白、文字shadowはなしが既定値です。継承したshadowを
@@ -231,6 +244,16 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
 import io.github.aiwao.mine2dengine.layout.Paragraph
+import io.github.aiwao.mine2dengine.layout.StyleSheet
+import io.github.aiwao.mine2dengine.layout.StyleSheetCombinator
+import io.github.aiwao.mine2dengine.layout.StyleSheetObject
+import io.github.aiwao.mine2dengine.layout.TargetAnd
+import io.github.aiwao.mine2dengine.layout.TargetClass
+import io.github.aiwao.mine2dengine.layout.TargetCombinator
+import io.github.aiwao.mine2dengine.layout.TargetId
+import io.github.aiwao.mine2dengine.layout.TargetOr
+import io.github.aiwao.mine2dengine.layout.TargetTag
+import io.github.aiwao.mine2dengine.layout.TargetWildcard
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiDirection
@@ -336,6 +359,53 @@ val labels = div(
         p("Second")
     }
 }
+```
+
+CSS風のルールは要素ツリーと分離して共有できます。`newStyle` は `styles` にルールを追加するため、
+初期化ブロック内で呼び出します。
+
+```kotlin
+object ExampleStyleSheet : StyleSheet {
+    override val styles = mutableListOf<StyleSheetObject>()
+
+    init {
+        newStyle(
+            target = TargetOr(TargetClass("example-class"), TargetTag("div")),
+            style = UiStyle(color = 0xFFFF0000.toInt()),
+        )
+        newStyle(
+            target = TargetAnd(
+                TargetClass("card"),
+                TargetClass("active"),
+                TargetClass("large"),
+            ),
+            style = UiStyle(width = 120f.px),
+        )
+        newStyle(
+            target = TargetAnd(TargetTag("div"), TargetId("main")),
+            style = UiStyle(backgroundColor = 0xFF202020.toInt()),
+        )
+        newStyle(
+            target = TargetCombinator(
+                left = TargetClass("screen"),
+                combinator = StyleSheetCombinator.CHILD,
+                right = TargetWildcard,
+            ),
+            style = UiStyle(padding = UiEdges(4f)),
+        )
+    }
+}
+
+val styledRoot = div(
+    tag = "div",
+    id = "main",
+    className = "screen",
+    style = UiStyle(font = font),
+) {
+    p("Red Text")
+}
+
+val styledLayout = LayoutEngine.layout(styledRoot, ExampleStyleSheet)
 ```
 
 `style` には具体的な要素を受け取る関数も指定できます。レイアウトまたは描画で使われるたびに

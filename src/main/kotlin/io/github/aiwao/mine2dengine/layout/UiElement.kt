@@ -5,6 +5,8 @@ import net.minecraft.client.input.MouseButtonEvent
 /** Base type for nodes in a UI tree. */
 sealed class UiElement(
     tag: String,
+    className: String,
+    id: String,
     style: UiStyle,
     open var onClick: ((MouseButtonEvent) -> Unit)? = null,
     open var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -15,6 +17,20 @@ sealed class UiElement(
     /** The HTML-compatible tag name for this element. */
     var tag: String = tag
         private set
+
+    /** The HTML-compatible ID for this element, or an empty string when it has no ID. */
+    var id: String = id
+        private set
+
+    /** The HTML-compatible, whitespace-separated class attribute for this element. */
+    var className: String = className
+        private set
+
+    /** The individual class names parsed from [className]. */
+    val classes: Set<String> = className
+        .splitToSequence(Regex("\\s+"))
+        .filter(String::isNotEmpty)
+        .toSet()
 
     private var styleProvider: () -> UiStyle = { style }
 
@@ -48,6 +64,8 @@ sealed class UiElement(
 /** Base type for UI elements that arrange child elements. */
 sealed class UiContainer(
     tag: String,
+    className: String,
+    id: String,
     style: UiStyle,
     children: Iterable<UiElement> = emptyList(),
     override var onClick: ((MouseButtonEvent) -> Unit)? = null,
@@ -57,7 +75,7 @@ sealed class UiContainer(
     override var onMouseOut: (() -> Unit)? = null,
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     childStyle: ((UiElement) -> UiStyle)? = null,
-) : UiElement(tag, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
+) : UiElement(tag, className, id, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
     val children: MutableList<UiElement> = children.toMutableList()
 
     /**
@@ -93,6 +111,8 @@ sealed class UiContainer(
         descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
         childStyle: ((UiElement) -> UiStyle)? = null,
+        className: String = "",
+        id: String = "",
         content: Div.() -> Unit = {},
     ): Div = add(
         Div(
@@ -105,6 +125,8 @@ sealed class UiContainer(
             descendantStyle = descendantStyle,
             childStyle = childStyle,
             tag = tag,
+            className = className,
+            id = id,
         ).apply(content),
     )
 
@@ -119,6 +141,8 @@ sealed class UiContainer(
         descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
         childStyle: ((UiElement) -> UiStyle)? = null,
+        className: String = "",
+        id: String = "",
         content: Div.() -> Unit = {},
     ): Div = add(
         Div(
@@ -130,6 +154,8 @@ sealed class UiContainer(
             descendantStyle = descendantStyle,
             childStyle = childStyle,
             tag = tag,
+            className = className,
+            id = id,
         ).withStyleProvider(style).apply(content),
     )
 
@@ -142,8 +168,21 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
+        className: String = "",
+        id: String = "",
     ): Paragraph = add(
-        Paragraph(text, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut, tag),
+        Paragraph(
+            text,
+            style,
+            onClick,
+            onMouseMove,
+            onDrag,
+            onMouseOver,
+            onMouseOut,
+            tag,
+            className,
+            id,
+        ),
     )
 
     /** Creates a paragraph whose style is resolved from its current state when used. */
@@ -156,6 +195,8 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
+        className: String = "",
+        id: String = "",
     ): Paragraph = add(
         Paragraph(
             text,
@@ -165,6 +206,8 @@ sealed class UiContainer(
             onMouseOver = onMouseOver,
             onMouseOut = onMouseOut,
             tag = tag,
+            className = className,
+            id = id,
         ).withStyleProvider(style),
     )
 
@@ -177,7 +220,20 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
-    ): Paragraph = p(text, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut, tag)
+        className: String = "",
+        id: String = "",
+    ): Paragraph = p(
+        text,
+        style,
+        onClick,
+        onMouseMove,
+        onDrag,
+        onMouseOver,
+        onMouseOut,
+        tag,
+        className,
+        id,
+    )
 
     /** Alias of [p] with a dynamic style. */
     fun paragraph(
@@ -189,7 +245,20 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
-    ): Paragraph = p(text, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut, tag)
+        className: String = "",
+        id: String = "",
+    ): Paragraph = p(
+        text,
+        style,
+        onClick,
+        onMouseMove,
+        onDrag,
+        onMouseOver,
+        onMouseOut,
+        tag,
+        className,
+        id,
+    )
 }
 
 /** A container corresponding to an HTML div. */
@@ -204,8 +273,12 @@ class Div(
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
+    className: String = "",
+    id: String = "",
 ) : UiContainer(
     tag,
+    className,
+    id,
     style,
     children,
     onClick,
@@ -227,7 +300,9 @@ class Paragraph(
     override var onMouseOver: (() -> Unit)? = null,
     override var onMouseOut: (() -> Unit)? = null,
     tag: String = "p",
-) : UiElement(tag, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut)
+    className: String = "",
+    id: String = "",
+) : UiElement(tag, className, id, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut)
 
 /** Creates the root of a UI tree. */
 fun div(
@@ -240,6 +315,8 @@ fun div(
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
+    className: String = "",
+    id: String = "",
     content: Div.() -> Unit = {},
 ): Div = Div(
     style = style,
@@ -251,6 +328,8 @@ fun div(
     descendantStyle = descendantStyle,
     childStyle = childStyle,
     tag = tag,
+    className = className,
+    id = id,
 ).apply(content)
 
 /** Creates the root of a UI tree with a style resolved from the div's current state. */
@@ -264,6 +343,8 @@ fun div(
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
+    className: String = "",
+    id: String = "",
     content: Div.() -> Unit = {},
 ): Div = Div(
     onClick = onClick,
@@ -274,6 +355,8 @@ fun div(
     descendantStyle = descendantStyle,
     childStyle = childStyle,
     tag = tag,
+    className = className,
+    id = id,
 ).withStyleProvider(style).apply(content)
 
 private fun <T : UiElement> T.withStyleProvider(provider: (T) -> UiStyle): T = apply {

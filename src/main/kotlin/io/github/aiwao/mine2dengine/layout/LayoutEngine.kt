@@ -26,16 +26,38 @@ class Mine2DTextMeasurer(
  * Text fonts are selected through [UiStyle.font] and remain owned by the caller.
  */
 object LayoutEngine {
-    /** Calculates the complete UI tree without issuing draw calls. */
+    /** Calculates the complete UI tree without style sheets or draw calls. */
     @JvmStatic
     fun layout(root: UiElement, left: Float = 0f, top: Float = 0f): UiLayout =
-        calculateLayout(root, left, top) { element, font ->
-            Mine2DTextMeasurer(
-                requireNotNull(font) {
-                    "${element.javaClass.simpleName} requires a font in its style or an ancestor style"
-                },
-            )
-        }
+        layout(root, emptyList(), left, top)
+
+    /** Calculates the complete UI tree after applying [styleSheet]. */
+    @JvmStatic
+    fun layout(
+        root: UiElement,
+        styleSheet: StyleSheet,
+        left: Float = 0f,
+        top: Float = 0f,
+    ): UiLayout = layout(root, listOf(styleSheet), left, top)
+
+    /**
+     * Calculates the complete UI tree after cascading [styleSheets] in iteration order.
+     *
+     * A later sheet acts as though its rules were appended after all rules in earlier sheets.
+     */
+    @JvmStatic
+    fun layout(
+        root: UiElement,
+        styleSheets: Iterable<StyleSheet>,
+        left: Float = 0f,
+        top: Float = 0f,
+    ): UiLayout = calculateLayout(root, left, top, styleSheets) { element, font ->
+        Mine2DTextMeasurer(
+            requireNotNull(font) {
+                "${element.javaClass.simpleName} requires a font in its style or an ancestor style"
+            },
+        )
+    }
 }
 
 internal fun calculateLayout(
@@ -43,19 +65,22 @@ internal fun calculateLayout(
     left: Float,
     top: Float,
     textMeasurer: UiTextMeasurer,
+    styleSheets: Iterable<StyleSheet> = emptyList(),
 ): UiLayout {
     validateTextMeasurer(textMeasurer)
-    return calculateLayout(root, left, top) { _, _ -> textMeasurer }
+    return calculateLayout(root, left, top, styleSheets) { _, _ -> textMeasurer }
 }
 
 private fun calculateLayout(
     root: UiElement,
     left: Float,
     top: Float,
+    styleSheets: Iterable<StyleSheet>,
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
 ): UiLayout {
     require(left.isFinite()) { "Left must be finite: $left" }
     require(top.isFinite()) { "Top must be finite: $top" }
+    val sheets = styleSheets.toList()
 
     fun calculateSnapshot(
         snapshotLeft: Float,
@@ -65,6 +90,7 @@ private fun calculateLayout(
         val noneDisplayStates = mutableListOf<UiNoneDisplayState>()
         val measured = measure(
             element = root,
+            styleSheetContext = StyleSheetElementContext(root),
             parentContentWidth = null,
             parentContentHeight = null,
             absoluteContainingWidth = null,
@@ -72,6 +98,7 @@ private fun calculateLayout(
             inheritedTextStyle = ResolvedUiTextStyle(),
             inheritedDescendantStyle = { _ -> null },
             parentChildStyle = { null },
+            styleSheetStyle = { context -> sheets.styleFor(context) },
             textMeasurer = textMeasurer,
             noneDisplayStates = noneDisplayStates,
             evaluatedNoneDisplays = evaluatedNoneDisplays,
@@ -116,6 +143,7 @@ private data class MeasuredNode(
 
 private fun measure(
     element: UiElement,
+    styleSheetContext: StyleSheetElementContext,
     parentContentWidth: Float?,
     parentContentHeight: Float?,
     absoluteContainingWidth: Float?,
@@ -123,14 +151,18 @@ private fun measure(
     inheritedTextStyle: ResolvedUiTextStyle,
     inheritedDescendantStyle: (UiElement) -> UiStyle?,
     parentChildStyle: () -> UiStyle?,
+    styleSheetStyle: (StyleSheetElementContext) -> UiStyle?,
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
     noneDisplayStates: MutableList<UiNoneDisplayState>,
     evaluatedNoneDisplays: Map<UiElement, Boolean>,
 ): MeasuredNode {
     val styleProvider = {
         combineStyles(
-            inheritedDescendantStyle(element),
-            parentChildStyle(),
+            styleSheetStyle(styleSheetContext),
+            combineStyles(
+                inheritedDescendantStyle(element),
+                parentChildStyle(),
+            ),
         )?.withOverrides(element.style)
             ?.resolveDefaults()
             ?: element.style.resolveDefaults()
@@ -221,10 +253,18 @@ private fun measure(
                 element.descendantStyle?.invoke(descendant),
             )
         }
+        var previousSiblingContext: StyleSheetElementContext? = null
         element.children
             .map { child ->
+                val childStyleSheetContext = StyleSheetElementContext(
+                    element = child,
+                    parent = styleSheetContext,
+                    previousSibling = previousSiblingContext,
+                )
+                previousSiblingContext = childStyleSheetContext
                 measure(
                     element = child,
+                    styleSheetContext = childStyleSheetContext,
                     parentContentWidth = definiteContentWidth,
                     parentContentHeight = definiteContentHeight,
                     absoluteContainingWidth = descendantAbsoluteContainingWidth,
@@ -232,6 +272,7 @@ private fun measure(
                     inheritedTextStyle = resolvedTextStyle,
                     inheritedDescendantStyle = descendantStyle,
                     parentChildStyle = { element.childStyle?.invoke(child) },
+                    styleSheetStyle = styleSheetStyle,
                     textMeasurer = textMeasurer,
                     noneDisplayStates = noneDisplayStates,
                     evaluatedNoneDisplays = evaluatedNoneDisplays,
