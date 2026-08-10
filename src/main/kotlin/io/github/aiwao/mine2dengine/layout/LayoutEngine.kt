@@ -90,6 +90,7 @@ private fun calculateLayout(
         val noneDisplayStates = mutableListOf<UiNoneDisplayState>()
         val measured = measure(
             element = root,
+            styleSheetContext = StyleSheetElementContext(root),
             parentContentWidth = null,
             parentContentHeight = null,
             absoluteContainingWidth = null,
@@ -97,7 +98,7 @@ private fun calculateLayout(
             inheritedTextStyle = ResolvedUiTextStyle(),
             inheritedDescendantStyle = { _ -> null },
             parentChildStyle = { null },
-            styleSheetStyle = { element -> sheets.styleFor(element) },
+            styleSheetStyle = { context -> sheets.styleFor(context) },
             textMeasurer = textMeasurer,
             noneDisplayStates = noneDisplayStates,
             evaluatedNoneDisplays = evaluatedNoneDisplays,
@@ -142,6 +143,7 @@ private data class MeasuredNode(
 
 private fun measure(
     element: UiElement,
+    styleSheetContext: StyleSheetElementContext,
     parentContentWidth: Float?,
     parentContentHeight: Float?,
     absoluteContainingWidth: Float?,
@@ -149,14 +151,14 @@ private fun measure(
     inheritedTextStyle: ResolvedUiTextStyle,
     inheritedDescendantStyle: (UiElement) -> UiStyle?,
     parentChildStyle: () -> UiStyle?,
-    styleSheetStyle: (UiElement) -> UiStyle?,
+    styleSheetStyle: (StyleSheetElementContext) -> UiStyle?,
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
     noneDisplayStates: MutableList<UiNoneDisplayState>,
     evaluatedNoneDisplays: Map<UiElement, Boolean>,
 ): MeasuredNode {
     val styleProvider = {
         combineStyles(
-            styleSheetStyle(element),
+            styleSheetStyle(styleSheetContext),
             combineStyles(
                 inheritedDescendantStyle(element),
                 parentChildStyle(),
@@ -251,10 +253,18 @@ private fun measure(
                 element.descendantStyle?.invoke(descendant),
             )
         }
+        var previousSiblingContext: StyleSheetElementContext? = null
         element.children
             .map { child ->
+                val childStyleSheetContext = StyleSheetElementContext(
+                    element = child,
+                    parent = styleSheetContext,
+                    previousSibling = previousSiblingContext,
+                )
+                previousSiblingContext = childStyleSheetContext
                 measure(
                     element = child,
+                    styleSheetContext = childStyleSheetContext,
                     parentContentWidth = definiteContentWidth,
                     parentContentHeight = definiteContentHeight,
                     absoluteContainingWidth = descendantAbsoluteContainingWidth,

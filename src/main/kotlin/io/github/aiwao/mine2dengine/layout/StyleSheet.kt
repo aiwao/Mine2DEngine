@@ -13,6 +13,52 @@ data class TargetTag(
     val tag: String,
 ) : StyleSheetTarget
 
+/**
+ * Selects [right] elements related to a matching [left] element by [combinator].
+ *
+ * Supported combinators have their CSS meanings: `" "` selects descendants, `">"` direct
+ * children, `"+"` immediately following siblings, and `"~"` any following sibling. Combinators
+ * can be nested to represent a selector chain.
+ */
+data class TargetCombinator(
+    val left: StyleSheetTarget,
+    val combinator: String,
+    val right: StyleSheetTarget,
+) : StyleSheetTarget {
+    init {
+        require(combinator in SUPPORTED_COMBINATORS) {
+            "Unsupported style-sheet combinator: '$combinator'"
+        }
+    }
+
+    companion object {
+        /** All combinator strings accepted by [TargetCombinator]. */
+        val SUPPORTED_COMBINATORS: Set<String> = setOf(" ", ">", "+", "~")
+    }
+}
+
+/** Combines this selector with [target] using a CSS [combinator]. */
+fun StyleSheetTarget.combine(
+    combinator: String,
+    target: StyleSheetTarget,
+): TargetCombinator = TargetCombinator(this, combinator, target)
+
+/** Selects matching descendants of this selector. */
+infix fun StyleSheetTarget.descendant(target: StyleSheetTarget): TargetCombinator =
+    combine(" ", target)
+
+/** Selects matching direct children of this selector. */
+infix fun StyleSheetTarget.child(target: StyleSheetTarget): TargetCombinator =
+    combine(">", target)
+
+/** Selects a matching sibling immediately following this selector. */
+infix fun StyleSheetTarget.adjacentSibling(target: StyleSheetTarget): TargetCombinator =
+    combine("+", target)
+
+/** Selects matching siblings following this selector. */
+infix fun StyleSheetTarget.generalSibling(target: StyleSheetTarget): TargetCombinator =
+    combine("~", target)
+
 /** One CSS-like rule. Any selector in [target] can make [style] apply. */
 data class StyleSheetObject(
     val target: Array<out StyleSheetTarget>,
@@ -36,12 +82,18 @@ interface StyleSheet {
     ): StyleSheetObject = StyleSheetObject(target, style).also(styles::add)
 }
 
-/** Resolves all declarations matching [element] according to selector specificity and order. */
-internal fun Iterable<StyleSheet>.styleFor(element: UiElement): UiStyle? =
+internal class StyleSheetElementContext(
+    val element: UiElement,
+    val parent: StyleSheetElementContext? = null,
+    val previousSibling: StyleSheetElementContext? = null,
+)
+
+/** Resolves all declarations matching [context] according to selector specificity and order. */
+internal fun Iterable<StyleSheet>.styleFor(context: StyleSheetElementContext): UiStyle? =
     flatMap(StyleSheet::styles)
         .mapNotNull { rule ->
             rule.target
-                .filter { target -> target.matches(element) }
+                .filter { target -> target.matches(context) }
                 .maxOfOrNull(StyleSheetTarget::specificity)
                 ?.let { specificity -> specificity to rule.style }
         }
@@ -50,13 +102,41 @@ internal fun Iterable<StyleSheet>.styleFor(element: UiElement): UiStyle? =
             resolved?.withOverrides(style) ?: style
         }
 
-private val StyleSheetTarget.specificity: Int
-    get() = when (this) {
-        is TargetClass -> 1
-        is TargetTag -> 0
+private data class StyleSheetSpecificity(
+    val classCount: Int = 0,
+    val tagCount: Int = 0,
+) : Comparable<StyleSheetSpecificity> {
+    override fun compareTo(other: StyleSheetSpecificity): Int {
+        val classComparison = classCount.compareTo(other.classCount)
+        return if (classComparison != 0) classComparison else tagCount.compareTo(other.tagCount)
     }
 
-private fun StyleSheetTarget.matches(element: UiElement): Boolean = when (this) {
-    is TargetClass -> className in element.classes
-    is TargetTag -> element.tag == tag
+    operator fun plus(other: StyleSheetSpecificity): StyleSheetSpecificity =
+        StyleSheetSpecificity(
+            classCount = classCount + other.classCount,
+            tagCount = tagCount + other.tagCount,
+        )
+}
+
+private val StyleSheetTarget.specificity: StyleSheetSpecificity
+    get() = when (this) {
+        is TargetClass -> StyleSheetSpecificity(classCount = 1)
+        is TargetTag -> StyleSheetSpecificity(tagCount = 1)
+        is TargetCombinator -> left.specificity + right.specificity
+    }
+
+private fun StyleSheetTarget.matches(context: StyleSheetElementContext): Boolean = when (this) {
+    is TargetClass -> className in context.element.classes
+    is TargetTag -> context.element.tag == tag
+    is TargetCombinator -> right.matches(context) && relatedContexts(context).any(left::matches)
+}
+
+private fun TargetCombinator.relatedContexts(
+    context: StyleSheetElementContext,
+): Sequence<StyleSheetElementContext> = when (combinator) {
+    " " -> generateSequence(context.parent, StyleSheetElementContext::parent)
+    ">" -> listOfNotNull(context.parent).asSequence()
+    "+" -> listOfNotNull(context.previousSibling).asSequence()
+    "~" -> generateSequence(context.previousSibling, StyleSheetElementContext::previousSibling)
+    else -> error("Unsupported style-sheet combinator: '$combinator'")
 }

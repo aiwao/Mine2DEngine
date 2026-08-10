@@ -225,6 +225,9 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - `LayoutEngine.layout` に `StyleSheet` を渡すと、要素のtagまたはclassに一致するルールが適用
   されます。1ルール内のtargetはセレクターリスト（OR条件）です。classルールはtagルールより
   優先され、詳細度が同じなら後のルール、最後に要素自身の指定済みstyleが優先されます。
+- `TargetCombinator(left, combinator, right)` ではCSS結合子の `" "`（子孫）、`">"`（直接の子）、
+  `"+"`（直後の兄弟）、`"~"`（後続の兄弟）を利用できます。結合子はネストしてチェーン化でき、
+  `combine`、`descendant`、`child`、`adjacentSibling`、`generalSibling` でも構築できます。
 - `className` はHTML互換の空白区切りclass属性です。分割後のclassは読み取り専用の `classes`
   Setからも参照できます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
@@ -239,6 +242,7 @@ import io.github.aiwao.mine2dengine.layout.Paragraph
 import io.github.aiwao.mine2dengine.layout.StyleSheet
 import io.github.aiwao.mine2dengine.layout.StyleSheetObject
 import io.github.aiwao.mine2dengine.layout.TargetClass
+import io.github.aiwao.mine2dengine.layout.TargetCombinator
 import io.github.aiwao.mine2dengine.layout.TargetTag
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
@@ -358,6 +362,16 @@ object ExampleStyleSheet : StyleSheet {
         newStyle(
             target = arrayOf(TargetClass("example-class"), TargetTag("div")),
             style = UiStyle(color = 0xFFFF0000.toInt()),
+        )
+        newStyle(
+            target = arrayOf(
+                TargetCombinator(
+                    left = TargetClass("screen"),
+                    combinator = ">",
+                    right = TargetTag("p"),
+                ),
+            ),
+            style = UiStyle(backgroundColor = 0xFF202020.toInt()),
         )
     }
 }

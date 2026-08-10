@@ -229,6 +229,10 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 - A `StyleSheet` passed to `LayoutEngine.layout` applies rules to matching element tags or class
   names. Targets in one rule are a selector list (OR). Class rules take precedence over tag rules,
   later rules win at equal specificity, and an element's own specified style values win last.
+- `TargetCombinator(left, combinator, right)` joins selectors with the CSS combinators `" "`
+  (descendant), `">"` (direct child), `"+"` (immediately following sibling), and `"~"` (following
+  siblings). Combinators can be nested into a chain; `combine`, `descendant`, `child`,
+  `adjacentSibling`, and `generalSibling` are builder alternatives.
 - `className` is an HTML-compatible, whitespace-separated class attribute. Its parsed names are
   also available through the read-only `classes` set.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
@@ -243,6 +247,7 @@ import io.github.aiwao.mine2dengine.layout.Paragraph
 import io.github.aiwao.mine2dengine.layout.StyleSheet
 import io.github.aiwao.mine2dengine.layout.StyleSheetObject
 import io.github.aiwao.mine2dengine.layout.TargetClass
+import io.github.aiwao.mine2dengine.layout.TargetCombinator
 import io.github.aiwao.mine2dengine.layout.TargetTag
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
@@ -363,6 +368,16 @@ object ExampleStyleSheet : StyleSheet {
         newStyle(
             target = arrayOf(TargetClass("example-class"), TargetTag("div")),
             style = UiStyle(color = 0xFFFF0000.toInt()),
+        )
+        newStyle(
+            target = arrayOf(
+                TargetCombinator(
+                    left = TargetClass("screen"),
+                    combinator = ">",
+                    right = TargetTag("p"),
+                ),
+            ),
+            style = UiStyle(backgroundColor = 0xFF202020.toInt()),
         )
     }
 }

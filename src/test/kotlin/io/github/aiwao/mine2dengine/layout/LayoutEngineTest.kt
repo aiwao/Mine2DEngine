@@ -133,6 +133,136 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `style sheet target accepts the four CSS combinators`() {
+        assertEquals(setOf(" ", ">", "+", "~"), TargetCombinator.SUPPORTED_COMBINATORS)
+
+        val parent = TargetClass("parent")
+        val rightTarget = TargetTag("p")
+        assertEquals(TargetCombinator(parent, " ", rightTarget), parent descendant rightTarget)
+        assertEquals(TargetCombinator(parent, ">", rightTarget), parent child rightTarget)
+        assertEquals(
+            TargetCombinator(parent, "+", rightTarget),
+            parent adjacentSibling rightTarget,
+        )
+        assertEquals(TargetCombinator(parent, "~", rightTarget), parent generalSibling rightTarget)
+        assertEquals(TargetCombinator(parent, ">", rightTarget), parent.combine(">", rightTarget))
+
+        assertFailsWith<IllegalArgumentException> {
+            TargetCombinator(parent, "||", rightTarget)
+        }
+    }
+
+    @Test
+    fun `style sheet combinators match descendants children and following siblings`() {
+        val descendantColor = 0xFF112233.toInt()
+        val sheet = styleSheet(
+            arrayOf(TargetClass("scope") descendant TargetClass("descendant")) to UiStyle(
+                backgroundColor = descendantColor,
+            ),
+            arrayOf(TargetClass("scope") child TargetClass("target")) to UiStyle(
+                width = 11f.px,
+            ),
+            arrayOf(TargetClass("marker") adjacentSibling TargetClass("candidate")) to UiStyle(
+                height = 12f.px,
+            ),
+            arrayOf(TargetClass("marker") generalSibling TargetClass("candidate")) to UiStyle(
+                padding = UiEdges(3f),
+            ),
+        )
+        lateinit var directDescendant: Paragraph
+        lateinit var nestedDescendant: Paragraph
+        lateinit var outsideDescendant: Paragraph
+        lateinit var precedingCandidate: Paragraph
+        lateinit var adjacentCandidate: Paragraph
+        lateinit var laterCandidate: Paragraph
+        lateinit var nestedCandidate: Paragraph
+        val root = div {
+            div(className = "scope") {
+                directDescendant = p("direct", className = "descendant target")
+                div {
+                    nestedDescendant = p("nested", className = "descendant target")
+                }
+            }
+            outsideDescendant = p("outside", className = "descendant target")
+            div {
+                precedingCandidate = p("before", className = "candidate")
+                p("marker", className = "marker")
+                adjacentCandidate = p("adjacent", className = "candidate")
+                div(tag = "spacer")
+                laterCandidate = p("later", className = "candidate")
+                div {
+                    nestedCandidate = p("nested candidate", className = "candidate")
+                }
+            }
+        }
+
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        val directStyle = layout.nodeOf(directDescendant)!!.styleProvider()
+        val nestedStyle = layout.nodeOf(nestedDescendant)!!.styleProvider()
+        val outsideStyle = layout.nodeOf(outsideDescendant)!!.styleProvider()
+        assertEquals(descendantColor, directStyle.backgroundColor)
+        assertEquals(11f.px, directStyle.width)
+        assertEquals(descendantColor, nestedStyle.backgroundColor)
+        assertNull(nestedStyle.width)
+        assertNull(outsideStyle.backgroundColor)
+        assertNull(outsideStyle.width)
+
+        val precedingStyle = layout.nodeOf(precedingCandidate)!!.styleProvider()
+        val adjacentStyle = layout.nodeOf(adjacentCandidate)!!.styleProvider()
+        val laterStyle = layout.nodeOf(laterCandidate)!!.styleProvider()
+        val nestedCandidateStyle = layout.nodeOf(nestedCandidate)!!.styleProvider()
+        assertNull(precedingStyle.height)
+        assertEquals(UiEdges(), precedingStyle.padding)
+        assertEquals(12f.px, adjacentStyle.height)
+        assertEquals(UiEdges(3f), adjacentStyle.padding)
+        assertNull(laterStyle.height)
+        assertEquals(UiEdges(3f), laterStyle.padding)
+        assertNull(nestedCandidateStyle.height)
+        assertEquals(UiEdges(), nestedCandidateStyle.padding)
+    }
+
+    @Test
+    fun `nested combinators contribute every selector to specificity`() {
+        val chainedColor = 0xFF112233.toInt()
+        val singleClassColor = 0xFF445566.toInt()
+        val chainedTarget = TargetTag("main")
+            .child(TargetClass("scope"))
+            .descendant(TargetTag("p"))
+        val sheet = styleSheet(
+            arrayOf(chainedTarget) to UiStyle(backgroundColor = chainedColor),
+            arrayOf(TargetClass("leaf")) to UiStyle(backgroundColor = singleClassColor),
+        )
+        lateinit var matching: Paragraph
+        lateinit var outside: Paragraph
+        val root = div(tag = "main") {
+            div(className = "scope") {
+                div {
+                    matching = p("matching", className = "leaf")
+                }
+            }
+            outside = p("outside", className = "leaf")
+        }
+
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        assertEquals(chainedColor, layout.nodeOf(matching)!!.styleProvider().backgroundColor)
+        assertEquals(singleClassColor, layout.nodeOf(outside)!!.styleProvider().backgroundColor)
+    }
+
+    @Test
     fun `style sheet cascades specificity source order and inline styles`() {
         val firstTagColor = 0xFF111111.toInt()
         val classColor = 0xFF222222.toInt()
