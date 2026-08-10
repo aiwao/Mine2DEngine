@@ -6,6 +6,7 @@ import net.minecraft.client.input.MouseButtonEvent
 sealed class UiElement(
     tag: String,
     className: String,
+    id: String,
     style: UiStyle,
     open var onClick: ((MouseButtonEvent) -> Unit)? = null,
     open var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -15,6 +16,10 @@ sealed class UiElement(
 ) {
     /** The HTML-compatible tag name for this element. */
     var tag: String = tag
+        private set
+
+    /** The HTML-compatible ID for this element, or an empty string when it has no ID. */
+    var id: String = id
         private set
 
     /** The HTML-compatible, whitespace-separated class attribute for this element. */
@@ -60,6 +65,7 @@ sealed class UiElement(
 sealed class UiContainer(
     tag: String,
     className: String,
+    id: String,
     style: UiStyle,
     children: Iterable<UiElement> = emptyList(),
     override var onClick: ((MouseButtonEvent) -> Unit)? = null,
@@ -69,7 +75,7 @@ sealed class UiContainer(
     override var onMouseOut: (() -> Unit)? = null,
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     childStyle: ((UiElement) -> UiStyle)? = null,
-) : UiElement(tag, className, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
+) : UiElement(tag, className, id, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
     val children: MutableList<UiElement> = children.toMutableList()
 
     /**
@@ -106,6 +112,7 @@ sealed class UiContainer(
         tag: String = "div",
         childStyle: ((UiElement) -> UiStyle)? = null,
         className: String = "",
+        id: String = "",
         content: Div.() -> Unit = {},
     ): Div = add(
         Div(
@@ -119,6 +126,7 @@ sealed class UiContainer(
             childStyle = childStyle,
             tag = tag,
             className = className,
+            id = id,
         ).apply(content),
     )
 
@@ -134,6 +142,7 @@ sealed class UiContainer(
         tag: String = "div",
         childStyle: ((UiElement) -> UiStyle)? = null,
         className: String = "",
+        id: String = "",
         content: Div.() -> Unit = {},
     ): Div = add(
         Div(
@@ -146,6 +155,7 @@ sealed class UiContainer(
             childStyle = childStyle,
             tag = tag,
             className = className,
+            id = id,
         ).withStyleProvider(style).apply(content),
     )
 
@@ -159,6 +169,7 @@ sealed class UiContainer(
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
         className: String = "",
+        id: String = "",
     ): Paragraph = add(
         Paragraph(
             text,
@@ -170,6 +181,7 @@ sealed class UiContainer(
             onMouseOut,
             tag,
             className,
+            id,
         ),
     )
 
@@ -184,6 +196,7 @@ sealed class UiContainer(
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
         className: String = "",
+        id: String = "",
     ): Paragraph = add(
         Paragraph(
             text,
@@ -194,6 +207,7 @@ sealed class UiContainer(
             onMouseOut = onMouseOut,
             tag = tag,
             className = className,
+            id = id,
         ).withStyleProvider(style),
     )
 
@@ -207,6 +221,7 @@ sealed class UiContainer(
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
         className: String = "",
+        id: String = "",
     ): Paragraph = p(
         text,
         style,
@@ -217,6 +232,7 @@ sealed class UiContainer(
         onMouseOut,
         tag,
         className,
+        id,
     )
 
     /** Alias of [p] with a dynamic style. */
@@ -230,6 +246,7 @@ sealed class UiContainer(
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
         className: String = "",
+        id: String = "",
     ): Paragraph = p(
         text,
         style,
@@ -240,6 +257,7 @@ sealed class UiContainer(
         onMouseOut,
         tag,
         className,
+        id,
     )
 }
 
@@ -256,9 +274,11 @@ class Div(
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
     className: String = "",
+    id: String = "",
 ) : UiContainer(
     tag,
     className,
+    id,
     style,
     children,
     onClick,
@@ -281,7 +301,8 @@ class Paragraph(
     override var onMouseOut: (() -> Unit)? = null,
     tag: String = "p",
     className: String = "",
-) : UiElement(tag, className, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut)
+    id: String = "",
+) : UiElement(tag, className, id, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut)
 
 /** Creates the root of a UI tree. */
 fun div(
@@ -295,6 +316,7 @@ fun div(
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
     className: String = "",
+    id: String = "",
     content: Div.() -> Unit = {},
 ): Div = Div(
     style = style,
@@ -307,6 +329,7 @@ fun div(
     childStyle = childStyle,
     tag = tag,
     className = className,
+    id = id,
 ).apply(content)
 
 /** Creates the root of a UI tree with a style resolved from the div's current state. */
@@ -321,6 +344,7 @@ fun div(
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
     className: String = "",
+    id: String = "",
     content: Div.() -> Unit = {},
 ): Div = Div(
     onClick = onClick,
@@ -332,6 +356,7 @@ fun div(
     childStyle = childStyle,
     tag = tag,
     className = className,
+    id = id,
 ).withStyleProvider(style).apply(content)
 
 private fun <T : UiElement> T.withStyleProvider(provider: (T) -> UiStyle): T = apply {

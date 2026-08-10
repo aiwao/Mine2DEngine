@@ -100,10 +100,51 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `elements expose their ids`() {
+        lateinit var childDiv: Div
+        lateinit var dynamicDiv: Div
+        lateinit var shortParagraph: Paragraph
+        lateinit var longParagraph: Paragraph
+        lateinit var dynamicParagraph: Paragraph
+        val root = div(id = "page") {
+            childDiv = div(id = "panel")
+            dynamicDiv = div(style = { UiStyle() }, id = "dynamic-panel")
+            shortParagraph = p("p", id = "label")
+            longParagraph = paragraph("paragraph", id = "strong")
+            dynamicParagraph = p("dynamic", style = { UiStyle() }, id = "dynamic-label")
+        }
+
+        assertEquals("page", root.id)
+        assertEquals("panel", childDiv.id)
+        assertEquals("dynamic-panel", dynamicDiv.id)
+        assertEquals("label", shortParagraph.id)
+        assertEquals("strong", longParagraph.id)
+        assertEquals("dynamic-label", dynamicParagraph.id)
+        assertEquals("standalone", Div(id = "standalone").id)
+        assertEquals("small", Paragraph("text", id = "small").id)
+        assertEquals("", div().id)
+    }
+
+    @Test
+    fun `style sheet targets combine selectors with AND and OR`() {
+        val tag = TargetTag("button")
+        val primary = TargetClass("primary")
+        val active = TargetClass("active")
+
+        assertEquals(TargetAnd(tag, primary, active), tag and primary and active)
+        assertEquals(
+            TargetOr(TargetTag("h1"), TargetTag("h2"), TargetTag("h3")),
+            TargetTag("h1") or TargetTag("h2") or TargetTag("h3"),
+        )
+        assertFailsWith<IllegalArgumentException> { TargetAnd(emptyList()) }
+        assertFailsWith<IllegalArgumentException> { TargetOr(emptyList()) }
+    }
+
+    @Test
     fun `style sheet registers and applies selector lists by class or tag`() {
         val red = 0xFFFF0000.toInt()
         val sheet = styleSheet(
-            arrayOf(TargetClass("example-class"), TargetTag("div")) to UiStyle(color = red),
+            TargetOr(TargetClass("example-class"), TargetTag("div")) to UiStyle(color = red),
         )
         lateinit var inheritedParagraph: Paragraph
         lateinit var classParagraph: Paragraph
@@ -133,16 +174,110 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `style sheet matches compound class id and selector list targets`() {
+        val buttonColor = 0xFF112233.toInt()
+        val sheet = styleSheet(
+            (TargetTag("button") and TargetClass("primary")) to UiStyle(
+                backgroundColor = buttonColor,
+            ),
+            (
+                TargetClass("card") and
+                    TargetClass("active") and
+                    TargetClass("large")
+            ) to UiStyle(width = 31f.px),
+            (TargetTag("div") and TargetId("main")) to UiStyle(height = 32f.px),
+            (
+                TargetTag("h1") or
+                    TargetTag("h2") or
+                    TargetTag("h3")
+            ) to UiStyle(padding = UiEdges(4f)),
+        )
+        lateinit var primaryButton: Div
+        lateinit var plainButton: Div
+        lateinit var activeLargeCard: Div
+        lateinit var partialCard: Div
+        lateinit var mainDiv: Div
+        lateinit var mainParagraph: Paragraph
+        lateinit var headingOne: Paragraph
+        lateinit var headingTwo: Paragraph
+        lateinit var headingThree: Paragraph
+        lateinit var headingFour: Paragraph
+        val root = div {
+            primaryButton = div(tag = "button", className = "primary")
+            plainButton = div(tag = "button")
+            activeLargeCard = div(className = "card active large")
+            partialCard = div(className = "card active")
+            mainDiv = div(id = "main")
+            mainParagraph = p("not a div", id = "main")
+            headingOne = p("h1", tag = "h1")
+            headingTwo = p("h2", tag = "h2")
+            headingThree = p("h3", tag = "h3")
+            headingFour = p("h4", tag = "h4")
+        }
+
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        assertEquals(buttonColor, layout.nodeOf(primaryButton)!!.styleProvider().backgroundColor)
+        assertNull(layout.nodeOf(plainButton)!!.styleProvider().backgroundColor)
+        assertEquals(31f.px, layout.nodeOf(activeLargeCard)!!.styleProvider().width)
+        assertNull(layout.nodeOf(partialCard)!!.styleProvider().width)
+        assertEquals(32f.px, layout.nodeOf(mainDiv)!!.styleProvider().height)
+        assertNull(layout.nodeOf(mainParagraph)!!.styleProvider().height)
+        assertEquals(UiEdges(4f), layout.nodeOf(headingOne)!!.styleProvider().padding)
+        assertEquals(UiEdges(4f), layout.nodeOf(headingTwo)!!.styleProvider().padding)
+        assertEquals(UiEdges(4f), layout.nodeOf(headingThree)!!.styleProvider().padding)
+        assertEquals(UiEdges(), layout.nodeOf(headingFour)!!.styleProvider().padding)
+    }
+
+    @Test
+    fun `compound and selector list targets use CSS specificity`() {
+        val idColor = 0xFF112233.toInt()
+        val compoundColor = 0xFF445566.toInt()
+        val sheet = styleSheet(
+            TargetId("hero") to UiStyle(backgroundColor = idColor),
+            (TargetTag("div") and TargetClass("featured")) to UiStyle(
+                backgroundColor = compoundColor,
+            ),
+            (TargetTag("h1") or TargetClass("featured")) to UiStyle(width = 10f.px),
+            TargetTag("h1") to UiStyle(width = 20f.px),
+        )
+        lateinit var heading: Paragraph
+        lateinit var featuredParagraph: Paragraph
+        val root = div(id = "hero", className = "featured") {
+            heading = p("heading", tag = "h1")
+            featuredParagraph = p("featured", className = "featured")
+        }
+
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        assertEquals(idColor, layout.root.styleProvider().backgroundColor)
+        assertEquals(20f.px, layout.nodeOf(heading)!!.styleProvider().width)
+        assertEquals(10f.px, layout.nodeOf(featuredParagraph)!!.styleProvider().width)
+    }
+
+    @Test
     fun `style sheet wildcard matches every element with zero specificity`() {
         val wildcardColor = 0xFF112233.toInt()
         val paragraphColor = 0xFF445566.toInt()
         val sheet = styleSheet(
-            arrayOf(TargetTag("p")) to UiStyle(backgroundColor = paragraphColor),
-            arrayOf(TargetWildcard) to UiStyle(
+            TargetTag("p") to UiStyle(backgroundColor = paragraphColor),
+            TargetWildcard to UiStyle(
                 backgroundColor = wildcardColor,
                 padding = UiEdges(1f),
             ),
-            arrayOf(TargetClass("scope") child TargetWildcard) to UiStyle(width = 8f.px),
+            (TargetClass("scope") child TargetWildcard) to UiStyle(width = 8f.px),
         )
         lateinit var directParagraph: Paragraph
         lateinit var directDiv: Div
@@ -213,16 +348,16 @@ class LayoutEngineTest {
     fun `style sheet combinators match descendants children and following siblings`() {
         val descendantColor = 0xFF112233.toInt()
         val sheet = styleSheet(
-            arrayOf(TargetClass("scope") descendant TargetClass("descendant")) to UiStyle(
+            (TargetClass("scope") descendant TargetClass("descendant")) to UiStyle(
                 backgroundColor = descendantColor,
             ),
-            arrayOf(TargetClass("scope") child TargetClass("target")) to UiStyle(
+            (TargetClass("scope") child TargetClass("target")) to UiStyle(
                 width = 11f.px,
             ),
-            arrayOf(TargetClass("marker") adjacentSibling TargetClass("candidate")) to UiStyle(
+            (TargetClass("marker") adjacentSibling TargetClass("candidate")) to UiStyle(
                 height = 12f.px,
             ),
-            arrayOf(TargetClass("marker") generalSibling TargetClass("candidate")) to UiStyle(
+            (TargetClass("marker") generalSibling TargetClass("candidate")) to UiStyle(
                 padding = UiEdges(3f),
             ),
         )
@@ -293,8 +428,8 @@ class LayoutEngineTest {
             .child(TargetClass("scope"))
             .descendant(TargetTag("p"))
         val sheet = styleSheet(
-            arrayOf(chainedTarget) to UiStyle(backgroundColor = chainedColor),
-            arrayOf(TargetClass("leaf")) to UiStyle(backgroundColor = singleClassColor),
+            chainedTarget to UiStyle(backgroundColor = chainedColor),
+            TargetClass("leaf") to UiStyle(backgroundColor = singleClassColor),
         )
         lateinit var matching: Paragraph
         lateinit var outside: Paragraph
@@ -326,20 +461,20 @@ class LayoutEngineTest {
         val laterTagColor = 0xFF333333.toInt()
         val laterClassBackground = 0xFF444444.toInt()
         val sheet = styleSheet(
-            arrayOf(TargetTag("p")) to UiStyle(
+            TargetTag("p") to UiStyle(
                 color = firstTagColor,
                 width = 20f.px,
             ),
-            arrayOf(TargetClass("featured")) to UiStyle(
+            TargetClass("featured") to UiStyle(
                 color = classColor,
                 backgroundColor = 0xFF010101.toInt(),
                 width = 30f.px,
             ),
-            arrayOf(TargetTag("p")) to UiStyle(
+            TargetTag("p") to UiStyle(
                 color = laterTagColor,
                 height = 12f.px,
             ),
-            arrayOf(TargetClass("featured")) to UiStyle(
+            TargetClass("featured") to UiStyle(
                 backgroundColor = laterClassBackground,
             ),
         )
@@ -372,13 +507,13 @@ class LayoutEngineTest {
     @Test
     fun `later style sheets override earlier sheets at equal specificity`() {
         val first = styleSheet(
-            arrayOf(TargetTag("section")) to UiStyle(
+            TargetTag("section") to UiStyle(
                 backgroundColor = 0xFF111111.toInt(),
                 width = 10f.px,
             ),
         )
         val second = styleSheet(
-            arrayOf(TargetTag("section")) to UiStyle(
+            TargetTag("section") to UiStyle(
                 backgroundColor = 0xFF222222.toInt(),
                 height = 20f.px,
             ),
@@ -403,10 +538,10 @@ class LayoutEngineTest {
     @Test
     fun `public layout engine accepts one or multiple style sheets`() {
         val widthSheet = styleSheet(
-            arrayOf(TargetTag("main")) to UiStyle(width = 10f.px),
+            TargetTag("main") to UiStyle(width = 10f.px),
         )
         val heightSheet = styleSheet(
-            arrayOf(TargetClass("panel")) to UiStyle(height = 20f.px),
+            TargetClass("panel") to UiStyle(height = 20f.px),
         )
         val root = div(tag = "main", className = "panel")
 
@@ -2064,7 +2199,7 @@ class LayoutEngineTest {
     }
 
     private fun styleSheet(
-        vararg rules: Pair<Array<out StyleSheetTarget>, UiStyle>,
+        vararg rules: Pair<StyleSheetTarget, UiStyle>,
     ): StyleSheet = object : StyleSheet {
         override val styles = mutableListOf<StyleSheetObject>()
     }.apply {
