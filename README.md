@@ -192,6 +192,11 @@ Mine2DEngine applies linear filtering only to glyph atlases created by `Mine2DFo
 
 The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-like box model:
 
+- Every `UiStyle` property defaults to `null`, meaning unspecified. Style selectors and the
+  element's own style are composed first, then unspecified properties receive their initial
+  values during layout. Explicit initial values such as `padding = UiEdges()`, `gap = 0f`, or
+  `position = UiPosition.STATIC` therefore override lower-priority declarations.
+
 - `boxSizing` controls whether a non-null `width` or `height` specifies the content box or the
   complete padded box. It defaults to `UiBoxSizing.CONTENT_BOX`; use `UiBoxSizing.BORDER_BOX` to
   include padding in the specified size. A `null` size still shrinks to the text or children.
@@ -215,12 +220,12 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
 - When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
 - `Div` places direct children vertically or horizontally.
 - `descendantStyle` on a `Div` receives each descendant and resolves its `UiStyle`, like CSS
-  `.parent *`. It can inspect the descendant's type and current state. Non-default values in a
+  `.parent *`. It can inspect the descendant's type and current state. Specified values in a
   descendant's own style take precedence. A non-null `descendantStyle` on a nested container takes
   precedence below that container.
 - `childStyle` works like CSS `.parent > *` and resolves styles only for direct children. When both
   selectors apply, `childStyle` takes precedence over `descendantStyle`, followed by the child's own
-  non-default style values.
+  specified style values.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
 - `color`, `font`, and `textShadow` are inherited from ancestors and may be overridden by a child.
   A null value inherits the parent. At the root, color defaults to opaque white and text shadow

@@ -139,13 +139,19 @@ class LayoutEngineTest {
         assertEquals(null, UiStyle().boxShadow)
         assertEquals(null, UiStyle().dropShadow)
         assertEquals(null, UiStyle().textShadow)
-        assertEquals(UiBoxSizing.CONTENT_BOX, UiStyle().boxSizing)
-        assertEquals(UiPosition.STATIC, UiStyle().position)
+        assertNull(UiStyle().margin)
+        assertNull(UiStyle().padding)
+        assertNull(UiStyle().direction)
+        assertNull(UiStyle().horizontalAlignment)
+        assertNull(UiStyle().verticalAlignment)
+        assertNull(UiStyle().gap)
+        assertNull(UiStyle().boxSizing)
+        assertNull(UiStyle().position)
         assertNull(UiStyle().left)
         assertNull(UiStyle().top)
         assertNull(UiStyle().right)
         assertNull(UiStyle().bottom)
-        assertFalse(UiStyle().noneDisplay())
+        assertNull(UiStyle().noneDisplay)
         assertEquals(UiStyle.DEFAULT_COLOR, layout.root.color)
         assertNull(layout.root.textShadow)
     }
@@ -346,6 +352,71 @@ class LayoutEngineTest {
         assertEquals(UiRect(5f, 7f, 20f, 10f), layout.root.bounds)
         assertSame(root, layout.elementAt(24f, 16f))
         assertNull(layout.elementAt(25f, 17f))
+    }
+
+    @Test
+    fun `explicit initial values override lower priority declarations`() {
+        val visible: () -> Boolean = { false }
+        val base = UiStyle(
+            margin = UiEdges(1f),
+            padding = UiEdges(2f),
+            direction = UiDirection.HORIZONTAL,
+            horizontalAlignment = UiHorizontalAlignment.RIGHT,
+            verticalAlignment = UiVerticalAlignment.BOTTOM,
+            position = UiPosition.ABSOLUTE,
+            gap = 3f,
+            boxSizing = UiBoxSizing.BORDER_BOX,
+            noneDisplay = { true },
+        )
+
+        val result = base.withOverrides(
+            UiStyle(
+                margin = UiEdges(),
+                padding = UiEdges(),
+                direction = UiDirection.VERTICAL,
+                horizontalAlignment = UiHorizontalAlignment.LEFT,
+                verticalAlignment = UiVerticalAlignment.TOP,
+                position = UiPosition.STATIC,
+                gap = 0f,
+                boxSizing = UiBoxSizing.CONTENT_BOX,
+                noneDisplay = visible,
+            ),
+        )
+
+        assertEquals(UiEdges(), result.margin)
+        assertEquals(UiEdges(), result.padding)
+        assertEquals(UiDirection.VERTICAL, result.direction)
+        assertEquals(UiHorizontalAlignment.LEFT, result.horizontalAlignment)
+        assertEquals(UiVerticalAlignment.TOP, result.verticalAlignment)
+        assertEquals(UiPosition.STATIC, result.position)
+        assertEquals(0f, result.gap)
+        assertEquals(UiBoxSizing.CONTENT_BOX, result.boxSizing)
+        assertSame(visible, result.noneDisplay)
+    }
+
+    @Test
+    fun `element can reset descendant padding to zero`() {
+        lateinit var child: Div
+        val root = div(
+            descendantStyle = {
+                UiStyle(
+                    padding = UiEdges(horizontal = 4f, vertical = 0f),
+                    boxSizing = UiBoxSizing.BORDER_BOX,
+                )
+            },
+        ) {
+            child = div(
+                UiStyle(
+                    width = 2f.px,
+                    padding = UiEdges(),
+                ),
+            )
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(2f, layout.nodeOf(child)!!.bounds.width)
+        assertEquals(UiEdges(), layout.nodeOf(child)!!.styleProvider().padding)
     }
 
     @Test

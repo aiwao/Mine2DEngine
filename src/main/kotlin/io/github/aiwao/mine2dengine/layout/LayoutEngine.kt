@@ -88,8 +88,8 @@ private fun calculateLayout(
 
 private data class MeasuredNode(
     val element: UiElement,
-    val style: UiStyle,
-    val styleProvider: () -> UiStyle,
+    val style: ResolvedUiStyle,
+    val styleProvider: () -> ResolvedUiStyle,
     val contentSize: UiSize,
     val children: List<MeasuredNode>,
     val textStyle: ResolvedUiTextStyle,
@@ -131,7 +131,9 @@ private fun measure(
         combineStyles(
             inheritedDescendantStyle(element),
             parentChildStyle(),
-        )?.withOverrides(element.style) ?: element.style
+        )?.withOverrides(element.style)
+            ?.resolveDefaults()
+            ?: element.style.resolveDefaults()
     }
     val style = styleProvider()
     val percentageWidthBase = when (style.position) {
