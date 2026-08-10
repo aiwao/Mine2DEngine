@@ -78,6 +78,12 @@ internal fun UiLength.resolve(percentageBase: Float?): Float? {
 /**
  * Visual and layout properties shared by every UI element.
  *
+ * Every nullable property uses null to mean that the property is unspecified. This allows a
+ * declaration to distinguish an omitted property from an explicitly supplied default value such
+ * as zero padding, a vertical direction, or static positioning. Unspecified properties first use
+ * matching descendant and child declarations, then resolve to their CSS-like initial values
+ * during layout.
+ *
  * [width] and [height] accept pixel and percentage [UiLength] values through [Float.px] and
  * [Float.percent]. Percentages use the corresponding resolved containing-block dimension, which is
  * normally the matching content dimension of the parent. [boxSizing] determines whether a non-null
@@ -110,22 +116,22 @@ data class UiStyle(
     val color: Int? = null,
     val backgroundColor: Int? = null,
     val backgroundMaterial: Mine2DMaterial? = null,
-    val margin: UiEdges = UiEdges(),
-    val padding: UiEdges = UiEdges(),
-    val direction: UiDirection = UiDirection.VERTICAL,
-    val horizontalAlignment: UiHorizontalAlignment = UiHorizontalAlignment.LEFT,
-    val verticalAlignment: UiVerticalAlignment = UiVerticalAlignment.TOP,
+    val margin: UiEdges? = null,
+    val padding: UiEdges? = null,
+    val direction: UiDirection? = null,
+    val horizontalAlignment: UiHorizontalAlignment? = null,
+    val verticalAlignment: UiVerticalAlignment? = null,
     val width: UiLength? = null,
     val height: UiLength? = null,
-    val position: UiPosition = UiPosition.STATIC,
+    val position: UiPosition? = null,
     val left: Float? = null,
     val top: Float? = null,
     val right: Float? = null,
     val bottom: Float? = null,
     val font: Mine2DFont? = null,
-    val gap: Float = 0f,
-    val boxSizing: UiBoxSizing = UiBoxSizing.CONTENT_BOX,
-    val noneDisplay: () -> Boolean = DEFAULT_NONE_DISPLAY,
+    val gap: Float? = null,
+    val boxSizing: UiBoxSizing? = null,
+    val noneDisplay: (() -> Boolean)? = null,
     val boxShadow: UiBoxShadow? = null,
     val textShadow: UiTextShadow? = null,
     val dropShadow: UiDropShadow? = null,
@@ -147,11 +153,62 @@ data class UiStyle(
         require(bottom == null || bottom.isFinite()) {
             "Bottom must be null or finite: $bottom"
         }
-        require(gap.isFinite() && gap >= 0f) {
+        require(gap == null || gap.isFinite() && gap >= 0f) {
             "Gap must be finite and non-negative: $gap"
         }
     }
 }
+
+/** A cascaded [UiStyle] after all unspecified properties have received their initial values. */
+internal data class ResolvedUiStyle(
+    val color: Int?,
+    val backgroundColor: Int?,
+    val backgroundMaterial: Mine2DMaterial?,
+    val margin: UiEdges,
+    val padding: UiEdges,
+    val direction: UiDirection,
+    val horizontalAlignment: UiHorizontalAlignment,
+    val verticalAlignment: UiVerticalAlignment,
+    val width: UiLength?,
+    val height: UiLength?,
+    val position: UiPosition,
+    val left: Float?,
+    val top: Float?,
+    val right: Float?,
+    val bottom: Float?,
+    val font: Mine2DFont?,
+    val gap: Float,
+    val boxSizing: UiBoxSizing,
+    val noneDisplay: () -> Boolean,
+    val boxShadow: UiBoxShadow?,
+    val textShadow: UiTextShadow?,
+    val dropShadow: UiDropShadow?,
+)
+
+internal fun UiStyle.resolveDefaults(): ResolvedUiStyle = ResolvedUiStyle(
+    color = color,
+    backgroundColor = backgroundColor,
+    backgroundMaterial = backgroundMaterial,
+    margin = margin ?: UiEdges(),
+    padding = padding ?: UiEdges(),
+    direction = direction ?: UiDirection.VERTICAL,
+    horizontalAlignment = horizontalAlignment ?: UiHorizontalAlignment.LEFT,
+    verticalAlignment = verticalAlignment ?: UiVerticalAlignment.TOP,
+    width = width,
+    height = height,
+    position = position ?: UiPosition.STATIC,
+    left = left,
+    top = top,
+    right = right,
+    bottom = bottom,
+    font = font,
+    gap = gap ?: 0f,
+    boxSizing = boxSizing ?: UiBoxSizing.CONTENT_BOX,
+    noneDisplay = noneDisplay ?: DEFAULT_NONE_DISPLAY,
+    boxShadow = boxShadow,
+    textShadow = textShadow,
+    dropShadow = dropShadow,
+)
 
 /** Text properties after resolving inheritance from ancestor styles. */
 internal data class ResolvedUiTextStyle(
@@ -160,7 +217,7 @@ internal data class ResolvedUiTextStyle(
     val textShadow: UiTextShadow? = null,
 )
 
-internal fun UiStyle.resolveTextStyle(parent: ResolvedUiTextStyle): ResolvedUiTextStyle =
+internal fun ResolvedUiStyle.resolveTextStyle(parent: ResolvedUiTextStyle): ResolvedUiTextStyle =
     ResolvedUiTextStyle(
         color = color ?: parent.color,
         font = font ?: parent.font,
@@ -168,34 +225,31 @@ internal fun UiStyle.resolveTextStyle(parent: ResolvedUiTextStyle): ResolvedUiTe
     )
 
 /**
- * Applies the explicitly non-default values in [overrides] to this style.
+ * Applies every specified value in [overrides] to this style.
  *
- * Nullable background values are resolved independently, with null meaning unspecified.
+ * Null uniformly means unspecified. Explicit initial values, including zero-valued lengths and
+ * the first enum constant, therefore override values supplied by a lower-priority declaration.
  */
 internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
     color = overrides.color ?: color,
     backgroundColor = overrides.backgroundColor ?: backgroundColor,
     backgroundMaterial = overrides.backgroundMaterial ?: backgroundMaterial,
-    margin = overrides.margin.takeUnless { it == UiEdges() } ?: margin,
-    padding = overrides.padding.takeUnless { it == UiEdges() } ?: padding,
-    direction = overrides.direction.takeUnless { it == UiDirection.VERTICAL } ?: direction,
-    horizontalAlignment = overrides.horizontalAlignment
-        .takeUnless { it == UiHorizontalAlignment.LEFT }
-        ?: horizontalAlignment,
-    verticalAlignment = overrides.verticalAlignment
-        .takeUnless { it == UiVerticalAlignment.TOP }
-        ?: verticalAlignment,
+    margin = overrides.margin ?: margin,
+    padding = overrides.padding ?: padding,
+    direction = overrides.direction ?: direction,
+    horizontalAlignment = overrides.horizontalAlignment ?: horizontalAlignment,
+    verticalAlignment = overrides.verticalAlignment ?: verticalAlignment,
     width = overrides.width ?: width,
     height = overrides.height ?: height,
-    position = overrides.position.takeUnless { it == UiPosition.STATIC } ?: position,
+    position = overrides.position ?: position,
     left = overrides.left ?: left,
     top = overrides.top ?: top,
     right = overrides.right ?: right,
     bottom = overrides.bottom ?: bottom,
     font = overrides.font ?: font,
-    gap = overrides.gap.takeUnless { it == 0f } ?: gap,
-    boxSizing = overrides.boxSizing.takeUnless { it == UiBoxSizing.CONTENT_BOX } ?: boxSizing,
-    noneDisplay = overrides.noneDisplay.takeUnless { it === DEFAULT_NONE_DISPLAY } ?: noneDisplay,
+    gap = overrides.gap ?: gap,
+    boxSizing = overrides.boxSizing ?: boxSizing,
+    noneDisplay = overrides.noneDisplay ?: noneDisplay,
     boxShadow = overrides.boxShadow ?: boxShadow,
     textShadow = overrides.textShadow ?: textShadow,
     dropShadow = overrides.dropShadow ?: dropShadow,

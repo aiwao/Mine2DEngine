@@ -38,7 +38,7 @@ data class UiLayoutNode(
     /** Whether this node generated a layout box. */
     internal val displayed: Boolean = true,
 ) {
-    internal var styleProvider: () -> UiStyle = { element.style }
+    internal var styleProvider: () -> ResolvedUiStyle = { element.style.resolveDefaults() }
 }
 
 /** A layout result that can render and dispatch pointer input to UI elements. */
@@ -287,7 +287,7 @@ class UiLayout internal constructor(
 
     private fun drawContents(
         node: UiLayoutNode,
-        style: UiStyle,
+        style: ResolvedUiStyle,
         renderer: Mine2DEngine,
         inheritedTextStyle: ResolvedUiTextStyle,
         timeSeconds: Float,
@@ -346,7 +346,7 @@ class UiLayout internal constructor(
 
     private fun drawText(
         text: String,
-        style: UiStyle,
+        style: ResolvedUiStyle,
         resolvedTextStyle: ResolvedUiTextStyle,
         contentBounds: UiRect,
         font: Mine2DFont,
@@ -410,6 +410,15 @@ internal fun textRendererY(
 ): Float = lineBoxTop + rendererOffsetFromLineTop + lineIndex * lineHeight
 
 internal fun UiStyle.drawBackground(
+    rendererMaterial: Mine2DMaterial,
+    draw: (color: Int, material: Mine2DMaterial) -> Unit,
+) {
+    backgroundColor?.let { color ->
+        draw(color, backgroundMaterial ?: rendererMaterial)
+    }
+}
+
+internal fun ResolvedUiStyle.drawBackground(
     rendererMaterial: Mine2DMaterial,
     draw: (color: Int, material: Mine2DMaterial) -> Unit,
 ) {
