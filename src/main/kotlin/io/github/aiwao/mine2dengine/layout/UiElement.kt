@@ -96,7 +96,8 @@ sealed class UiContainer(
      * Creates and adds one instance of [component] with call-site style and event overrides.
      *
      * Specified [style] values override the component root's style. Null callbacks preserve the
-     * callbacks created by the component factory.
+     * callbacks created by the component factory. [content] is built once by the component factory
+     * at the position it chooses in the created tree.
      */
     fun <T : UiElement> component(
         component: UiComponent<T>,
@@ -106,6 +107,7 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
+        content: UiContent = {},
     ): T = mountComponent(
         component = component,
         resolveStyle = { style },
@@ -114,13 +116,15 @@ sealed class UiContainer(
         onDrag = onDrag,
         onMouseOver = onMouseOver,
         onMouseOut = onMouseOut,
+        content = content,
     )
 
     /**
      * Creates an instance of [component] with style resolved from its root's current state.
      *
      * Specified style values override the component root's style. Null callbacks preserve the
-     * callbacks created by the component factory.
+     * callbacks created by the component factory. [content] is built once by the component factory
+     * at the position it chooses in the created tree.
      */
     fun <T : UiElement> component(
         component: UiComponent<T>,
@@ -130,6 +134,7 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
+        content: UiContent = {},
     ): T = mountComponent(
         component = component,
         resolveStyle = style,
@@ -138,6 +143,7 @@ sealed class UiContainer(
         onDrag = onDrag,
         onMouseOver = onMouseOver,
         onMouseOut = onMouseOut,
+        content = content,
     )
 
     private fun <T : UiElement> mountComponent(
@@ -148,15 +154,24 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)?,
         onMouseOver: (() -> Unit)?,
         onMouseOut: (() -> Unit)?,
-    ): T = component.create().also { root ->
-        root.componentStyleSheets = component.styleSheets.toList()
-        root.addStyleOverrides { resolveStyle(root) }
-        onClick?.let { root.onClick = it }
-        onMouseMove?.let { root.onMouseMove = it }
-        onDrag?.let { root.onDrag = it }
-        onMouseOver?.let { root.onMouseOver = it }
-        onMouseOut?.let { root.onMouseOut = it }
-        add(root)
+        content: UiContent,
+    ): T {
+        var contentBuilt = false
+        val singleUseContent: UiContent = {
+            check(!contentBuilt) { "Component content may only be built once" }
+            contentBuilt = true
+            content(this)
+        }
+        return component.create(singleUseContent).also { root ->
+            root.componentStyleSheets = component.styleSheets.toList()
+            root.addStyleOverrides { resolveStyle(root) }
+            onClick?.let { root.onClick = it }
+            onMouseMove?.let { root.onMouseMove = it }
+            onDrag?.let { root.onDrag = it }
+            onMouseOver?.let { root.onMouseOver = it }
+            onMouseOut?.let { root.onMouseOut = it }
+            add(root)
+        }
     }
 
     fun div(

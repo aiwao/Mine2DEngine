@@ -353,10 +353,9 @@ input handling. Inherited text styles and global `StyleSheet` values passed to
 `LayoutEngine.layout` continue across component boundaries.
 
 ```kotlin
-val actionBar = uiComponent(styleSheet = actionBarStyleSheet) {
+val actionBar = uiComponent(styleSheet = actionBarStyleSheet) { content ->
     div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
-        p("Save", className = "action")
-        p("Close", className = "action")
+        content()
     }
 }
 
@@ -366,17 +365,28 @@ val composedLayout = LayoutEngine.layout(
     top = 12f,
 ) {
     p("Editor")
-    component(actionBar)
+    component(actionBar) {
+        p("Save", className = "action")
+        p("Close", className = "action")
+    }
     component(
         actionBar,
         style = UiStyle(gap = 2f),
         onClick = { event -> println("Compact bar: button=${event.button()}") },
-    ) // Overrides only this instance's root
+    ) {
+        p("Apply", className = "action")
+        p("Cancel", className = "action")
+    } // Overrides only this instance's root
 }
 ```
 
+Every component receives empty content by default. Its factory may invoke supplied content once at
+any `UiContainer` in the created tree. A component that does not expose content can leave the
+factory parameter unused, and callers can omit content.
+
 Sheets attached to a `Div` or passed to `uiComponent` apply only to that scope root and its
-contents. `TargetScope` selects that root. Their local
+contents. Content supplied at the call site is also treated as part of the component's contents.
+`TargetScope` selects that root. Their local
 selectors cannot inspect ancestors or siblings at the call site. At a nested child component, a
 parent component's local sheet can style the child's root but does not enter its contents.
 
@@ -385,9 +395,9 @@ Specified style values override the style created by the component factory, whil
 values and null callbacks preserve the component defaults. Instance-specific style sheets are not
 accepted; use the call-site style for root overrides or define scoped sheets in `uiComponent`.
 
-The component factory runs once when `component(...)` adds it. When the same `UiLayout` is
-recalculated after a `noneDisplay` change, it reuses the existing element tree and preserves state
-such as hover and drag state.
+The component factory and its supplied content run only when `component(...)` adds it. When the
+same `UiLayout` is recalculated after a `noneDisplay` change, it reuses the existing element tree
+without rerunning content and preserves state such as hover and drag state.
 
 For example, this dynamic rule applies a drop shadow only to paragraph descendants, including the
 one inside the nested `Div`. A dynamic declaration receives each matching element whenever its
