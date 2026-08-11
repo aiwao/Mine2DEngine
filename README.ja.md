@@ -224,6 +224,13 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   `.card.active.large`、`div#main` のような複合セレクターには `TargetAnd`、`h1, h2, h3` の
   ようなセレクターリストには `TargetOr` を使います。詳細度はID、class・疑似class、tagの順に
   比較され、同じなら後のルール、最後に要素自身の指定済みstyleが優先されます。
+- 要素selectorに `.before` または `.after` を付けると、生成される `::before` / `::after`
+  boxを対象にできます。疑似要素ルールには`UiPseudoStyle`を使い、contentには
+  `UiGeneratedContent.Text`または`UiGeneratedContent.EmptyBox`を指定します。生成boxは
+  `UiContainer.children`には追加されず、元要素の最初または最後のcontentとして`direction`と
+  `gap`に参加します。通常の`UiStyle`によるbox、配置、描画、shadow、`noneDisplay`が利用でき、
+  Textは元要素から`color`、`font`、`textShadow`を継承します。生成box上のpointer入力は元要素を
+  対象にします。boundsは`UiLayout.pseudoNodeOf`で取得できます。
 - `TargetScope` はCSSの `:scope` セレクターです。グローバルシートではレイアウトのルート、
   scopedシートではコンテナまたはコンポーネントのルートに一致し、疑似クラス相当の詳細度を持ちます。
 - `TargetWildcard` はCSSのユニバーサルセレクター `*` です。すべての要素に一致し、詳細度には
@@ -262,11 +269,15 @@ import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiDropShadow
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
+import io.github.aiwao.mine2dengine.layout.UiGeneratedContent
 import io.github.aiwao.mine2dengine.layout.UiPosition
+import io.github.aiwao.mine2dengine.layout.UiPseudoStyle
 import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.descendant
+import io.github.aiwao.mine2dengine.layout.after
+import io.github.aiwao.mine2dengine.layout.before
 import io.github.aiwao.mine2dengine.layout.div
 import io.github.aiwao.mine2dengine.layout.percent
 import io.github.aiwao.mine2dengine.layout.px
@@ -457,6 +468,24 @@ object ExampleStyleSheet : StyleSheet {
                 right = TargetWildcard,
             ),
             style = UiStyle(padding = UiEdges(4f)),
+        )
+        newStyle(
+            target = TargetClass("featured").before,
+            pseudoStyle = UiPseudoStyle(
+                content = UiGeneratedContent.Text("注目: "),
+                style = UiStyle(color = 0xFFFFCC00.toInt()),
+            ),
+        )
+        newStyle(
+            target = TargetClass("featured").after,
+            pseudoStyle = UiPseudoStyle(
+                content = UiGeneratedContent.EmptyBox,
+                style = UiStyle(
+                    width = 4f.px,
+                    height = 4f.px,
+                    backgroundColor = 0xFFFFCC00.toInt(),
+                ),
+            ),
         )
     }
 }

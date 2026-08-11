@@ -430,6 +430,256 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `before and after generate first and last content boxes`() {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(
+                TargetClass("label").before,
+                UiPseudoStyle(UiGeneratedContent.Text(">>")),
+            )
+            newStyle(
+                TargetClass("label").after,
+                UiPseudoStyle(
+                    content = UiGeneratedContent.EmptyBox,
+                    style = UiStyle(width = 4f.px, height = 3f.px),
+                ),
+            )
+        }
+        lateinit var child: Paragraph
+        val root = div(
+            style = UiStyle(direction = UiDirection.HORIZONTAL),
+            className = "label",
+        ) {
+            child = p("x")
+        }
+
+        val layout = calculateLayout(
+            root,
+            left = 2f,
+            top = 3f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        assertEquals(UiSize(19f, 10f), layout.size)
+        assertEquals(UiRect(2f, 3f, 10f, 10f), layout.pseudoNodeOf(root, UiPseudoElement.BEFORE)!!.bounds)
+        assertEquals(UiRect(12f, 3f, 5f, 10f), layout.nodeOf(child)!!.bounds)
+        assertEquals(UiRect(17f, 3f, 4f, 3f), layout.pseudoNodeOf(root, UiPseudoElement.AFTER)!!.bounds)
+        assertEquals(listOf<UiElement>(child), root.children)
+
+        layout.left = 12f
+
+        assertEquals(UiRect(12f, 3f, 10f, 10f), layout.pseudoNodeOf(root, UiPseudoElement.BEFORE)!!.bounds)
+        assertEquals(UiRect(27f, 3f, 4f, 3f), layout.pseudoNodeOf(root, UiPseudoElement.AFTER)!!.bounds)
+    }
+
+    @Test
+    fun `pseudo element declarations cascade content and style independently from owner style`() {
+        val tagColor = 0xFF112233.toInt()
+        val classColor = 0xFF445566.toInt()
+        val ownerColor = 0xFF778899.toInt()
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(
+                TargetTag("section").before,
+                UiPseudoStyle(
+                    content = UiGeneratedContent.Text("tag"),
+                    style = UiStyle(color = tagColor, width = 20f.px),
+                ),
+            )
+            newStyle(
+                TargetClass("featured").before,
+                UiPseudoStyle(
+                    content = UiGeneratedContent.Text("class"),
+                    style = UiStyle(color = classColor),
+                ),
+            )
+        }
+        val root = div(
+            style = UiStyle(color = ownerColor, width = 1f.px),
+            tag = "section",
+            className = "featured",
+        )
+
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+        val pseudo = layout.pseudoNodeOf(root, UiPseudoElement.BEFORE)!!
+        val pseudoStyle = pseudo.pseudoStyleProvider()
+
+        assertEquals(UiGeneratedContent.Text("class"), pseudo.content)
+        assertEquals(classColor, pseudoStyle.style.color)
+        assertEquals(20f.px, pseudoStyle.style.width)
+        assertEquals(1f, layout.root.bounds.width)
+        assertEquals(ownerColor, layout.root.color)
+    }
+
+    @Test
+    fun `paragraph lays out before text and after in content order`() {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(
+                TargetTag("p").before,
+                UiPseudoStyle(UiGeneratedContent.Text("A")),
+            )
+            newStyle(
+                TargetTag("p").after,
+                UiPseudoStyle(
+                    UiGeneratedContent.EmptyBox,
+                    UiStyle(width = 3f.px, height = 2f.px),
+                ),
+            )
+        }
+        val paragraph = Paragraph(
+            text = "BC",
+            style = UiStyle(direction = UiDirection.HORIZONTAL),
+        )
+
+        val layout = calculateLayout(
+            paragraph,
+            left = 1f,
+            top = 2f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        assertEquals(UiSize(18f, 10f), layout.size)
+        assertEquals(UiRect(1f, 2f, 5f, 10f), layout.pseudoNodeOf(paragraph, UiPseudoElement.BEFORE)!!.bounds)
+        assertEquals(UiRect(6f, 2f, 10f, 10f), layout.root.textBounds)
+        assertEquals(UiRect(16f, 2f, 3f, 2f), layout.pseudoNodeOf(paragraph, UiPseudoElement.AFTER)!!.bounds)
+    }
+
+    @Test
+    fun `empty box does not require a font`() {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(
+                TargetScope.before,
+                UiPseudoStyle(
+                    UiGeneratedContent.EmptyBox,
+                    UiStyle(width = 7f.px, height = 4f.px),
+                ),
+            )
+        }
+
+        val layout = LayoutEngine.layout(div(), sheet)
+
+        assertEquals(UiSize(7f, 4f), layout.size)
+        assertEquals(UiRect(0f, 0f, 7f, 4f), layout.pseudoNodeOf(layout.root.element, UiPseudoElement.BEFORE)!!.bounds)
+    }
+
+    @Test
+    fun `target scope pseudo element uses its attached container scope`() {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(
+                TargetScope.after,
+                UiPseudoStyle(
+                    UiGeneratedContent.EmptyBox,
+                    UiStyle(width = 6f.px, height = 2f.px),
+                ),
+            )
+        }
+        lateinit var scoped: Div
+        lateinit var outside: Div
+        val root = div {
+            scoped = div(styleSheets = listOf(sheet))
+            outside = div()
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertNotNull(layout.pseudoNodeOf(scoped, UiPseudoElement.AFTER))
+        assertNull(layout.pseudoNodeOf(root, UiPseudoElement.AFTER))
+        assertNull(layout.pseudoNodeOf(outside, UiPseudoElement.AFTER))
+    }
+
+    @Test
+    fun `pseudo none display changes trigger relayout`() {
+        var hidden = false
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(TargetScope.before) {
+                UiPseudoStyle(
+                    UiGeneratedContent.EmptyBox,
+                    UiStyle(
+                        width = 8f.px,
+                        height = 3f.px,
+                        noneDisplay = { hidden },
+                    ),
+                )
+            }
+        }
+        val root = div()
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        assertEquals(UiSize(8f, 3f), layout.size)
+        assertNotNull(layout.pseudoNodeOf(root, UiPseudoElement.BEFORE))
+
+        hidden = true
+
+        assertEquals(UiSize(0f, 0f), layout.size)
+        assertNull(layout.pseudoNodeOf(root, UiPseudoElement.BEFORE))
+    }
+
+    @Test
+    fun `pointer input on an absolute pseudo box targets its originating element`() {
+        var clicked = false
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(
+                TargetScope.after,
+                UiPseudoStyle(
+                    UiGeneratedContent.EmptyBox,
+                    UiStyle(
+                        width = 5f.px,
+                        height = 5f.px,
+                        position = UiPosition.ABSOLUTE,
+                        left = 20f,
+                        top = 0f,
+                    ),
+                ),
+            )
+        }
+        val root = div(
+            style = UiStyle(
+                width = 10f.px,
+                height = 10f.px,
+                position = UiPosition.RELATIVE,
+            ),
+            onClick = { clicked = true },
+        )
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        assertSame(root, layout.elementAt(21f, 1f))
+        assertTrue(layout.mouseClick(MouseButtonEvent(21.0, 1.0, MouseButtonInfo(0, 0))))
+        assertTrue(clicked)
+    }
+
+    @Test
     fun `style sheet target accepts the four CSS combinators`() {
         assertEquals(
             listOf(" ", ">", "+", "~"),
