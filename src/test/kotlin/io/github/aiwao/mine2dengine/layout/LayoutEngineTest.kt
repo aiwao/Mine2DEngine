@@ -375,6 +375,61 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `target scope selects each attached container root`() {
+        val outerColor = 0xFF112233.toInt()
+        val innerColor = 0xFF445566.toInt()
+        val outerSheet = styleSheet(
+            TargetScope to UiStyle(width = 30f.px),
+            (TargetScope descendant TargetWildcard) to UiStyle(
+                backgroundColor = outerColor,
+                width = 30f.px,
+            ),
+        )
+        val innerSheet = styleSheet(
+            TargetScope to UiStyle(height = 12f.px),
+            (TargetScope descendant TargetWildcard) to UiStyle(
+                backgroundColor = innerColor,
+            ),
+        )
+        lateinit var outerParagraph: Paragraph
+        lateinit var inner: Div
+        lateinit var innerParagraph: Paragraph
+        lateinit var outsideParagraph: Paragraph
+        val root = div {
+            div(styleSheets = listOf(outerSheet)) {
+                outerParagraph = p("outer")
+                inner = div(styleSheets = listOf(innerSheet)) {
+                    innerParagraph = p("inner")
+                }
+            }
+            outsideParagraph = p("outside")
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(outerColor, layout.nodeOf(outerParagraph)!!.styleProvider().backgroundColor)
+        assertEquals(30f.px, layout.nodeOf(inner)!!.styleProvider().width)
+        assertEquals(12f.px, layout.nodeOf(inner)!!.styleProvider().height)
+        assertEquals(innerColor, layout.nodeOf(innerParagraph)!!.styleProvider().backgroundColor)
+        assertNull(layout.nodeOf(outsideParagraph)!!.styleProvider().backgroundColor)
+    }
+
+    @Test
+    fun `target scope has pseudo class specificity`() {
+        val tagColor = 0xFF112233.toInt()
+        val scopeColor = 0xFF445566.toInt()
+        val sheet = styleSheet(
+            TargetScope to UiStyle(backgroundColor = scopeColor),
+            TargetTag("section") to UiStyle(backgroundColor = tagColor),
+        )
+        val root = div(tag = "section", styleSheets = listOf(sheet))
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(scopeColor, layout.root.styleProvider().backgroundColor)
+    }
+
+    @Test
     fun `style sheet target accepts the four CSS combinators`() {
         assertEquals(
             listOf(" ", ">", "+", "~"),
@@ -670,8 +725,8 @@ class LayoutEngineTest {
     fun `component style sheets apply to their root and descendants without leaking out`() {
         val callerLeakColor = 0xFFABCDEF.toInt()
         val componentSheet = styleSheet(
-            TargetClass("component-root") to UiStyle(width = 20f.px),
-            TargetClass("label") to UiStyle(height = 4f.px),
+            TargetScope to UiStyle(width = 20f.px),
+            (TargetScope descendant TargetClass("label")) to UiStyle(height = 4f.px),
             (TargetClass("caller") descendant TargetClass("label")) to UiStyle(
                 backgroundColor = callerLeakColor,
             ),
@@ -698,47 +753,107 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `mount style sheets follow component defaults in the shared specificity cascade`() {
+    fun `container sheets stop inside nested components`() {
+        val outerColor = 0xFF112233.toInt()
+        val outerSheet = styleSheet(
+            (TargetScope descendant TargetClass("shared")) to UiStyle(
+                backgroundColor = outerColor,
+            ),
+        )
+        lateinit var componentRoot: Div
+        lateinit var componentParagraph: Paragraph
+        val component = uiComponent {
+            div(className = "shared") {
+                componentParagraph = p("inside", className = "shared")
+            }
+        }
+        val root = div(styleSheets = listOf(outerSheet)) {
+            componentRoot = component(component)
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(outerColor, layout.nodeOf(componentRoot)!!.styleProvider().backgroundColor)
+        assertNull(layout.nodeOf(componentParagraph)!!.styleProvider().backgroundColor)
+    }
+
+    @Test
+    fun `component call-site style overrides its root defaults`() {
         val defaultColor = 0xFF112233.toInt()
         val mountedColor = 0xFF445566.toInt()
         val defaultSheet = styleSheet(
-            TargetClass("card") to UiStyle(
+            TargetScope to UiStyle(
                 width = 10f.px,
                 backgroundColor = defaultColor,
             ),
         )
-        val mountSheet = styleSheet(
-            TargetClass("card") to UiStyle(
-                width = 20f.px,
-                height = 6f.px,
-                backgroundColor = mountedColor,
-            ),
-        )
-        val globalSheet = styleSheet(
-            (TargetTag("article") and TargetClass("card")) to UiStyle(height = 9f.px),
-        )
         val card = uiComponent(styleSheets = listOf(defaultSheet)) {
-            div(tag = "article", className = setOf("card"))
+            div(UiStyle(height = 6f.px))
         }
         lateinit var defaultCard: Div
         lateinit var mountedCard: Div
         val root = div {
             defaultCard = component(card)
-            mountedCard = component(card, styleSheets = listOf(mountSheet))
+            mountedCard = component(
+                card,
+                style = UiStyle(
+                    width = 20f.px,
+                    backgroundColor = mountedColor,
+                ),
+            )
         }
 
-        val layout = calculateLayout(
-            root,
-            left = 0f,
-            top = 0f,
-            textMeasurer = textMeasurer,
-            styleSheets = listOf(globalSheet),
-        )
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
-        assertEquals(UiRect(0f, 0f, 10f, 9f), layout.nodeOf(defaultCard)!!.bounds)
+        assertEquals(UiRect(0f, 0f, 10f, 6f), layout.nodeOf(defaultCard)!!.bounds)
         assertEquals(defaultColor, layout.nodeOf(defaultCard)!!.styleProvider().backgroundColor)
-        assertEquals(UiRect(0f, 9f, 20f, 9f), layout.nodeOf(mountedCard)!!.bounds)
+        assertEquals(UiRect(0f, 6f, 20f, 6f), layout.nodeOf(mountedCard)!!.bounds)
         assertEquals(mountedColor, layout.nodeOf(mountedCard)!!.styleProvider().backgroundColor)
+    }
+
+    @Test
+    fun `component call-site supports dynamic style and event overrides`() {
+        val defaultClick: (MouseButtonEvent) -> Unit = {}
+        val mountedClick: (MouseButtonEvent) -> Unit = {}
+        val mountedMove: (Double, Double) -> Unit = { _, _ -> }
+        val mountedDrag: (MouseButtonEvent) -> Unit = {}
+        val mountedOver: () -> Unit = {}
+        val mountedOut: () -> Unit = {}
+        var mountedHeight = 6f
+        val card = uiComponent {
+            div(
+                style = UiStyle(width = 10f.px, height = 4f.px),
+                onClick = defaultClick,
+            )
+        }
+        lateinit var defaultCard: Div
+        lateinit var mountedCard: Div
+        val root = div {
+            defaultCard = component(card)
+            mountedCard = component(
+                card,
+                style = { UiStyle(height = mountedHeight.px) },
+                onClick = mountedClick,
+                onMouseMove = mountedMove,
+                onDrag = mountedDrag,
+                onMouseOver = mountedOver,
+                onMouseOut = mountedOut,
+            )
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertSame(defaultClick, defaultCard.onClick)
+        assertEquals(10f.px, layout.nodeOf(mountedCard)!!.styleProvider().width)
+        assertEquals(6f.px, layout.nodeOf(mountedCard)!!.styleProvider().height)
+        assertSame(mountedClick, mountedCard.onClick)
+        assertSame(mountedMove, mountedCard.onMouseMove)
+        assertSame(mountedDrag, mountedCard.onDrag)
+        assertSame(mountedOver, mountedCard.onMouseOver)
+        assertSame(mountedOut, mountedCard.onMouseOut)
+
+        mountedHeight = 8f
+        assertEquals(8f.px, layout.nodeOf(mountedCard)!!.styleProvider().height)
     }
 
     @Test
@@ -1174,15 +1289,16 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `element can reset descendant padding to zero`() {
+    fun `element can reset scoped descendant padding to zero`() {
+        val descendantSheet = styleSheet(
+            (TargetScope descendant TargetWildcard) to UiStyle(
+                padding = UiEdges(horizontal = 4f, vertical = 0f),
+                boxSizing = UiBoxSizing.BORDER_BOX,
+            ),
+        )
         lateinit var child: Div
         val root = div(
-            descendantStyle = {
-                UiStyle(
-                    padding = UiEdges(horizontal = 4f, vertical = 0f),
-                    boxSizing = UiBoxSizing.BORDER_BOX,
-                )
-            },
+            styleSheets = listOf(descendantSheet),
         ) {
             child = div(
                 UiStyle(
@@ -1199,26 +1315,36 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `descendant style receives and dynamically styles every descendant`() {
+    fun `dynamic scoped rule receives and styles every descendant`() {
         val outerEvaluations = mutableListOf<UiElement>()
         val nestedEvaluations = mutableListOf<UiElement>()
         val paragraphShadow = UiDropShadow()
         var shadowsEnabled = false
-        val descendantStyle: (UiElement) -> UiStyle = { child ->
-            outerEvaluations += child
-            UiStyle(
-                color = 0xFF112233.toInt(),
-                width = 20f.px,
-                height = 10f.px,
-                dropShadow = paragraphShadow.takeIf { shadowsEnabled && child is Paragraph },
-            )
+        val outerSheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(TargetScope descendant TargetWildcard) { descendant ->
+                outerEvaluations += descendant
+                UiStyle(
+                    color = 0xFF112233.toInt(),
+                    width = 20f.px,
+                    height = 10f.px,
+                    dropShadow = paragraphShadow.takeIf {
+                        shadowsEnabled && descendant is Paragraph
+                    },
+                )
+            }
         }
-        val nestedDescendantStyle: (UiElement) -> UiStyle = { child ->
-            nestedEvaluations += child
-            UiStyle(
-                color = 0xFF445566.toInt(),
-                width = 8f.px,
-            )
+        val nestedSheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(TargetScope descendant TargetWildcard) { descendant ->
+                nestedEvaluations += descendant
+                UiStyle(
+                    color = 0xFF445566.toInt(),
+                    width = 8f.px,
+                )
+            }
         }
         lateinit var directParagraph: Paragraph
         lateinit var nestedDiv: Div
@@ -1227,13 +1353,13 @@ class LayoutEngineTest {
         lateinit var styledParagraph: Paragraph
         val root = div(
             style = UiStyle(width = 80f.px, height = 60f.px),
-            descendantStyle = descendantStyle,
+            styleSheets = listOf(outerSheet),
         ) {
             directParagraph = p("direct", UiStyle(width = 1f.px))
             nestedDiv = div {
                 nestedParagraph = p("nested", UiStyle(width = 2f.px))
             }
-            styledDiv = div(style = UiStyle(), descendantStyle = nestedDescendantStyle) {
+            styledDiv = div(styleSheets = listOf(nestedSheet)) {
                 styledParagraph = p("styled")
             }
         }
@@ -1271,31 +1397,36 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `child style receives and dynamically styles only direct children`() {
+    fun `dynamic scoped child rule styles only direct children`() {
         val childEvaluations = mutableListOf<UiElement>()
         var directChildHeight = 10f
         val descendantBackground = 0xFF112233.toInt()
         val childBackground = 0xFF445566.toInt()
-        lateinit var directParagraph: Paragraph
-        lateinit var nestedDiv: Div
-        lateinit var nestedParagraph: Paragraph
-        val root = div(
-            style = UiStyle(width = 80f.px, height = 60f.px),
-            descendantStyle = {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(TargetScope descendant TargetWildcard) {
                 UiStyle(
                     width = 20f.px,
                     height = 8f.px,
                     backgroundColor = descendantBackground,
                 )
-            },
-            childStyle = { child ->
+            }
+            newStyle(TargetScope child TargetWildcard) { child ->
                 childEvaluations += child
                 UiStyle(
                     width = 12f.px,
                     height = directChildHeight.px,
                     backgroundColor = childBackground,
                 )
-            },
+            }
+        }
+        lateinit var directParagraph: Paragraph
+        lateinit var nestedDiv: Div
+        lateinit var nestedParagraph: Paragraph
+        val root = div(
+            style = UiStyle(width = 80f.px, height = 60f.px),
+            styleSheets = listOf(sheet),
         ) {
             directParagraph = p("direct", UiStyle(width = 1f.px))
             nestedDiv = div {

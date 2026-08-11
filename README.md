@@ -219,18 +219,16 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
   CSS `filter: drop-shadow()`. It is local to that element and does not affect layout or hit bounds.
 - When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
 - `Div` places direct children vertically or horizontally.
-- `descendantStyle` on a `Div` receives each descendant and resolves its `UiStyle`, like CSS
-  `.parent *`. It can inspect the descendant's type and current state. Specified values in a
-  descendant's own style take precedence. A non-null `descendantStyle` on a nested container takes
-  precedence below that container.
-- `childStyle` works like CSS `.parent > *` and resolves styles only for direct children. When both
-  selectors apply, `childStyle` takes precedence over `descendantStyle`, followed by the child's own
-  specified style values.
+- A `Div` can receive `styleSheets` scoped to itself and its descendants. Nested container scopes
+  participate in the same specificity cascade, while a nested component stops an outer local sheet
+  below the component root. Mutating a container's sheet list requires recalculating the layout.
 - A `StyleSheet` passed to `LayoutEngine.layout` applies rules to matching element tags, IDs, or
   class names. `newStyle` accepts one `StyleSheetTarget`. Use `TargetAnd` for compound selectors
   such as `button.primary`, `.card.active.large`, and `div#main`; use `TargetOr` for selector lists
-  such as `h1, h2, h3`. Specificity is compared by ID, then class, then tag; later rules win at
-  equal specificity, and an element's own specified style values win last.
+  such as `h1, h2, h3`. Specificity is compared by ID, then class/pseudo-class, then tag; later
+  rules win at equal specificity, and an element's own specified style values win last.
+- `TargetScope` is the CSS `:scope` selector. It selects the layout root in a global sheet, or the
+  container/component root in a scoped sheet, and has pseudo-class specificity.
 - `TargetWildcard` is the CSS universal selector `*`. It matches every element and adds no
   specificity, including when used in a chain such as `.parent > *`.
 - `TargetCombinator(left, combinator, right)` joins selectors with `StyleSheetCombinator`:
@@ -258,6 +256,7 @@ import io.github.aiwao.mine2dengine.layout.TargetClass
 import io.github.aiwao.mine2dengine.layout.TargetCombinator
 import io.github.aiwao.mine2dengine.layout.TargetId
 import io.github.aiwao.mine2dengine.layout.TargetOr
+import io.github.aiwao.mine2dengine.layout.TargetScope
 import io.github.aiwao.mine2dengine.layout.TargetTag
 import io.github.aiwao.mine2dengine.layout.TargetWildcard
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
@@ -270,6 +269,7 @@ import io.github.aiwao.mine2dengine.layout.UiPosition
 import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
+import io.github.aiwao.mine2dengine.layout.descendant
 import io.github.aiwao.mine2dengine.layout.div
 import io.github.aiwao.mine2dengine.layout.percent
 import io.github.aiwao.mine2dengine.layout.px
@@ -369,36 +369,48 @@ val composedLayout = LayoutEngine.layout(
     component(actionBar)
     component(
         actionBar,
-        styleSheet = compactActionBarStyleSheet,
-    ) // Added only to this instance
+        style = UiStyle(gap = 2f),
+        onClick = { event -> println("Compact bar: button=${event.button()}") },
+    ) // Overrides only this instance's root
 }
 ```
 
-Sheets passed to `uiComponent` apply only to the component root and its contents. Their local
+Sheets attached to a `Div` or passed to `uiComponent` apply only to that scope root and its
+contents. `TargetScope` selects that root. Their local
 selectors cannot inspect ancestors or siblings at the call site. At a nested child component, a
-parent component's local sheet can style the child's root but does not enter its contents. A sheet
-passed to `component(...)` follows the component's default sheets. As in the regular cascade,
-specificity is compared first; later sheets win at equal specificity, and the element's own style
-wins last.
+parent component's local sheet can style the child's root but does not enter its contents.
+
+`component(...)` accepts the same static or dynamic `style` and root event callbacks as `div`.
+Specified style values override the style created by the component factory, while unspecified
+values and null callbacks preserve the component defaults. Instance-specific style sheets are not
+accepted; use the call-site style for root overrides or define scoped sheets in `uiComponent`.
 
 The component factory runs once when `component(...)` adds it. When the same `UiLayout` is
 recalculated after a `noneDisplay` change, it reuses the existing element tree and preserves state
 such as hover and drag state.
 
-For example, this applies a drop shadow only to paragraph descendants, including the one inside
-the nested `Div`. Every element exposes its read-only `tag`, which can be used when selecting
-descendants. Tag names are matched exactly and may contain whitespace. It defaults to `"div"` for
-`div` and `"p"` for `p` / `paragraph`, and can be specified with the `tag` constructor argument:
+For example, this dynamic rule applies a drop shadow only to paragraph descendants, including the
+one inside the nested `Div`. A dynamic declaration receives each matching element whenever its
+style is resolved. It may run more than once and should not perform side effects. Every element
+exposes its read-only `tag`; tag names are matched exactly and may contain whitespace:
 
 ```kotlin
+object LabelStyleSheet : StyleSheet {
+    override val styles = mutableListOf<StyleSheetObject>()
+
+    init {
+        newStyle(TargetScope descendant TargetWildcard) { descendant ->
+            UiStyle(
+                dropShadow = if (descendant.tag == "p") UiDropShadow() else null,
+            )
+        }
+    }
+}
+
 val labels = div(
     tag = "section",
     style = UiStyle(font = font),
-    descendantStyle = { child ->
-        UiStyle(
-            dropShadow = if (child.tag == "p") UiDropShadow() else null,
-        )
-    },
+    styleSheets = listOf(LabelStyleSheet),
 ) {
     p("First")
     div {
@@ -479,11 +491,11 @@ hoverableLayout.mouseMove(mouseX, mouseY)
 hoverableLayout.render(draw)
 ```
 
-Dynamic styles are supported by `div` and `p` / `paragraph`. Redrawing an existing
+Dynamic styles are supported by `div`, `p` / `paragraph`, and style-sheet declarations. Redrawing an existing
 layout refreshes drawing properties such as inherited text colors, shadows, background colors, and
 background materials.
 Drawing-only changes do not require relayout. Recalculate the
-layout when the resolved `style`, `descendantStyle`, or `childStyle` changes sizing, spacing,
+layout when a resolved element style or style-sheet declaration changes sizing, spacing,
 direction, alignment, positioning, insets, or font. Assigning `element.style` replaces its dynamic
 style with that static value.
 
@@ -575,8 +587,8 @@ Set an individual layout background with the independent `UiStyle.backgroundColo
 `UiStyle.backgroundMaterial` properties. A non-null color draws the background with the specified
 material, or with the `Mine2DEngine.material` active during rendering when the material is null. A
 material without a color does not create a background. These properties are local to the element
-and are not inherited by children. During `descendantStyle` or `childStyle` composition they are
-overridden independently, so an element can replace a supplied material while retaining a supplied
+and are not inherited by children. During style-sheet composition they are overridden
+independently, so a later declaration can replace a supplied material while retaining a supplied
 color; `null` means unspecified during this composition and cannot explicitly clear a material.
 Paragraph text uses Minecraft's text rendering path and is not affected by the background material.
 

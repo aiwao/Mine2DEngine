@@ -133,14 +133,12 @@ private fun calculateLayout(
                 styleSheets = sheets,
                 context = StyleSheetElementContext(root),
             ),
-            componentStyleSheetScopes = emptyList(),
+            scopedStyleSheetScopes = emptyList(),
             parentContentWidth = null,
             parentContentHeight = null,
             absoluteContainingWidth = null,
             absoluteContainingHeight = null,
             inheritedTextStyle = ResolvedUiTextStyle(),
-            inheritedDescendantStyle = { _ -> null },
-            parentChildStyle = { null },
             textMeasurer = textMeasurer,
             noneDisplayStates = noneDisplayStates,
             evaluatedNoneDisplays = evaluatedNoneDisplays,
@@ -186,39 +184,41 @@ private data class MeasuredNode(
 private fun measure(
     element: UiElement,
     globalStyleSheetScope: StyleSheetScopeContext,
-    componentStyleSheetScopes: List<StyleSheetScopeContext>,
+    scopedStyleSheetScopes: List<StyleSheetScopeContext>,
     parentContentWidth: Float?,
     parentContentHeight: Float?,
     absoluteContainingWidth: Float?,
     absoluteContainingHeight: Float?,
     inheritedTextStyle: ResolvedUiTextStyle,
-    inheritedDescendantStyle: (UiElement) -> UiStyle?,
-    parentChildStyle: () -> UiStyle?,
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
     noneDisplayStates: MutableList<UiNoneDisplayState>,
     evaluatedNoneDisplays: Map<UiElement, Boolean>,
 ): MeasuredNode {
+    val ownContainerStyleSheetScope = (element as? UiContainer)
+        ?.styleSheets
+        ?.takeIf { it.isNotEmpty() }
+        ?.let { styleSheets ->
+            StyleSheetScopeContext(
+                styleSheets = styleSheets.toList(),
+                context = StyleSheetElementContext(element),
+            )
+        }
     val ownComponentStyleSheetScope = element.componentStyleSheets?.let { styleSheets ->
         StyleSheetScopeContext(
             styleSheets = styleSheets,
             context = StyleSheetElementContext(element),
         )
     }
-    val elementComponentStyleSheetScopes = if (ownComponentStyleSheetScope == null) {
-        componentStyleSheetScopes
-    } else {
-        componentStyleSheetScopes + ownComponentStyleSheetScope
-    }
+    val ownStyleSheetScopes = listOfNotNull(
+        ownContainerStyleSheetScope,
+        ownComponentStyleSheetScope,
+    )
+    val elementScopedStyleSheetScopes = scopedStyleSheetScopes + ownStyleSheetScopes
     val elementStyleSheetScopes = listOf(globalStyleSheetScope) +
-        elementComponentStyleSheetScopes
+        elementScopedStyleSheetScopes
     val styleProvider = {
-        combineStyles(
-            elementStyleSheetScopes.scopedStyleFor(),
-            combineStyles(
-                inheritedDescendantStyle(element),
-                parentChildStyle(),
-            ),
-        )?.withOverrides(element.style)
+        elementStyleSheetScopes.scopedStyleFor()
+            ?.withOverrides(element.style)
             ?.resolveDefaults()
             ?: element.style.resolveDefaults()
     }
@@ -302,20 +302,14 @@ private fun measure(
     }
 
     val children = if (element is UiContainer) {
-        val descendantStyle = { descendant: UiElement ->
-            combineStyles(
-                inheritedDescendantStyle(descendant),
-                element.descendantStyle?.invoke(descendant),
-            )
-        }
-        val componentStyleSheetScopesForChildren = if (ownComponentStyleSheetScope == null) {
-            componentStyleSheetScopes
+        val scopedStyleSheetScopesForChildren = if (ownComponentStyleSheetScope == null) {
+            elementScopedStyleSheetScopes
         } else {
-            listOf(ownComponentStyleSheetScope)
+            ownStyleSheetScopes
         }
         var previousGlobalSiblingContext: StyleSheetElementContext? = null
-        val previousComponentSiblingContexts = MutableList<StyleSheetElementContext?>(
-            componentStyleSheetScopesForChildren.size,
+        val previousScopedSiblingContexts = MutableList<StyleSheetElementContext?>(
+            scopedStyleSheetScopesForChildren.size,
         ) { null }
         element.children
             .map { child ->
@@ -325,16 +319,16 @@ private fun measure(
                     previousSibling = previousGlobalSiblingContext,
                 )
                 previousGlobalSiblingContext = childGlobalStyleSheetContext
-                val childComponentStyleSheetScopes = componentStyleSheetScopesForChildren
+                val childScopedStyleSheetScopes = scopedStyleSheetScopesForChildren
                     .mapIndexed { index, scope ->
                         StyleSheetScopeContext(
                             styleSheets = scope.styleSheets,
                             context = StyleSheetElementContext(
                                 element = child,
                                 parent = scope.context,
-                                previousSibling = previousComponentSiblingContexts[index],
+                                previousSibling = previousScopedSiblingContexts[index],
                             ).also { context ->
-                                previousComponentSiblingContexts[index] = context
+                                previousScopedSiblingContexts[index] = context
                             },
                         )
                     }
@@ -344,14 +338,12 @@ private fun measure(
                         styleSheets = globalStyleSheetScope.styleSheets,
                         context = childGlobalStyleSheetContext,
                     ),
-                    componentStyleSheetScopes = childComponentStyleSheetScopes,
+                    scopedStyleSheetScopes = childScopedStyleSheetScopes,
                     parentContentWidth = definiteContentWidth,
                     parentContentHeight = definiteContentHeight,
                     absoluteContainingWidth = descendantAbsoluteContainingWidth,
                     absoluteContainingHeight = descendantAbsoluteContainingHeight,
                     inheritedTextStyle = resolvedTextStyle,
-                    inheritedDescendantStyle = descendantStyle,
-                    parentChildStyle = { element.childStyle?.invoke(child) },
                     textMeasurer = textMeasurer,
                     noneDisplayStates = noneDisplayStates,
                     evaluatedNoneDisplays = evaluatedNoneDisplays,
@@ -394,12 +386,6 @@ private fun measure(
         textStyle = resolvedTextStyle,
         displayed = true,
     )
-}
-
-private fun combineStyles(base: UiStyle?, overrides: UiStyle?): UiStyle? = when {
-    base == null -> overrides
-    overrides == null -> base
-    else -> base.withOverrides(overrides)
 }
 
 private fun contentLength(

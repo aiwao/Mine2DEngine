@@ -22,6 +22,14 @@ data class TargetId(
 data object TargetWildcard : StyleSheetTarget
 
 /**
+ * Selects the root of the current style-sheet scope, like the CSS `:scope` pseudo-class.
+ *
+ * For a global sheet this is the layout root. For a sheet attached to a container or component,
+ * this is that container or component root.
+ */
+data object TargetScope : StyleSheetTarget
+
+/**
  * Selects elements that match every selector in [targets], like CSS `button.primary`.
  *
  * Every target is evaluated against the same element. Use [TargetCombinator] for relationships
@@ -105,18 +113,28 @@ infix fun StyleSheetTarget.adjacentSibling(target: StyleSheetTarget): TargetComb
 infix fun StyleSheetTarget.generalSibling(target: StyleSheetTarget): TargetCombinator =
     combine(StyleSheetCombinator.GENERAL_SIBLING, target)
 
-/** One CSS-like rule. */
-data class StyleSheetObject(
+/**
+ * One CSS-like rule whose declaration is resolved for each matching element.
+ *
+ * [resolveStyle] may be evaluated more than once during layout and rendering. It should not rely
+ * on invocation count or perform side effects.
+ */
+class StyleSheetObject(
     val target: StyleSheetTarget,
-    val style: UiStyle,
-)
+    private val resolveStyle: (UiElement) -> UiStyle,
+) {
+    /** Creates a rule with a declaration that is shared by every matching element. */
+    constructor(target: StyleSheetTarget, style: UiStyle) : this(target, { style })
+
+    internal fun styleFor(element: UiElement): UiStyle = resolveStyle(element)
+}
 
 /**
  * A collection of CSS-like rules consumed by [LayoutEngine].
  *
- * ID, class, and tag selectors contribute CSS specificity in that order. Rules with the same
- * specificity are applied in insertion order, so later rules win. An element's directly supplied
- * [UiElement.style] takes precedence over style-sheet declarations.
+ * ID, class/pseudo-class, and tag selectors contribute CSS specificity in that order. Rules with
+ * the same specificity are applied in insertion order, so later rules win. An element's directly
+ * supplied [UiElement.style] takes precedence over style-sheet declarations.
  */
 interface StyleSheet {
     val styles: MutableList<StyleSheetObject>
@@ -126,6 +144,12 @@ interface StyleSheet {
         target: StyleSheetTarget,
         style: UiStyle,
     ): StyleSheetObject = StyleSheetObject(target, style).also(styles::add)
+
+    /** Adds a rule resolved from each matching element and returns the stored object. */
+    fun newStyle(
+        target: StyleSheetTarget,
+        resolveStyle: (UiElement) -> UiStyle,
+    ): StyleSheetObject = StyleSheetObject(target, resolveStyle).also(styles::add)
 }
 
 internal class StyleSheetElementContext(
@@ -154,7 +178,8 @@ internal fun Iterable<StyleSheetScopeContext>.scopedStyleFor(): UiStyle? =
                 MatchedStyleSheetRule(
                     specificity = specificity,
                     sourceOrder = sourceOrder,
-                    style = rule.style,
+                    rule = rule,
+                    element = context.element,
                 )
             }
         }
@@ -163,13 +188,15 @@ internal fun Iterable<StyleSheetScopeContext>.scopedStyleFor(): UiStyle? =
                 .thenBy(MatchedStyleSheetRule::sourceOrder),
         )
         .fold(null as UiStyle?) { resolved, matched ->
-            resolved?.withOverrides(matched.style) ?: matched.style
+            val style = matched.rule.styleFor(matched.element)
+            resolved?.withOverrides(style) ?: style
         }
 
 private data class MatchedStyleSheetRule(
     val specificity: StyleSheetSpecificity,
     val sourceOrder: Int,
-    val style: UiStyle,
+    val rule: StyleSheetObject,
+    val element: UiElement,
 )
 
 private data class StyleSheetSpecificity(
@@ -205,6 +232,9 @@ private fun StyleSheetTarget.matchSpecificity(
         .takeIf { context.element.id == id }
 
     TargetWildcard -> StyleSheetSpecificity()
+    TargetScope -> StyleSheetSpecificity(classCount = 1)
+        .takeIf { context.parent == null }
+
     is TargetAnd -> matchAllSpecificity(context)
     is TargetOr -> targets.mapNotNull { it.matchSpecificity(context) }.maxOrNull()
     is TargetCombinator -> matchCombinatorSpecificity(context)
