@@ -267,6 +267,7 @@ import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
 import io.github.aiwao.mine2dengine.layout.percent
 import io.github.aiwao.mine2dengine.layout.px
+import io.github.aiwao.mine2dengine.layout.uiComponent
 
 val root = div(
     UiStyle(
@@ -339,6 +340,33 @@ val root = div(
 val layout = LayoutEngine.layout(root, left = 12f, top = 12f)
 layout.render(draw)
 ```
+
+再利用するUIツリーは `UiComponent` として定義できます。`component(...)` を呼ぶたびに新しい
+`UiElement` ツリーが親へ追加され、親ツリーと一緒に計測、描画、入力処理されます。親からの
+文字styleの継承や `StyleSheet` のセレクターもコンポーネント内へ通常どおり適用されます。
+
+```kotlin
+val actionBar = uiComponent {
+    div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
+        p("保存")
+        p("閉じる")
+    }
+}
+
+val composedLayout = LayoutEngine.layout(
+    rootStyle = UiStyle(font = font),
+    left = 12f,
+    top = 12f,
+) {
+    p("エディター")
+    component(actionBar)
+    component(actionBar) // 別の要素インスタンス
+}
+```
+
+コンポーネントのfactoryは `component(...)` で追加するときに1回だけ呼ばれます。同じ
+`UiLayout` が `noneDisplay` の変更で再計算される場合は、既存の要素ツリーが再利用されるため、
+要素のhoverやdragなどの状態も維持されます。
 
 たとえば、次の指定では、ネストした `Div` 内も含めて段落の子孫だけにdrop shadowを適用します。
 各要素では読み取り専用のHTML互換 `tag` を参照でき、子孫の選択に利用できます。デフォルト値は

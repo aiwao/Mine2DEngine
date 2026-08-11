@@ -101,6 +101,9 @@ sealed class UiContainer(
         return element
     }
 
+    /** Creates and adds one independent instance of [component] to this container. */
+    fun <T : UiElement> component(component: UiComponent<T>): T = add(component.create())
+
     fun div(
         style: UiStyle = UiStyle(),
         onClick: ((MouseButtonEvent) -> Unit)? = null,

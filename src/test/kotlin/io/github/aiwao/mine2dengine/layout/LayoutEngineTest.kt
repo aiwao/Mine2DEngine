@@ -19,6 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -550,6 +551,94 @@ class LayoutEngineTest {
 
         assertEquals(UiSize(10f, 0f), oneSheetLayout.size)
         assertEquals(UiSize(10f, 20f), multipleSheetLayout.size)
+    }
+
+    @Test
+    fun `layout DSL mounts a fresh element tree for each component instance`() {
+        var creations = 0
+        val card = uiComponent {
+            creations++
+            div(
+                style = UiStyle(width = 10f.px, height = 4f.px),
+                className = "card",
+            )
+        }
+        lateinit var first: Div
+        lateinit var second: Div
+
+        val layout = LayoutEngine.layout(left = 2f, top = 3f) {
+            first = component(card)
+            second = component(card)
+        }
+
+        assertEquals(2, creations)
+        assertNotSame(first, second)
+        assertEquals(UiSize(10f, 8f), layout.size)
+        assertEquals(UiRect(2f, 3f, 10f, 4f), layout.nodeOf(first)!!.outerBounds)
+        assertEquals(UiRect(2f, 7f, 10f, 4f), layout.nodeOf(second)!!.outerBounds)
+    }
+
+    @Test
+    fun `mounted components participate in inheritance and style sheet matching`() {
+        val inheritedColor = 0xFF123456.toInt()
+        lateinit var paragraph: Paragraph
+        val label = uiComponent {
+            div(className = "component") {
+                paragraph = p("label")
+            }
+        }
+        val root = div(UiStyle(color = inheritedColor)) {
+            component(label)
+        }
+        val sheet = styleSheet(
+            (TargetClass("component") child TargetTag("p")) to UiStyle(width = 20f.px),
+        )
+
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        assertEquals(inheritedColor, layout.nodeOf(paragraph)!!.color)
+        assertEquals(20f, layout.nodeOf(paragraph)!!.contentBounds.width)
+    }
+
+    @Test
+    fun `relayout reuses the element tree created by a component`() {
+        var hidden = false
+        var creations = 0
+        lateinit var conditional: Div
+        val conditionalComponent = uiComponent {
+            creations++
+            div(
+                UiStyle(
+                    width = 10f.px,
+                    height = 4f.px,
+                    noneDisplay = { hidden },
+                ),
+            )
+        }
+        val root = div {
+            conditional = component(conditionalComponent)
+            div(UiStyle(width = 5f.px, height = 3f.px))
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(1, creations)
+        assertEquals(UiSize(10f, 7f), layout.size)
+
+        hidden = true
+        assertEquals(UiSize(5f, 3f), layout.size)
+        assertNull(layout.nodeOf(conditional))
+        assertEquals(1, creations)
+
+        hidden = false
+        assertEquals(UiSize(10f, 7f), layout.size)
+        assertNotNull(layout.nodeOf(conditional))
+        assertEquals(1, creations)
     }
 
     @Test

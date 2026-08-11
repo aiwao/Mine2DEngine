@@ -26,6 +26,45 @@ class Mine2DTextMeasurer(
  * Text fonts are selected through [UiStyle.font] and remain owned by the caller.
  */
 object LayoutEngine {
+    /** Builds a root [Div] with [rootStyle], then calculates the complete UI tree. */
+    @JvmStatic
+    fun layout(
+        rootStyle: UiStyle = UiStyle(),
+        left: Float = 0f,
+        top: Float = 0f,
+        content: Div.() -> Unit,
+    ): UiLayout = layout(div(style = rootStyle, content = content), left, top)
+
+    /** Builds a root [Div], applies [styleSheet], then calculates the complete UI tree. */
+    @JvmStatic
+    fun layout(
+        styleSheet: StyleSheet,
+        rootStyle: UiStyle = UiStyle(),
+        left: Float = 0f,
+        top: Float = 0f,
+        content: Div.() -> Unit,
+    ): UiLayout = layout(
+        div(style = rootStyle, content = content),
+        styleSheet,
+        left,
+        top,
+    )
+
+    /** Builds a root [Div], cascades [styleSheets], then calculates the complete UI tree. */
+    @JvmStatic
+    fun layout(
+        styleSheets: Iterable<StyleSheet>,
+        rootStyle: UiStyle = UiStyle(),
+        left: Float = 0f,
+        top: Float = 0f,
+        content: Div.() -> Unit,
+    ): UiLayout = layout(
+        div(style = rootStyle, content = content),
+        styleSheets,
+        left,
+        top,
+    )
+
     /** Calculates the complete UI tree without style sheets or draw calls. */
     @JvmStatic
     fun layout(root: UiElement, left: Float = 0f, top: Float = 0f): UiLayout =
