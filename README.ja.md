@@ -343,13 +343,14 @@ layout.render(draw)
 
 再利用するUIツリーは `UiComponent` として定義できます。`component(...)` を呼ぶたびに新しい
 `UiElement` ツリーが親へ追加され、親ツリーと一緒に計測、描画、入力処理されます。親からの
-文字styleの継承や `StyleSheet` のセレクターもコンポーネント内へ通常どおり適用されます。
+文字styleの継承や、`LayoutEngine.layout` に渡したグローバルな `StyleSheet` も
+コンポーネント内へ通常どおり適用されます。
 
 ```kotlin
-val actionBar = uiComponent {
+val actionBar = uiComponent(styleSheet = actionBarStyleSheet) {
     div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
-        p("保存")
-        p("閉じる")
+        p("保存", className = "action")
+        p("閉じる", className = "action")
     }
 }
 
@@ -360,9 +361,19 @@ val composedLayout = LayoutEngine.layout(
 ) {
     p("エディター")
     component(actionBar)
-    component(actionBar) // 別の要素インスタンス
+    component(
+        actionBar,
+        styleSheet = compactActionBarStyleSheet,
+    ) // このインスタンスだけに追加
 }
 ```
+
+`uiComponent` に渡したシートはコンポーネントのルートとその内部だけに適用され、呼び出し側の
+祖先や兄弟をローカルセレクターから参照することはできません。ネストした子コンポーネントでは、
+親コンポーネントのローカルシートは子のルートには適用できますが、その内部には入りません。
+`component(...)` に渡したシートはコンポーネント既定のシートより後に追加されます。通常のCSSと
+同様に詳細度が先に比較され、同じ詳細度なら後のシートが優先され、要素自身のstyleが最後に
+優先されます。
 
 コンポーネントのfactoryは `component(...)` で追加するときに1回だけ呼ばれます。同じ
 `UiLayout` が `noneDisplay` の変更で再計算される場合は、既存の要素ツリーが再利用されるため、
