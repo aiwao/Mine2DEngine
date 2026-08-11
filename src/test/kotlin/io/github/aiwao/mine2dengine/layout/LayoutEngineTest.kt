@@ -694,19 +694,6 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `component create receives empty content by default`() {
-        val component = uiComponent { content ->
-            div {
-                content()
-            }
-        }
-
-        val root = component.create()
-
-        assertTrue(root.children.isEmpty())
-    }
-
-    @Test
     fun `component builds supplied content in its selected slot only once`() {
         var hidden = false
         var contentBuilds = 0

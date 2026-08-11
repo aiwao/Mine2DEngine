@@ -16,9 +16,6 @@ fun interface UiComponent<out T : UiElement> {
         get() = emptyList()
 
     fun create(content: UiContent): T
-
-    /** Creates this component with empty content. */
-    fun create(): T = create {}
 }
 
 /** Builds the elements supplied to a component at its mount site. */
