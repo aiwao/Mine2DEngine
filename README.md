@@ -238,8 +238,9 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
   (`"~"`). Combinators can be nested into a chain; `combine`, `descendant`, `child`,
   `adjacentSibling`, and `generalSibling` are builder alternatives.
 - `id` is an HTML-compatible element ID. `className` is a read-only `Set<String>`, specified with
-  values such as `setOf("card", "active")`. Class and tag names are matched exactly and may contain
-  whitespace.
+  values such as `setOf("card", "active")`. A `String` is also accepted as shorthand for a
+  single-element set and is not split on whitespace. Class and tag names are matched exactly and
+  may contain whitespace.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
 - `color`, `font`, and `textShadow` are inherited from ancestors and may be overridden by a child.
   A null value inherits the parent. At the root, color defaults to opaque white and text shadow
@@ -354,8 +355,8 @@ input handling. Inherited text styles and global `StyleSheet` values passed to
 ```kotlin
 val actionBar = uiComponent(styleSheet = actionBarStyleSheet) {
     div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
-        p("Save", className = setOf("action"))
-        p("Close", className = setOf("action"))
+        p("Save", className = "action")
+        p("Close", className = "action")
     }
 }
 
@@ -444,7 +445,7 @@ object ExampleStyleSheet : StyleSheet {
 val styledRoot = div(
     tag = "div",
     id = "main",
-    className = setOf("screen"),
+    className = "screen",
     style = UiStyle(font = font),
 ) {
     p("Red Text")

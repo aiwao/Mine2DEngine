@@ -101,6 +101,43 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `String class names are wrapped without being split`() {
+        lateinit var childDiv: Div
+        lateinit var dynamicDiv: Div
+        lateinit var shortParagraph: Paragraph
+        lateinit var dynamicShortParagraph: Paragraph
+        lateinit var longParagraph: Paragraph
+        lateinit var dynamicLongParagraph: Paragraph
+        val root = div(className = "root class") {
+            childDiv = div(className = "child div")
+            dynamicDiv = div(style = { UiStyle() }, className = "dynamic div")
+            shortParagraph = p("p", className = "short paragraph")
+            dynamicShortParagraph = p("p", style = { UiStyle() }, className = "dynamic p")
+            longParagraph = paragraph("paragraph", className = "long paragraph")
+            dynamicLongParagraph = paragraph(
+                "paragraph",
+                style = { UiStyle() },
+                className = "dynamic paragraph",
+            )
+        }
+        val dynamicRoot = div(style = { UiStyle() }, className = "dynamic root")
+
+        assertEquals(setOf("root class"), root.className)
+        assertEquals(setOf("child div"), childDiv.className)
+        assertEquals(setOf("dynamic div"), dynamicDiv.className)
+        assertEquals(setOf("short paragraph"), shortParagraph.className)
+        assertEquals(setOf("dynamic p"), dynamicShortParagraph.className)
+        assertEquals(setOf("long paragraph"), longParagraph.className)
+        assertEquals(setOf("dynamic paragraph"), dynamicLongParagraph.className)
+        assertEquals(setOf("dynamic root"), dynamicRoot.className)
+        assertEquals(setOf("standalone div"), Div(className = "standalone div").className)
+        assertEquals(
+            setOf("standalone paragraph"),
+            Paragraph("text", className = "standalone paragraph").className,
+        )
+    }
+
+    @Test
     fun `elements expose their ids`() {
         lateinit var childDiv: Div
         lateinit var dynamicDiv: Div
@@ -182,7 +219,7 @@ class LayoutEngineTest {
         )
         val root = div(
             tag = "tag name",
-            className = setOf("class name"),
+            className = "class name",
         )
 
         val layout = calculateLayout(

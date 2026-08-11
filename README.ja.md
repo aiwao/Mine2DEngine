@@ -234,8 +234,9 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   できます。結合子はネストしてチェーン化でき、
   `combine`、`descendant`、`child`、`adjacentSibling`、`generalSibling` でも構築できます。
 - `id` はHTML互換の要素IDです。`className` は読み取り専用の `Set<String>` で、
-  `setOf("card", "active")` のように指定します。class名とtag名は空白を含めることができ、
-  文字列全体が完全一致で照合されます。
+  `setOf("card", "active")` のように指定します。`String` も単一要素Setの省略形として指定でき、
+  空白では分割されません。class名とtag名は空白を含めることができ、文字列全体が完全一致で
+  照合されます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
 - `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
   親を継承します。ルートではcolorが不透明な白、文字shadowはなしが既定値です。継承したshadowを
@@ -350,8 +351,8 @@ layout.render(draw)
 ```kotlin
 val actionBar = uiComponent(styleSheet = actionBarStyleSheet) {
     div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
-        p("保存", className = setOf("action"))
-        p("閉じる", className = setOf("action"))
+        p("保存", className = "action")
+        p("閉じる", className = "action")
     }
 }
 
@@ -440,7 +441,7 @@ object ExampleStyleSheet : StyleSheet {
 val styledRoot = div(
     tag = "div",
     id = "main",
-    className = setOf("screen"),
+    className = "screen",
     style = UiStyle(font = font),
 ) {
     p("Red Text")
