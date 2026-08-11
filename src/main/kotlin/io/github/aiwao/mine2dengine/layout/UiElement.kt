@@ -69,28 +69,18 @@ sealed class UiContainer(
     override var onDrag: ((MouseButtonEvent) -> Unit)? = null,
     override var onMouseOver: (() -> Unit)? = null,
     override var onMouseOut: (() -> Unit)? = null,
-    descendantStyle: ((UiElement) -> UiStyle)? = null,
-    childStyle: ((UiElement) -> UiStyle)? = null,
+    styleSheets: Iterable<StyleSheet> = emptyList(),
 ) : UiElement(tag, className, id, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
     val children: MutableList<UiElement> = children.toMutableList()
 
     /**
-     * Resolves a style for every descendant, like the CSS selector `.parent *`.
+     * Style sheets scoped to this container and its descendants.
      *
-     * The provider receives the descendant being styled and is evaluated whenever its style is
-     * used. A descendant's own non-default style values take precedence. A descendant container's
-     * non-null descendant style also takes precedence for its own descendants.
+     * [TargetScope] selects this container. An outer container's sheets can style a nested
+     * component root but do not enter that component's descendants. Mutating this list after
+     * layout requires recalculating the layout.
      */
-    var descendantStyle: ((UiElement) -> UiStyle)? = descendantStyle
-
-    /**
-     * Resolves a style for every direct child, like the CSS selector `.parent > *`.
-     *
-     * The provider receives the child being styled and is evaluated whenever its style is used.
-     * It takes precedence over [descendantStyle], while the child's own non-default style values
-     * take precedence over both.
-     */
-    var childStyle: ((UiElement) -> UiStyle)? = childStyle
+    val styleSheets: MutableList<StyleSheet> = styleSheets.toMutableList()
 
     fun <T : UiElement> add(element: T): T {
         children += element
@@ -136,9 +126,8 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
-        descendantStyle: ((UiElement) -> UiStyle)? = null,
+        styleSheets: Iterable<StyleSheet> = emptyList(),
         tag: String = "div",
-        childStyle: ((UiElement) -> UiStyle)? = null,
         className: Set<String> = emptySet(),
         id: String = "",
         content: Div.() -> Unit = {},
@@ -150,8 +139,7 @@ sealed class UiContainer(
             onDrag = onDrag,
             onMouseOver = onMouseOver,
             onMouseOut = onMouseOut,
-            descendantStyle = descendantStyle,
-            childStyle = childStyle,
+            styleSheets = styleSheets,
             tag = tag,
             className = className,
             id = id,
@@ -166,9 +154,8 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
-        descendantStyle: ((UiElement) -> UiStyle)? = null,
+        styleSheets: Iterable<StyleSheet> = emptyList(),
         tag: String = "div",
-        childStyle: ((UiElement) -> UiStyle)? = null,
         className: String,
         id: String = "",
         content: Div.() -> Unit = {},
@@ -179,9 +166,8 @@ sealed class UiContainer(
         onDrag = onDrag,
         onMouseOver = onMouseOver,
         onMouseOut = onMouseOut,
-        descendantStyle = descendantStyle,
+        styleSheets = styleSheets,
         tag = tag,
-        childStyle = childStyle,
         className = setOf(className),
         id = id,
         content = content,
@@ -195,9 +181,8 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
-        descendantStyle: ((UiElement) -> UiStyle)? = null,
+        styleSheets: Iterable<StyleSheet> = emptyList(),
         tag: String = "div",
-        childStyle: ((UiElement) -> UiStyle)? = null,
         className: Set<String> = emptySet(),
         id: String = "",
         content: Div.() -> Unit = {},
@@ -208,8 +193,7 @@ sealed class UiContainer(
             onDrag = onDrag,
             onMouseOver = onMouseOver,
             onMouseOut = onMouseOut,
-            descendantStyle = descendantStyle,
-            childStyle = childStyle,
+            styleSheets = styleSheets,
             tag = tag,
             className = className,
             id = id,
@@ -224,9 +208,8 @@ sealed class UiContainer(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
-        descendantStyle: ((UiElement) -> UiStyle)? = null,
+        styleSheets: Iterable<StyleSheet> = emptyList(),
         tag: String = "div",
-        childStyle: ((UiElement) -> UiStyle)? = null,
         className: String,
         id: String = "",
         content: Div.() -> Unit = {},
@@ -237,9 +220,8 @@ sealed class UiContainer(
         onDrag = onDrag,
         onMouseOver = onMouseOver,
         onMouseOut = onMouseOut,
-        descendantStyle = descendantStyle,
+        styleSheets = styleSheets,
         tag = tag,
-        childStyle = childStyle,
         className = setOf(className),
         id = id,
         content = content,
@@ -456,9 +438,8 @@ class Div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    descendantStyle: ((UiElement) -> UiStyle)? = null,
+    styleSheets: Iterable<StyleSheet> = emptyList(),
     tag: String = "div",
-    childStyle: ((UiElement) -> UiStyle)? = null,
     className: Set<String> = emptySet(),
     id: String = "",
 ) : UiContainer(
@@ -472,8 +453,7 @@ class Div(
     onDrag,
     onMouseOver,
     onMouseOut,
-    descendantStyle,
-    childStyle,
+    styleSheets,
 ) {
     /** Creates a div with [className] as its single, unsplit class name. */
     constructor(
@@ -484,9 +464,8 @@ class Div(
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
-        descendantStyle: ((UiElement) -> UiStyle)? = null,
+        styleSheets: Iterable<StyleSheet> = emptyList(),
         tag: String = "div",
-        childStyle: ((UiElement) -> UiStyle)? = null,
         className: String,
         id: String = "",
     ) : this(
@@ -497,9 +476,8 @@ class Div(
         onDrag = onDrag,
         onMouseOver = onMouseOver,
         onMouseOut = onMouseOut,
-        descendantStyle = descendantStyle,
+        styleSheets = styleSheets,
         tag = tag,
-        childStyle = childStyle,
         className = setOf(className),
         id = id,
     )
@@ -552,9 +530,8 @@ fun div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    descendantStyle: ((UiElement) -> UiStyle)? = null,
+    styleSheets: Iterable<StyleSheet> = emptyList(),
     tag: String = "div",
-    childStyle: ((UiElement) -> UiStyle)? = null,
     className: Set<String> = emptySet(),
     id: String = "",
     content: Div.() -> Unit = {},
@@ -565,8 +542,7 @@ fun div(
     onDrag = onDrag,
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
-    descendantStyle = descendantStyle,
-    childStyle = childStyle,
+    styleSheets = styleSheets,
     tag = tag,
     className = className,
     id = id,
@@ -580,9 +556,8 @@ fun div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    descendantStyle: ((UiElement) -> UiStyle)? = null,
+    styleSheets: Iterable<StyleSheet> = emptyList(),
     tag: String = "div",
-    childStyle: ((UiElement) -> UiStyle)? = null,
     className: String,
     id: String = "",
     content: Div.() -> Unit = {},
@@ -593,9 +568,8 @@ fun div(
     onDrag = onDrag,
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
-    descendantStyle = descendantStyle,
+    styleSheets = styleSheets,
     tag = tag,
-    childStyle = childStyle,
     className = setOf(className),
     id = id,
     content = content,
@@ -609,9 +583,8 @@ fun div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    descendantStyle: ((UiElement) -> UiStyle)? = null,
+    styleSheets: Iterable<StyleSheet> = emptyList(),
     tag: String = "div",
-    childStyle: ((UiElement) -> UiStyle)? = null,
     className: Set<String> = emptySet(),
     id: String = "",
     content: Div.() -> Unit = {},
@@ -621,8 +594,7 @@ fun div(
     onDrag = onDrag,
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
-    descendantStyle = descendantStyle,
-    childStyle = childStyle,
+    styleSheets = styleSheets,
     tag = tag,
     className = className,
     id = id,
@@ -636,9 +608,8 @@ fun div(
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
     onMouseOver: (() -> Unit)? = null,
     onMouseOut: (() -> Unit)? = null,
-    descendantStyle: ((UiElement) -> UiStyle)? = null,
+    styleSheets: Iterable<StyleSheet> = emptyList(),
     tag: String = "div",
-    childStyle: ((UiElement) -> UiStyle)? = null,
     className: String,
     id: String = "",
     content: Div.() -> Unit = {},
@@ -649,9 +620,8 @@ fun div(
     onDrag = onDrag,
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
-    descendantStyle = descendantStyle,
+    styleSheets = styleSheets,
     tag = tag,
-    childStyle = childStyle,
     className = setOf(className),
     id = id,
     content = content,

@@ -215,18 +215,17 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   alpha形状へ影を付けます。要素内だけの指定であり、レイアウトやヒット領域には影響しません。
 - `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
 - `Div` は直接の子要素を縦または横に並べます。
-- `Div` の `descendantStyle` は、CSS の `.parent *` と同様に、各子孫を受け取って `UiStyle` を
-  解決します。子孫の型や現在の状態を参照できます。子孫自身のstyleにあるデフォルト以外の値が
-  優先されます。ネストしたコンテナにnullではない `descendantStyle` がある場合、その配下では近い
-  指定が優先されます。
-- `childStyle` はCSSの `.parent > *` と同様に、直接の子だけのstyleを解決します。両方が適用される
-  場合は `childStyle` が `descendantStyle` より優先され、子自身のデフォルト以外のstyleがさらに
-  優先されます。
+- `Div` の `styleSheets` には、そのコンテナと子孫だけに適用するシートを指定できます。ネストした
+  コンテナのスコープも同じ詳細度cascadeへ参加し、外側のローカルシートは子コンポーネントの
+  ルートには適用できますが、その内部には入りません。シート一覧を変更した場合は再レイアウトが
+  必要です。
 - `LayoutEngine.layout` に `StyleSheet` を渡すと、要素のtag、ID、classに一致するルールが適用
   されます。`newStyle` は1つの `StyleSheetTarget` を受け取ります。`button.primary`、
   `.card.active.large`、`div#main` のような複合セレクターには `TargetAnd`、`h1, h2, h3` の
-  ようなセレクターリストには `TargetOr` を使います。詳細度はID、class、tagの順に比較され、
-  同じなら後のルール、最後に要素自身の指定済みstyleが優先されます。
+  ようなセレクターリストには `TargetOr` を使います。詳細度はID、class・疑似class、tagの順に
+  比較され、同じなら後のルール、最後に要素自身の指定済みstyleが優先されます。
+- `TargetScope` はCSSの `:scope` セレクターです。グローバルシートではレイアウトのルート、
+  scopedシートではコンテナまたはコンポーネントのルートに一致し、疑似クラス相当の詳細度を持ちます。
 - `TargetWildcard` はCSSのユニバーサルセレクター `*` です。すべての要素に一致し、詳細度には
   加算されません。`.parent > *` のように結合子内でも利用できます。
 - `TargetCombinator(left, combinator, right)` では `StyleSheetCombinator` の `DESCENDANT`
@@ -254,6 +253,7 @@ import io.github.aiwao.mine2dengine.layout.TargetClass
 import io.github.aiwao.mine2dengine.layout.TargetCombinator
 import io.github.aiwao.mine2dengine.layout.TargetId
 import io.github.aiwao.mine2dengine.layout.TargetOr
+import io.github.aiwao.mine2dengine.layout.TargetScope
 import io.github.aiwao.mine2dengine.layout.TargetTag
 import io.github.aiwao.mine2dengine.layout.TargetWildcard
 import io.github.aiwao.mine2dengine.layout.UiBoxShadow
@@ -266,6 +266,7 @@ import io.github.aiwao.mine2dengine.layout.UiPosition
 import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
+import io.github.aiwao.mine2dengine.layout.descendant
 import io.github.aiwao.mine2dengine.layout.div
 import io.github.aiwao.mine2dengine.layout.percent
 import io.github.aiwao.mine2dengine.layout.px
@@ -370,7 +371,8 @@ val composedLayout = LayoutEngine.layout(
 }
 ```
 
-`uiComponent` に渡したシートはコンポーネントのルートとその内部だけに適用され、呼び出し側の
+`Div` に指定したシートと `uiComponent` に渡したシートは、そのスコープのルートと内部だけに
+適用され、`TargetScope` はそのルートを選択します。呼び出し側の
 祖先や兄弟をローカルセレクターから参照することはできません。ネストした子コンポーネントでは、
 親コンポーネントのローカルシートは子のルートには適用できますが、その内部には入りません。
 `component(...)` に渡したシートはコンポーネント既定のシートより後に追加されます。通常のCSSと
@@ -381,20 +383,28 @@ val composedLayout = LayoutEngine.layout(
 `UiLayout` が `noneDisplay` の変更で再計算される場合は、既存の要素ツリーが再利用されるため、
 要素のhoverやdragなどの状態も維持されます。
 
-たとえば、次の指定では、ネストした `Div` 内も含めて段落の子孫だけにdrop shadowを適用します。
-各要素では読み取り専用の `tag` を参照でき、子孫の選択に利用できます。tag名には空白を含める
-ことができ、文字列全体が完全一致で照合されます。デフォルト値は `div` が `"div"`、
-`p` / `paragraph` が `"p"` で、コンストラクタ引数 `tag` から指定できます。
+たとえば、次の動的ruleでは、ネストした `Div` 内も含めて段落の子孫だけにdrop shadowを
+適用します。動的declarationはstyleの解決時に一致要素を受け取ります。複数回呼ばれる可能性が
+あるため、副作用を持たせないでください。各要素の読み取り専用 `tag` は完全一致で照合され、
+空白を含めることもできます。
 
 ```kotlin
+object LabelStyleSheet : StyleSheet {
+    override val styles = mutableListOf<StyleSheetObject>()
+
+    init {
+        newStyle(TargetScope descendant TargetWildcard) { descendant ->
+            UiStyle(
+                dropShadow = if (descendant.tag == "p") UiDropShadow() else null,
+            )
+        }
+    }
+}
+
 val labels = div(
     tag = "section",
     style = UiStyle(font = font),
-    descendantStyle = { child ->
-        UiStyle(
-            dropShadow = if (child.tag == "p") UiDropShadow() else null,
-        )
-    },
+    styleSheets = listOf(LabelStyleSheet),
 ) {
     p("First")
     div {
@@ -475,10 +485,10 @@ hoverableLayout.mouseMove(mouseX, mouseY)
 hoverableLayout.render(draw)
 ```
 
-動的スタイルは `div` と `p` / `paragraph` で利用できます。既存レイアウトを再描画すると
+動的スタイルは `div`、`p` / `paragraph`、StyleSheetのdeclarationで利用できます。既存レイアウトを再描画すると
 継承される文字色やshadow、背景色、背景Materialなどの描画プロパティも更新されます。これらの
-描画プロパティだけを変える場合は再レイアウト不要です。解決後の `style`、`descendantStyle`、
-`childStyle` によってサイズ、余白、方向、配置、position、inset、フォントが変わる場合は、
+描画プロパティだけを変える場合は再レイアウト不要です。解決後の要素styleまたはStyleSheetの
+declarationによってサイズ、余白、方向、配置、position、inset、フォントが変わる場合は、
 レイアウトを再計算してください。
 `element.style` に代入すると、動的スタイルはその静的な値で置き換えられます。
 
@@ -569,8 +579,8 @@ Layoutの要素別背景は、独立した `UiStyle.backgroundColor` と
 `UiStyle.backgroundMaterial` で指定します。背景色がnullではない場合は指定したMaterialで描画し、
 Materialがnullなら描画時の `Mine2DEngine.material` を使用します。背景色がnullなら、Materialだけを
 指定しても背景は描画されません。これらのプロパティは要素内だけの指定であり、子へ継承されません。
-`descendantStyle` または `childStyle` の合成時にはそれぞれ独立して上書きされるため、指定済みの
-背景色を維持したまま要素側でMaterialだけを変更できます。この合成ではnullは未指定を意味し、
+StyleSheetの合成時にはそれぞれ独立して上書きされるため、指定済みの背景色を維持したまま後の
+declarationでMaterialだけを変更できます。この合成ではnullは未指定を意味し、
 Materialを明示的に解除することはできません。Paragraphの文字列はMinecraftのテキスト描画経路を
 使うため、背景Materialの対象外です。
 

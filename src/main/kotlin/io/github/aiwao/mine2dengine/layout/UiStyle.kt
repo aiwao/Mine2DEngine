@@ -81,8 +81,7 @@ internal fun UiLength.resolve(percentageBase: Float?): Float? {
  * Every nullable property uses null to mean that the property is unspecified. This allows a
  * declaration to distinguish an omitted property from an explicitly supplied default value such
  * as zero padding, a vertical direction, or static positioning. Unspecified properties first use
- * matching descendant and child declarations, then resolve to their CSS-like initial values
- * during layout.
+ * matching style-sheet declarations, then resolve to their CSS-like initial values during layout.
  *
  * [width] and [height] accept pixel and percentage [UiLength] values through [Float.px] and
  * [Float.percent]. Percentages use the corresponding resolved containing-block dimension, which is
