@@ -8,8 +8,13 @@ import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.MouseButtonInfo
 import java.util.IdentityHashMap
 
-internal data class UiNoneDisplayState(
+internal data class UiNoneDisplayKey(
     val element: UiElement,
+    val pseudoElement: UiPseudoElement? = null,
+)
+
+internal data class UiNoneDisplayState(
+    val key: UiNoneDisplayKey,
     val predicate: () -> Boolean,
     val noneDisplay: Boolean,
 )
@@ -37,14 +42,37 @@ data class UiLayoutNode(
     val textShadow: UiTextShadow? = null,
     /** Whether this node generated a layout box. */
     internal val displayed: Boolean = true,
+    internal val beforePseudo: UiPseudoLayoutNode? = null,
+    internal val afterPseudo: UiPseudoLayoutNode? = null,
+    internal val textBounds: UiRect? = null,
 ) {
     internal var styleProvider: () -> ResolvedUiStyle = { element.style.resolveDefaults() }
+}
+
+/** Calculated geometry and content for one generated pseudo-element box. */
+data class UiPseudoLayoutNode(
+    /** The author-created element which generated this box. */
+    val element: UiElement,
+    val pseudoElement: UiPseudoElement,
+    /** Includes the generated box's margin. */
+    val outerBounds: UiRect,
+    /** The rectangle painted by the generated box's background. */
+    val bounds: UiRect,
+    /** The generated text area after padding. */
+    val contentBounds: UiRect,
+    /** The content captured by the layout pass. */
+    val content: UiGeneratedContent,
+    /** The font resolved from the pseudo-element style and its originating element. */
+    val font: Mine2DFont?,
+    val displayed: Boolean = true,
+) {
+    internal var pseudoStyleProvider: () -> UiPseudoStyle = { UiPseudoStyle(content) }
 }
 
 /** A layout result that can render and dispatch pointer input to UI elements. */
 class UiLayout internal constructor(
     snapshot: UiLayoutSnapshot,
-    private val relayout: (Float, Float, Map<UiElement, Boolean>) -> UiLayoutSnapshot,
+    private val relayout: (Float, Float, Map<UiNoneDisplayKey, Boolean>) -> UiLayoutSnapshot,
 ) {
     var root: UiLayoutNode = snapshot.root
         private set
@@ -99,7 +127,10 @@ class UiLayout internal constructor(
     /** Finds the deepest element at the given GUI coordinate. */
     fun elementAt(x: Float, y: Float): UiElement? {
         refreshNoneDisplay()
-        return nodesInPaintOrder().asReversed().firstOrNull { it.bounds.contains(x, y) }?.element
+        return hitRegionsInPaintOrder()
+            .asReversed()
+            .firstOrNull { region -> region.bounds.contains(x, y) }
+            ?.element
     }
 
     /**
@@ -113,12 +144,12 @@ class UiLayout internal constructor(
         val x = event.x().toFloat()
         val y = event.y().toFloat()
         val nodes = nodesInPaintOrder()
-        val element = nodes
+        val element = hitRegionsInPaintOrder()
             .asReversed()
-            .firstOrNull { node ->
-                (node.element.onClick != null ||
-                    node.element.onDrag != null) &&
-                    node.bounds.contains(x, y)
+            .firstOrNull { region ->
+                (region.element.onClick != null ||
+                    region.element.onDrag != null) &&
+                    region.bounds.contains(x, y)
             }
             ?.element
             ?: return false
@@ -144,11 +175,15 @@ class UiLayout internal constructor(
         val layoutX = x.toFloat()
         val layoutY = y.toFloat()
         val nodes = nodesInPaintOrder()
+        val hitRegions = hitRegionsInPaintOrder()
+        fun contains(element: UiElement): Boolean = hitRegions.any { region ->
+            region.element === element && region.bounds.contains(layoutX, layoutY)
+        }
         var handled = false
 
         nodes
             .asReversed()
-            .filter { node -> node.element.hovering && !node.bounds.contains(layoutX, layoutY) }
+            .filter { node -> node.element.hovering && !contains(node.element) }
             .forEach { node ->
                 val onMouseOut = node.element.onMouseOut
                 onMouseOut?.invoke()
@@ -157,7 +192,7 @@ class UiLayout internal constructor(
             }
 
         nodes
-            .filter { node -> !node.element.hovering && node.bounds.contains(layoutX, layoutY) }
+            .filter { node -> !node.element.hovering && contains(node.element) }
             .forEach { node ->
                 val onMouseOver = node.element.onMouseOver
                 onMouseOver?.invoke()
@@ -165,11 +200,11 @@ class UiLayout internal constructor(
                 node.element.hovering = true
             }
 
-        nodes
+        hitRegions
             .asReversed()
-            .firstOrNull { node ->
-                node.element.onMouseMove != null &&
-                    node.bounds.contains(layoutX, layoutY)
+            .firstOrNull { region ->
+                region.element.onMouseMove != null &&
+                    region.bounds.contains(layoutX, layoutY)
             }
             ?.element
             ?.onMouseMove
@@ -216,6 +251,22 @@ class UiLayout internal constructor(
         return nodesInPaintOrder().firstOrNull { it.element === element }
     }
 
+    /**
+     * Returns the generated pseudo-element layout box owned by [element].
+     *
+     * Returns null when no rule matches or the generated box currently has `noneDisplay`.
+     */
+    fun pseudoNodeOf(
+        element: UiElement,
+        pseudoElement: UiPseudoElement,
+    ): UiPseudoLayoutNode? {
+        val node = nodeOf(element) ?: return null
+        return when (pseudoElement) {
+            UiPseudoElement.BEFORE -> node.beforePseudo
+            UiPseudoElement.AFTER -> node.afterPseudo
+        }
+    }
+
     internal fun nodesInPaintOrder(): List<UiLayoutNode> = buildList {
         fun addTree(node: UiLayoutNode) {
             add(node)
@@ -224,12 +275,31 @@ class UiLayout internal constructor(
         addTree(root)
     }
 
+    private data class UiHitRegion(
+        val element: UiElement,
+        val bounds: UiRect,
+    )
+
+    private fun hitRegionsInPaintOrder(): List<UiHitRegion> = buildList {
+        fun addTree(node: UiLayoutNode) {
+            add(UiHitRegion(node.element, node.bounds))
+            node.beforePseudo
+                ?.takeIf(UiPseudoLayoutNode::displayed)
+                ?.let { pseudo -> add(UiHitRegion(node.element, pseudo.bounds)) }
+            node.children.forEach(::addTree)
+            node.afterPseudo
+                ?.takeIf(UiPseudoLayoutNode::displayed)
+                ?.let { pseudo -> add(UiHitRegion(node.element, pseudo.bounds)) }
+        }
+        addTree(root)
+    }
+
     private fun refreshNoneDisplay() {
-        val evaluatedNoneDisplays = IdentityHashMap<UiElement, Boolean>()
+        val evaluatedNoneDisplays = mutableMapOf<UiNoneDisplayKey, Boolean>()
         var changed = false
         noneDisplayStates.forEach { state ->
             val noneDisplay = state.predicate()
-            evaluatedNoneDisplays[state.element] = noneDisplay
+            evaluatedNoneDisplays[state.key] = noneDisplay
             changed = changed || noneDisplay != state.noneDisplay
         }
         if (!changed) return
@@ -327,13 +397,17 @@ class UiLayout internal constructor(
             }
         }
 
+        node.beforePseudo?.let { pseudo ->
+            drawPseudo(pseudo, renderer, resolvedTextStyle, timeSeconds)
+        }
+
         when (val element = node.element) {
             is UiContainer -> Unit
             is Paragraph -> drawText(
                 element.text,
                 style,
                 resolvedTextStyle,
-                node.contentBounds,
+                node.textBounds ?: node.contentBounds,
                 requireFont(node),
                 renderer,
             )
@@ -341,6 +415,110 @@ class UiLayout internal constructor(
 
         node.children.forEach { child ->
             draw(child, renderer, resolvedTextStyle, timeSeconds)
+        }
+
+        node.afterPseudo?.let { pseudo ->
+            drawPseudo(pseudo, renderer, resolvedTextStyle, timeSeconds)
+        }
+    }
+
+    private fun drawPseudo(
+        node: UiPseudoLayoutNode,
+        renderer: Mine2DEngine,
+        inheritedTextStyle: ResolvedUiTextStyle,
+        timeSeconds: Float,
+    ) {
+        if (!node.displayed) return
+
+        val pseudoStyle = node.pseudoStyleProvider()
+        val style = pseudoStyle.style.resolveDefaults()
+        val dropShadow = style.dropShadow
+        if (dropShadow != null) {
+            renderer.withDropShadow(
+                x = node.bounds.left,
+                y = node.bounds.top,
+                width = node.bounds.width,
+                height = node.bounds.height,
+                color = dropShadow.color,
+                offsetX = dropShadow.offsetX,
+                offsetY = dropShadow.offsetY,
+                blurRadius = dropShadow.blurRadius,
+            ) {
+                drawPseudoContents(
+                    node,
+                    pseudoStyle.content,
+                    style,
+                    renderer,
+                    inheritedTextStyle,
+                    timeSeconds,
+                )
+            }
+        } else {
+            drawPseudoContents(
+                node,
+                pseudoStyle.content,
+                style,
+                renderer,
+                inheritedTextStyle,
+                timeSeconds,
+            )
+        }
+    }
+
+    private fun drawPseudoContents(
+        node: UiPseudoLayoutNode,
+        content: UiGeneratedContent,
+        style: ResolvedUiStyle,
+        renderer: Mine2DEngine,
+        inheritedTextStyle: ResolvedUiTextStyle,
+        timeSeconds: Float,
+    ) {
+        val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
+        style.boxShadow?.let { shadow ->
+            if (node.bounds.width > 0f && node.bounds.height > 0f) {
+                renderer.boxShadow(
+                    x = node.bounds.left,
+                    y = node.bounds.top,
+                    width = node.bounds.width,
+                    height = node.bounds.height,
+                    color = shadow.color,
+                    offsetX = shadow.offsetX,
+                    offsetY = shadow.offsetY,
+                    blurRadius = shadow.blurRadius,
+                    spreadRadius = shadow.spreadRadius,
+                    cornerRadius = shadow.cornerRadius,
+                )
+            }
+        }
+        style.drawBackground(renderer.material) { color, material ->
+            if (node.bounds.width > 0f && node.bounds.height > 0f) {
+                renderer.quad(
+                    node.bounds.left,
+                    node.bounds.top,
+                    node.bounds.width,
+                    node.bounds.height,
+                    color,
+                    material,
+                    renderer.uniformContext(
+                        elementBounds = node.bounds.toUniformRect(),
+                        contentBounds = node.contentBounds.toUniformRect(),
+                        timeSeconds = timeSeconds,
+                    ),
+                )
+            }
+        }
+        if (content is UiGeneratedContent.Text) {
+            drawText(
+                content.value,
+                style,
+                resolvedTextStyle,
+                node.contentBounds,
+                requireNotNull(node.font) {
+                    "${node.pseudoElement.cssName} on ${node.element.javaClass.simpleName} " +
+                        "requires a font in its style or originating element"
+                },
+                renderer,
+            )
         }
     }
 
@@ -432,8 +610,22 @@ private fun UiLayoutNode.translated(deltaX: Float, deltaY: Float): UiLayoutNode 
     bounds = bounds.translated(deltaX, deltaY),
     contentBounds = contentBounds.translated(deltaX, deltaY),
     children = children.map { child -> child.translated(deltaX, deltaY) },
+    beforePseudo = beforePseudo?.translated(deltaX, deltaY),
+    afterPseudo = afterPseudo?.translated(deltaX, deltaY),
+    textBounds = textBounds?.translated(deltaX, deltaY),
 ).also { translated ->
     translated.styleProvider = styleProvider
+}
+
+private fun UiPseudoLayoutNode.translated(
+    deltaX: Float,
+    deltaY: Float,
+): UiPseudoLayoutNode = copy(
+    outerBounds = outerBounds.translated(deltaX, deltaY),
+    bounds = bounds.translated(deltaX, deltaY),
+    contentBounds = contentBounds.translated(deltaX, deltaY),
+).also { translated ->
+    translated.pseudoStyleProvider = pseudoStyleProvider
 }
 
 private fun UiRect.translated(deltaX: Float, deltaY: Float): UiRect = copy(

@@ -92,8 +92,8 @@ internal fun UiLength.resolve(percentageBase: Float?): Float? {
  * [bottom] are nullable so that null represents CSS `auto`. Relative elements keep their normal
  * flow space, while absolute elements do not contribute to their container's size or gap. The
  * root's outer position is always controlled by [LayoutEngine.layout].
- * [gap] adds space between adjacent direct children without adding space at the
- * edges of the content box.
+ * [gap] adds space between adjacent direct children and generated pseudo-element boxes without
+ * adding space at the edges of the content box.
  * [noneDisplay] is evaluated during layout, rendering, and pointer queries.
  * When its value changes, geometry is recalculated. A true value removes the
  * element and its descendants from layout, rendering, and pointer input, like

@@ -227,6 +227,13 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
   such as `button.primary`, `.card.active.large`, and `div#main`; use `TargetOr` for selector lists
   such as `h1, h2, h3`. Specificity is compared by ID, then class/pseudo-class, then tag; later
   rules win at equal specificity, and an element's own specified style values win last.
+- Append `.before` or `.after` to an element selector to target a generated `::before` or
+  `::after` box. A pseudo rule uses `UiPseudoStyle`; its content is either
+  `UiGeneratedContent.Text` or `UiGeneratedContent.EmptyBox`. Generated boxes are the first or
+  last content item without being added to `UiContainer.children`, participate in the owner's
+  `direction` and `gap`, and support the regular `UiStyle` box, positioning, paint, shadow, and
+  `noneDisplay` properties. Text inherits `color`, `font`, and `textShadow` from the owner. Pointer
+  input over a generated box targets its owner. Use `UiLayout.pseudoNodeOf` to inspect its bounds.
 - `TargetScope` is the CSS `:scope` selector. It selects the layout root in a global sheet, or the
   container/component root in a scoped sheet, and has pseudo-class specificity.
 - `TargetWildcard` is the CSS universal selector `*`. It matches every element and adds no
@@ -265,11 +272,15 @@ import io.github.aiwao.mine2dengine.layout.UiDirection
 import io.github.aiwao.mine2dengine.layout.UiDropShadow
 import io.github.aiwao.mine2dengine.layout.UiEdges
 import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
+import io.github.aiwao.mine2dengine.layout.UiGeneratedContent
 import io.github.aiwao.mine2dengine.layout.UiPosition
+import io.github.aiwao.mine2dengine.layout.UiPseudoStyle
 import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.UiTextShadow
 import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.descendant
+import io.github.aiwao.mine2dengine.layout.after
+import io.github.aiwao.mine2dengine.layout.before
 import io.github.aiwao.mine2dengine.layout.div
 import io.github.aiwao.mine2dengine.layout.percent
 import io.github.aiwao.mine2dengine.layout.px
@@ -460,6 +471,24 @@ object ExampleStyleSheet : StyleSheet {
                 right = TargetWildcard,
             ),
             style = UiStyle(padding = UiEdges(4f)),
+        )
+        newStyle(
+            target = TargetClass("featured").before,
+            pseudoStyle = UiPseudoStyle(
+                content = UiGeneratedContent.Text("Featured: "),
+                style = UiStyle(color = 0xFFFFCC00.toInt()),
+            ),
+        )
+        newStyle(
+            target = TargetClass("featured").after,
+            pseudoStyle = UiPseudoStyle(
+                content = UiGeneratedContent.EmptyBox,
+                style = UiStyle(
+                    width = 4f.px,
+                    height = 4f.px,
+                    backgroundColor = 0xFFFFCC00.toInt(),
+                ),
+            ),
         )
     }
 }
