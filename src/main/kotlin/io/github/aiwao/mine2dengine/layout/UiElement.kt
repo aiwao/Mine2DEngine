@@ -5,7 +5,7 @@ import net.minecraft.client.input.MouseButtonEvent
 /** Base type for nodes in a UI tree. */
 sealed class UiElement(
     tag: String,
-    className: String,
+    className: Set<String>,
     id: String,
     style: UiStyle,
     open var onClick: ((MouseButtonEvent) -> Unit)? = null,
@@ -14,7 +14,7 @@ sealed class UiElement(
     open var onMouseOver: (() -> Unit)? = null,
     open var onMouseOut: (() -> Unit)? = null,
 ) {
-    /** The HTML-compatible tag name for this element. */
+    /** The tag name for this element. Names are matched exactly and may contain whitespace. */
     var tag: String = tag
         private set
 
@@ -22,15 +22,8 @@ sealed class UiElement(
     var id: String = id
         private set
 
-    /** The HTML-compatible, whitespace-separated class attribute for this element. */
-    var className: String = className
-        private set
-
-    /** The individual class names parsed from [className]. */
-    val classes: Set<String> = className
-        .splitToSequence(Regex("\\s+"))
-        .filter(String::isNotEmpty)
-        .toSet()
+    /** The class names for this element. Names are matched exactly and may contain whitespace. */
+    val className: Set<String> = className.toSet()
 
     private var styleProvider: () -> UiStyle = { style }
 
@@ -67,7 +60,7 @@ sealed class UiElement(
 /** Base type for UI elements that arrange child elements. */
 sealed class UiContainer(
     tag: String,
-    className: String,
+    className: Set<String>,
     id: String,
     style: UiStyle,
     children: Iterable<UiElement> = emptyList(),
@@ -146,7 +139,7 @@ sealed class UiContainer(
         descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
         childStyle: ((UiElement) -> UiStyle)? = null,
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
         content: Div.() -> Unit = {},
     ): Div = add(
@@ -165,6 +158,35 @@ sealed class UiContainer(
         ).apply(content),
     )
 
+    /** Creates a div with [className] as its single, unsplit class name. */
+    fun div(
+        style: UiStyle = UiStyle(),
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+        descendantStyle: ((UiElement) -> UiStyle)? = null,
+        tag: String = "div",
+        childStyle: ((UiElement) -> UiStyle)? = null,
+        className: String,
+        id: String = "",
+        content: Div.() -> Unit = {},
+    ): Div = div(
+        style = style,
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+        descendantStyle = descendantStyle,
+        tag = tag,
+        childStyle = childStyle,
+        className = setOf(className),
+        id = id,
+        content = content,
+    )
+
     /** Creates a div whose style is resolved from its current state when used. */
     fun div(
         style: (Div) -> UiStyle,
@@ -176,7 +198,7 @@ sealed class UiContainer(
         descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
         childStyle: ((UiElement) -> UiStyle)? = null,
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
         content: Div.() -> Unit = {},
     ): Div = add(
@@ -194,6 +216,35 @@ sealed class UiContainer(
         ).withStyleProvider(style).apply(content),
     )
 
+    /** Creates a dynamically styled div with [className] as its single, unsplit class name. */
+    fun div(
+        style: (Div) -> UiStyle,
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+        descendantStyle: ((UiElement) -> UiStyle)? = null,
+        tag: String = "div",
+        childStyle: ((UiElement) -> UiStyle)? = null,
+        className: String,
+        id: String = "",
+        content: Div.() -> Unit = {},
+    ): Div = div(
+        style = style,
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+        descendantStyle = descendantStyle,
+        tag = tag,
+        childStyle = childStyle,
+        className = setOf(className),
+        id = id,
+        content = content,
+    )
+
     fun p(
         text: String,
         style: UiStyle = UiStyle(),
@@ -203,7 +254,7 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
     ): Paragraph = add(
         Paragraph(
@@ -220,6 +271,31 @@ sealed class UiContainer(
         ),
     )
 
+    /** Creates a paragraph with [className] as its single, unsplit class name. */
+    fun p(
+        text: String,
+        style: UiStyle = UiStyle(),
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+        tag: String = "p",
+        className: String,
+        id: String = "",
+    ): Paragraph = p(
+        text = text,
+        style = style,
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+        tag = tag,
+        className = setOf(className),
+        id = id,
+    )
+
     /** Creates a paragraph whose style is resolved from its current state when used. */
     fun p(
         text: String,
@@ -230,7 +306,7 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
     ): Paragraph = add(
         Paragraph(
@@ -246,6 +322,31 @@ sealed class UiContainer(
         ).withStyleProvider(style),
     )
 
+    /** Creates a dynamically styled paragraph with [className] as its single class name. */
+    fun p(
+        text: String,
+        style: (Paragraph) -> UiStyle,
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+        tag: String = "p",
+        className: String,
+        id: String = "",
+    ): Paragraph = p(
+        text = text,
+        style = style,
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+        tag = tag,
+        className = setOf(className),
+        id = id,
+    )
+
     fun paragraph(
         text: String,
         style: UiStyle = UiStyle(),
@@ -255,7 +356,7 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
     ): Paragraph = p(
         text,
@@ -270,6 +371,31 @@ sealed class UiContainer(
         id,
     )
 
+    /** Alias of [p] with [className] as its single, unsplit class name. */
+    fun paragraph(
+        text: String,
+        style: UiStyle = UiStyle(),
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+        tag: String = "p",
+        className: String,
+        id: String = "",
+    ): Paragraph = p(
+        text = text,
+        style = style,
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+        tag = tag,
+        className = setOf(className),
+        id = id,
+    )
+
     /** Alias of [p] with a dynamic style. */
     fun paragraph(
         text: String,
@@ -280,7 +406,7 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
     ): Paragraph = p(
         text,
@@ -293,6 +419,31 @@ sealed class UiContainer(
         tag,
         className,
         id,
+    )
+
+    /** Dynamic-style alias of [p] with [className] as its single, unsplit class name. */
+    fun paragraph(
+        text: String,
+        style: (Paragraph) -> UiStyle,
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+        tag: String = "p",
+        className: String,
+        id: String = "",
+    ): Paragraph = p(
+        text = text,
+        style = style,
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+        tag = tag,
+        className = setOf(className),
+        id = id,
     )
 }
 
@@ -308,7 +459,7 @@ class Div(
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
-    className: String = "",
+    className: Set<String> = emptySet(),
     id: String = "",
 ) : UiContainer(
     tag,
@@ -323,7 +474,36 @@ class Div(
     onMouseOut,
     descendantStyle,
     childStyle,
-)
+) {
+    /** Creates a div with [className] as its single, unsplit class name. */
+    constructor(
+        style: UiStyle = UiStyle(),
+        children: Iterable<UiElement> = emptyList(),
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+        descendantStyle: ((UiElement) -> UiStyle)? = null,
+        tag: String = "div",
+        childStyle: ((UiElement) -> UiStyle)? = null,
+        className: String,
+        id: String = "",
+    ) : this(
+        style = style,
+        children = children,
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+        descendantStyle = descendantStyle,
+        tag = tag,
+        childStyle = childStyle,
+        className = setOf(className),
+        id = id,
+    )
+}
 
 /** A text element corresponding to an HTML p. Newlines create multiple lines. */
 class Paragraph(
@@ -335,9 +515,34 @@ class Paragraph(
     override var onMouseOver: (() -> Unit)? = null,
     override var onMouseOut: (() -> Unit)? = null,
     tag: String = "p",
-    className: String = "",
+    className: Set<String> = emptySet(),
     id: String = "",
-) : UiElement(tag, className, id, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut)
+) : UiElement(tag, className, id, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
+    /** Creates a paragraph with [className] as its single, unsplit class name. */
+    constructor(
+        text: String,
+        style: UiStyle = UiStyle(),
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+        tag: String = "p",
+        className: String,
+        id: String = "",
+    ) : this(
+        text = text,
+        style = style,
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+        tag = tag,
+        className = setOf(className),
+        id = id,
+    )
+}
 
 /** Creates the root of a UI tree. */
 fun div(
@@ -350,7 +555,7 @@ fun div(
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
-    className: String = "",
+    className: Set<String> = emptySet(),
     id: String = "",
     content: Div.() -> Unit = {},
 ): Div = Div(
@@ -367,6 +572,35 @@ fun div(
     id = id,
 ).apply(content)
 
+/** Creates the root of a UI tree with [className] as its single, unsplit class name. */
+fun div(
+    style: UiStyle = UiStyle(),
+    onClick: ((MouseButtonEvent) -> Unit)? = null,
+    onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+    onDrag: ((MouseButtonEvent) -> Unit)? = null,
+    onMouseOver: (() -> Unit)? = null,
+    onMouseOut: (() -> Unit)? = null,
+    descendantStyle: ((UiElement) -> UiStyle)? = null,
+    tag: String = "div",
+    childStyle: ((UiElement) -> UiStyle)? = null,
+    className: String,
+    id: String = "",
+    content: Div.() -> Unit = {},
+): Div = div(
+    style = style,
+    onClick = onClick,
+    onMouseMove = onMouseMove,
+    onDrag = onDrag,
+    onMouseOver = onMouseOver,
+    onMouseOut = onMouseOut,
+    descendantStyle = descendantStyle,
+    tag = tag,
+    childStyle = childStyle,
+    className = setOf(className),
+    id = id,
+    content = content,
+)
+
 /** Creates the root of a UI tree with a style resolved from the div's current state. */
 fun div(
     style: (Div) -> UiStyle,
@@ -378,7 +612,7 @@ fun div(
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
-    className: String = "",
+    className: Set<String> = emptySet(),
     id: String = "",
     content: Div.() -> Unit = {},
 ): Div = Div(
@@ -393,6 +627,35 @@ fun div(
     className = className,
     id = id,
 ).withStyleProvider(style).apply(content)
+
+/** Creates a dynamically styled root with [className] as its single, unsplit class name. */
+fun div(
+    style: (Div) -> UiStyle,
+    onClick: ((MouseButtonEvent) -> Unit)? = null,
+    onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+    onDrag: ((MouseButtonEvent) -> Unit)? = null,
+    onMouseOver: (() -> Unit)? = null,
+    onMouseOut: (() -> Unit)? = null,
+    descendantStyle: ((UiElement) -> UiStyle)? = null,
+    tag: String = "div",
+    childStyle: ((UiElement) -> UiStyle)? = null,
+    className: String,
+    id: String = "",
+    content: Div.() -> Unit = {},
+): Div = div(
+    style = style,
+    onClick = onClick,
+    onMouseMove = onMouseMove,
+    onDrag = onDrag,
+    onMouseOver = onMouseOver,
+    onMouseOut = onMouseOut,
+    descendantStyle = descendantStyle,
+    tag = tag,
+    childStyle = childStyle,
+    className = setOf(className),
+    id = id,
+    content = content,
+)
 
 private fun <T : UiElement> T.withStyleProvider(provider: (T) -> UiStyle): T = apply {
     setStyleProvider { provider(this) }

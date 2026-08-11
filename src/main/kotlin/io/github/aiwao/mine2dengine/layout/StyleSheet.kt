@@ -3,12 +3,12 @@ package io.github.aiwao.mine2dengine.layout
 /** A selector that can decide whether a style-sheet rule applies to a [UiElement]. */
 sealed interface StyleSheetTarget
 
-/** Selects elements containing [className] in their HTML-compatible class list. */
+/** Selects elements containing the exact [className], which may include whitespace. */
 data class TargetClass(
     val className: String,
 ) : StyleSheetTarget
 
-/** Selects elements whose HTML-compatible tag is [tag]. */
+/** Selects elements whose tag exactly equals [tag], which may include whitespace. */
 data class TargetTag(
     val tag: String,
 ) : StyleSheetTarget
@@ -196,7 +196,7 @@ private fun StyleSheetTarget.matchSpecificity(
     context: StyleSheetElementContext,
 ): StyleSheetSpecificity? = when (this) {
     is TargetClass -> StyleSheetSpecificity(classCount = 1)
-        .takeIf { className in context.element.classes }
+        .takeIf { className in context.element.className }
 
     is TargetTag -> StyleSheetSpecificity(tagCount = 1)
         .takeIf { context.element.tag == tag }
