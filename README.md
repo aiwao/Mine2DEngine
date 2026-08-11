@@ -271,6 +271,7 @@ import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
 import io.github.aiwao.mine2dengine.layout.percent
 import io.github.aiwao.mine2dengine.layout.px
+import io.github.aiwao.mine2dengine.layout.uiComponent
 
 val root = div(
     UiStyle(
@@ -343,6 +344,44 @@ val root = div(
 val layout = LayoutEngine.layout(root, left = 12f, top = 12f)
 layout.render(draw)
 ```
+
+Define reusable UI trees as `UiComponent` values. Every `component(...)` call adds a fresh
+`UiElement` tree to its parent, where it participates in the parent's measurement, rendering, and
+input handling. Inherited text styles and global `StyleSheet` values passed to
+`LayoutEngine.layout` continue across component boundaries.
+
+```kotlin
+val actionBar = uiComponent(styleSheet = actionBarStyleSheet) {
+    div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
+        p("Save", className = "action")
+        p("Close", className = "action")
+    }
+}
+
+val composedLayout = LayoutEngine.layout(
+    rootStyle = UiStyle(font = font),
+    left = 12f,
+    top = 12f,
+) {
+    p("Editor")
+    component(actionBar)
+    component(
+        actionBar,
+        styleSheet = compactActionBarStyleSheet,
+    ) // Added only to this instance
+}
+```
+
+Sheets passed to `uiComponent` apply only to the component root and its contents. Their local
+selectors cannot inspect ancestors or siblings at the call site. At a nested child component, a
+parent component's local sheet can style the child's root but does not enter its contents. A sheet
+passed to `component(...)` follows the component's default sheets. As in the regular cascade,
+specificity is compared first; later sheets win at equal specificity, and the element's own style
+wins last.
+
+The component factory runs once when `component(...)` adds it. When the same `UiLayout` is
+recalculated after a `noneDisplay` change, it reuses the existing element tree and preserves state
+such as hover and drag state.
 
 For example, this applies a drop shadow only to paragraph descendants, including the one inside
 the nested `Div`. Every element exposes its read-only HTML-compatible `tag`, which can be used when

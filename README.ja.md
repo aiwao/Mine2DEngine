@@ -267,6 +267,7 @@ import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
 import io.github.aiwao.mine2dengine.layout.div
 import io.github.aiwao.mine2dengine.layout.percent
 import io.github.aiwao.mine2dengine.layout.px
+import io.github.aiwao.mine2dengine.layout.uiComponent
 
 val root = div(
     UiStyle(
@@ -339,6 +340,44 @@ val root = div(
 val layout = LayoutEngine.layout(root, left = 12f, top = 12f)
 layout.render(draw)
 ```
+
+再利用するUIツリーは `UiComponent` として定義できます。`component(...)` を呼ぶたびに新しい
+`UiElement` ツリーが親へ追加され、親ツリーと一緒に計測、描画、入力処理されます。親からの
+文字styleの継承や、`LayoutEngine.layout` に渡したグローバルな `StyleSheet` も
+コンポーネント内へ通常どおり適用されます。
+
+```kotlin
+val actionBar = uiComponent(styleSheet = actionBarStyleSheet) {
+    div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
+        p("保存", className = "action")
+        p("閉じる", className = "action")
+    }
+}
+
+val composedLayout = LayoutEngine.layout(
+    rootStyle = UiStyle(font = font),
+    left = 12f,
+    top = 12f,
+) {
+    p("エディター")
+    component(actionBar)
+    component(
+        actionBar,
+        styleSheet = compactActionBarStyleSheet,
+    ) // このインスタンスだけに追加
+}
+```
+
+`uiComponent` に渡したシートはコンポーネントのルートとその内部だけに適用され、呼び出し側の
+祖先や兄弟をローカルセレクターから参照することはできません。ネストした子コンポーネントでは、
+親コンポーネントのローカルシートは子のルートには適用できますが、その内部には入りません。
+`component(...)` に渡したシートはコンポーネント既定のシートより後に追加されます。通常のCSSと
+同様に詳細度が先に比較され、同じ詳細度なら後のシートが優先され、要素自身のstyleが最後に
+優先されます。
+
+コンポーネントのfactoryは `component(...)` で追加するときに1回だけ呼ばれます。同じ
+`UiLayout` が `noneDisplay` の変更で再計算される場合は、既存の要素ツリーが再利用されるため、
+要素のhoverやdragなどの状態も維持されます。
 
 たとえば、次の指定では、ネストした `Div` 内も含めて段落の子孫だけにdrop shadowを適用します。
 各要素では読み取り専用のHTML互換 `tag` を参照でき、子孫の選択に利用できます。デフォルト値は

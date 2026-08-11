@@ -49,6 +49,9 @@ sealed class UiElement(
         styleProvider = provider
     }
 
+    /** Null outside a component root; an empty list still marks a component style boundary. */
+    internal var componentStyleSheets: List<StyleSheet>? = null
+
     /** Whether this element's click callback is disabled. */
     var disabled: Boolean = false
 
@@ -99,6 +102,38 @@ sealed class UiContainer(
     fun <T : UiElement> add(element: T): T {
         children += element
         return element
+    }
+
+    /** Creates and adds one independently styled instance of [component] to this container. */
+    fun <T : UiElement> component(component: UiComponent<T>): T =
+        mountComponent(component, emptyList())
+
+    /**
+     * Creates an instance of [component] with one additional scoped [styleSheet].
+     *
+     * The sheet follows the component's default sheets in the cascade.
+     */
+    fun <T : UiElement> component(
+        component: UiComponent<T>,
+        styleSheet: StyleSheet,
+    ): T = mountComponent(component, listOf(styleSheet))
+
+    /**
+     * Creates an instance of [component] with additional scoped [styleSheets].
+     *
+     * The sheets follow the component's default sheets in iteration order.
+     */
+    fun <T : UiElement> component(
+        component: UiComponent<T>,
+        styleSheets: Iterable<StyleSheet>,
+    ): T = mountComponent(component, styleSheets.toList())
+
+    private fun <T : UiElement> mountComponent(
+        component: UiComponent<T>,
+        additionalStyleSheets: List<StyleSheet>,
+    ): T = component.create().also { root ->
+        root.componentStyleSheets = component.styleSheets.toList() + additionalStyleSheets
+        add(root)
     }
 
     fun div(

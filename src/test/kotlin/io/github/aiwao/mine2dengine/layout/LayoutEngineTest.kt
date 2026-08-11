@@ -19,6 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -550,6 +551,218 @@ class LayoutEngineTest {
 
         assertEquals(UiSize(10f, 0f), oneSheetLayout.size)
         assertEquals(UiSize(10f, 20f), multipleSheetLayout.size)
+    }
+
+    @Test
+    fun `layout DSL mounts a fresh element tree for each component instance`() {
+        var creations = 0
+        val card = uiComponent {
+            creations++
+            div(
+                style = UiStyle(width = 10f.px, height = 4f.px),
+                className = "card",
+            )
+        }
+        lateinit var first: Div
+        lateinit var second: Div
+
+        val layout = LayoutEngine.layout(left = 2f, top = 3f) {
+            first = component(card)
+            second = component(card)
+        }
+
+        assertEquals(2, creations)
+        assertNotSame(first, second)
+        assertEquals(UiSize(10f, 8f), layout.size)
+        assertEquals(UiRect(2f, 3f, 10f, 4f), layout.nodeOf(first)!!.outerBounds)
+        assertEquals(UiRect(2f, 7f, 10f, 4f), layout.nodeOf(second)!!.outerBounds)
+    }
+
+    @Test
+    fun `mounted components participate in inheritance and style sheet matching`() {
+        val inheritedColor = 0xFF123456.toInt()
+        lateinit var paragraph: Paragraph
+        val label = uiComponent {
+            div(className = "component") {
+                paragraph = p("label")
+            }
+        }
+        val root = div(UiStyle(color = inheritedColor)) {
+            component(label)
+        }
+        val sheet = styleSheet(
+            (TargetClass("component") child TargetTag("p")) to UiStyle(width = 20f.px),
+        )
+
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        assertEquals(inheritedColor, layout.nodeOf(paragraph)!!.color)
+        assertEquals(20f, layout.nodeOf(paragraph)!!.contentBounds.width)
+    }
+
+    @Test
+    fun `component style sheets apply to their root and descendants without leaking out`() {
+        val callerLeakColor = 0xFFABCDEF.toInt()
+        val componentSheet = styleSheet(
+            TargetClass("component-root") to UiStyle(width = 20f.px),
+            TargetClass("label") to UiStyle(height = 4f.px),
+            (TargetClass("caller") descendant TargetClass("label")) to UiStyle(
+                backgroundColor = callerLeakColor,
+            ),
+        )
+        lateinit var componentRoot: Div
+        lateinit var componentLabel: Paragraph
+        lateinit var outsideLabel: Paragraph
+        val labelComponent = uiComponent(styleSheet = componentSheet) {
+            div(className = "component-root") {
+                componentLabel = p("inside", className = "label")
+            }
+        }
+        val root = div(className = "caller") {
+            componentRoot = component(labelComponent)
+            outsideLabel = p("outside", className = "label")
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(20f, layout.nodeOf(componentRoot)!!.contentBounds.width)
+        assertEquals(4f, layout.nodeOf(componentLabel)!!.contentBounds.height)
+        assertNull(layout.nodeOf(componentLabel)!!.styleProvider().backgroundColor)
+        assertEquals(10f, layout.nodeOf(outsideLabel)!!.contentBounds.height)
+    }
+
+    @Test
+    fun `mount style sheets follow component defaults in the shared specificity cascade`() {
+        val defaultColor = 0xFF112233.toInt()
+        val mountedColor = 0xFF445566.toInt()
+        val defaultSheet = styleSheet(
+            TargetClass("card") to UiStyle(
+                width = 10f.px,
+                backgroundColor = defaultColor,
+            ),
+        )
+        val mountSheet = styleSheet(
+            TargetClass("card") to UiStyle(
+                width = 20f.px,
+                height = 6f.px,
+                backgroundColor = mountedColor,
+            ),
+        )
+        val globalSheet = styleSheet(
+            (TargetTag("article") and TargetClass("card")) to UiStyle(height = 9f.px),
+        )
+        val card = uiComponent(styleSheets = listOf(defaultSheet)) {
+            div(tag = "article", className = "card")
+        }
+        lateinit var defaultCard: Div
+        lateinit var mountedCard: Div
+        val root = div {
+            defaultCard = component(card)
+            mountedCard = component(card, styleSheets = listOf(mountSheet))
+        }
+
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(globalSheet),
+        )
+
+        assertEquals(UiRect(0f, 0f, 10f, 9f), layout.nodeOf(defaultCard)!!.bounds)
+        assertEquals(defaultColor, layout.nodeOf(defaultCard)!!.styleProvider().backgroundColor)
+        assertEquals(UiRect(0f, 9f, 20f, 9f), layout.nodeOf(mountedCard)!!.bounds)
+        assertEquals(mountedColor, layout.nodeOf(mountedCard)!!.styleProvider().backgroundColor)
+    }
+
+    @Test
+    fun `nested component boundaries expose their root but isolate their descendants`() {
+        val globalColor = 0xFF778899.toInt()
+        val outerSheet = styleSheet(
+            TargetClass("shared") to UiStyle(width = 40f.px),
+        )
+        val innerSheet = styleSheet(
+            TargetClass("shared") to UiStyle(height = 6f.px),
+        )
+        val globalSheet = styleSheet(
+            (TargetClass("application") descendant TargetClass("shared")) to UiStyle(
+                backgroundColor = globalColor,
+            ),
+        )
+        lateinit var innerLabel: Paragraph
+        val innerComponent = uiComponent(innerSheet) {
+            div(className = "shared") {
+                innerLabel = p("i", className = "shared")
+            }
+        }
+        lateinit var outerLabel: Paragraph
+        lateinit var innerRoot: Div
+        val outerComponent = uiComponent(outerSheet) {
+            div {
+                outerLabel = p("o", className = "shared")
+                innerRoot = component(innerComponent)
+            }
+        }
+        val root = div(className = "application") {
+            component(outerComponent)
+        }
+
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(globalSheet),
+        )
+
+        assertEquals(40f, layout.nodeOf(outerLabel)!!.contentBounds.width)
+        assertEquals(40f, layout.nodeOf(innerRoot)!!.contentBounds.width)
+        assertEquals(6f, layout.nodeOf(innerRoot)!!.contentBounds.height)
+        assertEquals(5f, layout.nodeOf(innerLabel)!!.contentBounds.width)
+        assertEquals(6f, layout.nodeOf(innerLabel)!!.contentBounds.height)
+        assertEquals(globalColor, layout.nodeOf(innerLabel)!!.styleProvider().backgroundColor)
+    }
+
+    @Test
+    fun `relayout reuses the element tree created by a component`() {
+        var hidden = false
+        var creations = 0
+        lateinit var conditional: Div
+        val visibilitySheet = styleSheet(
+            TargetClass("conditional") to UiStyle(
+                width = 10f.px,
+                height = 4f.px,
+                noneDisplay = { hidden },
+            ),
+        )
+        val conditionalComponent = uiComponent(visibilitySheet) {
+            creations++
+            div(className = "conditional")
+        }
+        val root = div {
+            conditional = component(conditionalComponent)
+            div(UiStyle(width = 5f.px, height = 3f.px))
+        }
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(1, creations)
+        assertEquals(UiSize(10f, 7f), layout.size)
+
+        hidden = true
+        assertEquals(UiSize(5f, 3f), layout.size)
+        assertNull(layout.nodeOf(conditional))
+        assertEquals(1, creations)
+
+        hidden = false
+        assertEquals(UiSize(10f, 7f), layout.size)
+        assertNotNull(layout.nodeOf(conditional))
+        assertEquals(1, creations)
     }
 
     @Test

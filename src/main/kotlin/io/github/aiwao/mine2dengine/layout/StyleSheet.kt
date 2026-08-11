@@ -134,17 +134,43 @@ internal class StyleSheetElementContext(
     val previousSibling: StyleSheetElementContext? = null,
 )
 
+/** Style sheets paired with the selector context visible from their scope. */
+internal data class StyleSheetScopeContext(
+    val styleSheets: List<StyleSheet>,
+    val context: StyleSheetElementContext,
+)
+
 /** Resolves all declarations matching [context] according to selector specificity and order. */
 internal fun Iterable<StyleSheet>.styleFor(context: StyleSheetElementContext): UiStyle? =
-    flatMap(StyleSheet::styles)
-        .mapNotNull { rule ->
-            rule.target.matchSpecificity(context)
-                ?.let { specificity -> specificity to rule.style }
+    listOf(StyleSheetScopeContext(toList(), context)).scopedStyleFor()
+
+/** Resolves declarations from multiple selector scopes as one ordered cascade. */
+internal fun Iterable<StyleSheetScopeContext>.scopedStyleFor(): UiStyle? =
+    flatMap { scope ->
+        scope.styleSheets.flatMap(StyleSheet::styles).map { rule -> rule to scope.context }
+    }
+        .mapIndexedNotNull { sourceOrder, (rule, context) ->
+            rule.target.matchSpecificity(context)?.let { specificity ->
+                MatchedStyleSheetRule(
+                    specificity = specificity,
+                    sourceOrder = sourceOrder,
+                    style = rule.style,
+                )
+            }
         }
-        .sortedBy { (specificity, _) -> specificity }
-        .fold(null as UiStyle?) { resolved, (_, style) ->
-            resolved?.withOverrides(style) ?: style
+        .sortedWith(
+            compareBy<MatchedStyleSheetRule> { it.specificity }
+                .thenBy(MatchedStyleSheetRule::sourceOrder),
+        )
+        .fold(null as UiStyle?) { resolved, matched ->
+            resolved?.withOverrides(matched.style) ?: matched.style
         }
+
+private data class MatchedStyleSheetRule(
+    val specificity: StyleSheetSpecificity,
+    val sourceOrder: Int,
+    val style: UiStyle,
+)
 
 private data class StyleSheetSpecificity(
     val idCount: Int = 0,
