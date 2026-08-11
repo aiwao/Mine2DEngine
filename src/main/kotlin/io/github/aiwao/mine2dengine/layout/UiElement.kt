@@ -42,6 +42,11 @@ sealed class UiElement(
         styleProvider = provider
     }
 
+    internal fun addStyleOverrides(provider: () -> UiStyle) {
+        val baseStyleProvider = styleProvider
+        styleProvider = { baseStyleProvider().withOverrides(provider()) }
+    }
+
     /** Null outside a component root; an empty list still marks a component style boundary. */
     internal var componentStyleSheets: List<StyleSheet>? = null
 
@@ -87,35 +92,70 @@ sealed class UiContainer(
         return element
     }
 
-    /** Creates and adds one independently styled instance of [component] to this container. */
-    fun <T : UiElement> component(component: UiComponent<T>): T =
-        mountComponent(component, emptyList())
-
     /**
-     * Creates an instance of [component] with one additional scoped [styleSheet].
+     * Creates and adds one instance of [component] with call-site style and event overrides.
      *
-     * The sheet follows the component's default sheets in the cascade.
+     * Specified [style] values override the component root's style. Null callbacks preserve the
+     * callbacks created by the component factory.
      */
     fun <T : UiElement> component(
         component: UiComponent<T>,
-        styleSheet: StyleSheet,
-    ): T = mountComponent(component, listOf(styleSheet))
+        style: UiStyle = UiStyle(),
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+    ): T = mountComponent(
+        component = component,
+        resolveStyle = { style },
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+    )
 
     /**
-     * Creates an instance of [component] with additional scoped [styleSheets].
+     * Creates an instance of [component] with style resolved from its root's current state.
      *
-     * The sheets follow the component's default sheets in iteration order.
+     * Specified style values override the component root's style. Null callbacks preserve the
+     * callbacks created by the component factory.
      */
     fun <T : UiElement> component(
         component: UiComponent<T>,
-        styleSheets: Iterable<StyleSheet>,
-    ): T = mountComponent(component, styleSheets.toList())
+        style: (T) -> UiStyle,
+        onClick: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+        onDrag: ((MouseButtonEvent) -> Unit)? = null,
+        onMouseOver: (() -> Unit)? = null,
+        onMouseOut: (() -> Unit)? = null,
+    ): T = mountComponent(
+        component = component,
+        resolveStyle = style,
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+    )
 
     private fun <T : UiElement> mountComponent(
         component: UiComponent<T>,
-        additionalStyleSheets: List<StyleSheet>,
+        resolveStyle: (T) -> UiStyle,
+        onClick: ((MouseButtonEvent) -> Unit)?,
+        onMouseMove: ((x: Double, y: Double) -> Unit)?,
+        onDrag: ((MouseButtonEvent) -> Unit)?,
+        onMouseOver: (() -> Unit)?,
+        onMouseOut: (() -> Unit)?,
     ): T = component.create().also { root ->
-        root.componentStyleSheets = component.styleSheets.toList() + additionalStyleSheets
+        root.componentStyleSheets = component.styleSheets.toList()
+        root.addStyleOverrides { resolveStyle(root) }
+        onClick?.let { root.onClick = it }
+        onMouseMove?.let { root.onMouseMove = it }
+        onDrag?.let { root.onDrag = it }
+        onMouseOver?.let { root.onMouseOver = it }
+        onMouseOut?.let { root.onMouseOut = it }
         add(root)
     }
 

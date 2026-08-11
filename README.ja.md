@@ -366,8 +366,9 @@ val composedLayout = LayoutEngine.layout(
     component(actionBar)
     component(
         actionBar,
-        styleSheet = compactActionBarStyleSheet,
-    ) // このインスタンスだけに追加
+        style = UiStyle(gap = 2f),
+        onClick = { event -> println("Compact bar: button=${event.button()}") },
+    ) // このインスタンスのrootだけを上書き
 }
 ```
 
@@ -375,9 +376,11 @@ val composedLayout = LayoutEngine.layout(
 適用され、`TargetScope` はそのルートを選択します。呼び出し側の
 祖先や兄弟をローカルセレクターから参照することはできません。ネストした子コンポーネントでは、
 親コンポーネントのローカルシートは子のルートには適用できますが、その内部には入りません。
-`component(...)` に渡したシートはコンポーネント既定のシートより後に追加されます。通常のCSSと
-同様に詳細度が先に比較され、同じ詳細度なら後のシートが優先され、要素自身のstyleが最後に
-優先されます。
+
+`component(...)` には `div` と同様に、静的または動的な `style` とroot用イベントcallbackを
+指定できます。指定済みstyle値はcomponent factoryが作成したroot styleを上書きし、未指定値と
+nullのcallbackはcomponent既定値を保持します。インスタンス固有のStyleSheetは指定できません。
+rootだけを変える場合は呼び出し側style、scoped ruleには `uiComponent` のシートを使います。
 
 コンポーネントのfactoryは `component(...)` で追加するときに1回だけ呼ばれます。同じ
 `UiLayout` が `noneDisplay` の変更で再計算される場合は、既存の要素ツリーが再利用されるため、

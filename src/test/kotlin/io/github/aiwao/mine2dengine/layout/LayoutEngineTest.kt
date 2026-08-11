@@ -778,47 +778,82 @@ class LayoutEngineTest {
     }
 
     @Test
-    fun `mount style sheets follow component defaults in the shared specificity cascade`() {
+    fun `component call-site style overrides its root defaults`() {
         val defaultColor = 0xFF112233.toInt()
         val mountedColor = 0xFF445566.toInt()
         val defaultSheet = styleSheet(
-            TargetClass("card") to UiStyle(
+            TargetScope to UiStyle(
                 width = 10f.px,
                 backgroundColor = defaultColor,
             ),
         )
-        val mountSheet = styleSheet(
-            TargetClass("card") to UiStyle(
-                width = 20f.px,
-                height = 6f.px,
-                backgroundColor = mountedColor,
-            ),
-        )
-        val globalSheet = styleSheet(
-            (TargetTag("article") and TargetClass("card")) to UiStyle(height = 9f.px),
-        )
         val card = uiComponent(styleSheets = listOf(defaultSheet)) {
-            div(tag = "article", className = setOf("card"))
+            div(UiStyle(height = 6f.px))
         }
         lateinit var defaultCard: Div
         lateinit var mountedCard: Div
         val root = div {
             defaultCard = component(card)
-            mountedCard = component(card, styleSheets = listOf(mountSheet))
+            mountedCard = component(
+                card,
+                style = UiStyle(
+                    width = 20f.px,
+                    backgroundColor = mountedColor,
+                ),
+            )
         }
 
-        val layout = calculateLayout(
-            root,
-            left = 0f,
-            top = 0f,
-            textMeasurer = textMeasurer,
-            styleSheets = listOf(globalSheet),
-        )
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
 
-        assertEquals(UiRect(0f, 0f, 10f, 9f), layout.nodeOf(defaultCard)!!.bounds)
+        assertEquals(UiRect(0f, 0f, 10f, 6f), layout.nodeOf(defaultCard)!!.bounds)
         assertEquals(defaultColor, layout.nodeOf(defaultCard)!!.styleProvider().backgroundColor)
-        assertEquals(UiRect(0f, 9f, 20f, 9f), layout.nodeOf(mountedCard)!!.bounds)
+        assertEquals(UiRect(0f, 6f, 20f, 6f), layout.nodeOf(mountedCard)!!.bounds)
         assertEquals(mountedColor, layout.nodeOf(mountedCard)!!.styleProvider().backgroundColor)
+    }
+
+    @Test
+    fun `component call-site supports dynamic style and event overrides`() {
+        val defaultClick: (MouseButtonEvent) -> Unit = {}
+        val mountedClick: (MouseButtonEvent) -> Unit = {}
+        val mountedMove: (Double, Double) -> Unit = { _, _ -> }
+        val mountedDrag: (MouseButtonEvent) -> Unit = {}
+        val mountedOver: () -> Unit = {}
+        val mountedOut: () -> Unit = {}
+        var mountedHeight = 6f
+        val card = uiComponent {
+            div(
+                style = UiStyle(width = 10f.px, height = 4f.px),
+                onClick = defaultClick,
+            )
+        }
+        lateinit var defaultCard: Div
+        lateinit var mountedCard: Div
+        val root = div {
+            defaultCard = component(card)
+            mountedCard = component(
+                card,
+                style = { UiStyle(height = mountedHeight.px) },
+                onClick = mountedClick,
+                onMouseMove = mountedMove,
+                onDrag = mountedDrag,
+                onMouseOver = mountedOver,
+                onMouseOut = mountedOut,
+            )
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertSame(defaultClick, defaultCard.onClick)
+        assertEquals(10f.px, layout.nodeOf(mountedCard)!!.styleProvider().width)
+        assertEquals(6f.px, layout.nodeOf(mountedCard)!!.styleProvider().height)
+        assertSame(mountedClick, mountedCard.onClick)
+        assertSame(mountedMove, mountedCard.onMouseMove)
+        assertSame(mountedDrag, mountedCard.onDrag)
+        assertSame(mountedOver, mountedCard.onMouseOver)
+        assertSame(mountedOut, mountedCard.onMouseOut)
+
+        mountedHeight = 8f
+        assertEquals(8f.px, layout.nodeOf(mountedCard)!!.styleProvider().height)
     }
 
     @Test

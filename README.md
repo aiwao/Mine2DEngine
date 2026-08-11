@@ -369,18 +369,21 @@ val composedLayout = LayoutEngine.layout(
     component(actionBar)
     component(
         actionBar,
-        styleSheet = compactActionBarStyleSheet,
-    ) // Added only to this instance
+        style = UiStyle(gap = 2f),
+        onClick = { event -> println("Compact bar: button=${event.button()}") },
+    ) // Overrides only this instance's root
 }
 ```
 
 Sheets attached to a `Div` or passed to `uiComponent` apply only to that scope root and its
 contents. `TargetScope` selects that root. Their local
 selectors cannot inspect ancestors or siblings at the call site. At a nested child component, a
-parent component's local sheet can style the child's root but does not enter its contents. A sheet
-passed to `component(...)` follows the component's default sheets. As in the regular cascade,
-specificity is compared first; later sheets win at equal specificity, and the element's own style
-wins last.
+parent component's local sheet can style the child's root but does not enter its contents.
+
+`component(...)` accepts the same static or dynamic `style` and root event callbacks as `div`.
+Specified style values override the style created by the component factory, while unspecified
+values and null callbacks preserve the component defaults. Instance-specific style sheets are not
+accepted; use the call-site style for root overrides or define scoped sheets in `uiComponent`.
 
 The component factory runs once when `component(...)` adds it. When the same `UiLayout` is
 recalculated after a `noneDisplay` change, it reuses the existing element tree and preserves state
