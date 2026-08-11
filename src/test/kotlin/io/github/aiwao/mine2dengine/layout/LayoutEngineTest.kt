@@ -54,6 +54,7 @@ class LayoutEngineTest {
         assertEquals("span", dynamicParagraph.tag)
         assertEquals("aside", Div(tag = "aside").tag)
         assertEquals("small", Paragraph("text", tag = "small").tag)
+        assertEquals("custom tag", div(tag = "custom tag").tag)
     }
 
     @Test
@@ -76,28 +77,27 @@ class LayoutEngineTest {
         lateinit var shortParagraph: Paragraph
         lateinit var longParagraph: Paragraph
         lateinit var dynamicParagraph: Paragraph
-        val root = div(className = "page themed") {
-            childDiv = div(className = "panel")
-            dynamicDiv = div(style = { UiStyle() }, className = "dynamic panel")
-            shortParagraph = p("p", className = "label")
-            longParagraph = paragraph("paragraph", className = "strong label")
-            dynamicParagraph = p("dynamic", style = { UiStyle() }, className = "dynamic")
+        val root = div(className = setOf("page", "themed")) {
+            childDiv = div(className = setOf("panel"))
+            dynamicDiv = div(style = { UiStyle() }, className = setOf("dynamic", "panel"))
+            shortParagraph = p("p", className = setOf("label"))
+            longParagraph = paragraph("paragraph", className = setOf("strong", "label"))
+            dynamicParagraph = p("dynamic", style = { UiStyle() }, className = setOf("dynamic"))
         }
 
-        assertEquals("page themed", root.className)
-        assertEquals(setOf("page", "themed"), root.classes)
-        assertEquals(setOf("panel"), childDiv.classes)
-        assertEquals(setOf("dynamic", "panel"), dynamicDiv.classes)
-        assertEquals(setOf("label"), shortParagraph.classes)
-        assertEquals(setOf("strong", "label"), longParagraph.classes)
-        assertEquals(setOf("dynamic"), dynamicParagraph.classes)
-        assertEquals(setOf("standalone"), Div(className = "standalone").classes)
-        assertEquals(setOf("small"), Paragraph("text", className = "small").classes)
+        assertEquals(setOf("page", "themed"), root.className)
+        assertEquals(setOf("panel"), childDiv.className)
+        assertEquals(setOf("dynamic", "panel"), dynamicDiv.className)
+        assertEquals(setOf("label"), shortParagraph.className)
+        assertEquals(setOf("strong", "label"), longParagraph.className)
+        assertEquals(setOf("dynamic"), dynamicParagraph.className)
+        assertEquals(setOf("standalone"), Div(className = setOf("standalone")).className)
+        assertEquals(setOf("small"), Paragraph("text", className = setOf("small")).className)
         assertEquals(
-            setOf("spaced", "classes"),
-            div(className = "  spaced\tclasses\n").classes,
+            setOf("  spaced\tclass\n"),
+            div(className = setOf("  spaced\tclass\n")).className,
         )
-        assertTrue(div().classes.isEmpty())
+        assertTrue(div().className.isEmpty())
     }
 
     @Test
@@ -152,7 +152,7 @@ class LayoutEngineTest {
         lateinit var unmatchedParagraph: Paragraph
         val root = div(tag = "div") {
             inheritedParagraph = p("Red Text")
-            classParagraph = p("Also Red", className = "secondary example-class")
+            classParagraph = p("Also Red", className = setOf("secondary", "example-class"))
             unmatchedParagraph = p("Inherited too", tag = "label")
         }
 
@@ -172,6 +172,29 @@ class LayoutEngineTest {
         assertNull(layout.nodeOf(inheritedParagraph)!!.styleProvider().color)
         assertEquals(red, layout.nodeOf(classParagraph)!!.styleProvider().color)
         assertNull(layout.nodeOf(unmatchedParagraph)!!.styleProvider().color)
+    }
+
+    @Test
+    fun `style sheet matches class and tag names containing whitespace`() {
+        val sheet = styleSheet(
+            TargetClass("class name") to UiStyle(width = 10f.px),
+            TargetTag("tag name") to UiStyle(height = 20f.px),
+        )
+        val root = div(
+            tag = "tag name",
+            className = setOf("class name"),
+        )
+
+        val layout = calculateLayout(
+            root,
+            left = 0f,
+            top = 0f,
+            textMeasurer = textMeasurer,
+            styleSheets = listOf(sheet),
+        )
+
+        assertEquals(10f, layout.root.bounds.width)
+        assertEquals(20f, layout.root.bounds.height)
     }
 
     @Test
@@ -204,10 +227,10 @@ class LayoutEngineTest {
         lateinit var headingThree: Paragraph
         lateinit var headingFour: Paragraph
         val root = div {
-            primaryButton = div(tag = "button", className = "primary")
+            primaryButton = div(tag = "button", className = setOf("primary"))
             plainButton = div(tag = "button")
-            activeLargeCard = div(className = "card active large")
-            partialCard = div(className = "card active")
+            activeLargeCard = div(className = setOf("card", "active", "large"))
+            partialCard = div(className = setOf("card", "active"))
             mainDiv = div(id = "main")
             mainParagraph = p("not a div", id = "main")
             headingOne = p("h1", tag = "h1")
@@ -250,9 +273,9 @@ class LayoutEngineTest {
         )
         lateinit var heading: Paragraph
         lateinit var featuredParagraph: Paragraph
-        val root = div(id = "hero", className = "featured") {
+        val root = div(id = "hero", className = setOf("featured")) {
             heading = p("heading", tag = "h1")
-            featuredParagraph = p("featured", className = "featured")
+            featuredParagraph = p("featured", className = setOf("featured"))
         }
 
         val layout = calculateLayout(
@@ -283,7 +306,7 @@ class LayoutEngineTest {
         lateinit var directParagraph: Paragraph
         lateinit var directDiv: Div
         lateinit var nestedParagraph: Paragraph
-        val root = div(className = "scope") {
+        val root = div(className = setOf("scope")) {
             directParagraph = p("direct")
             directDiv = div {
                 nestedParagraph = p("nested")
@@ -370,21 +393,21 @@ class LayoutEngineTest {
         lateinit var laterCandidate: Paragraph
         lateinit var nestedCandidate: Paragraph
         val root = div {
-            div(className = "scope") {
-                directDescendant = p("direct", className = "descendant target")
+            div(className = setOf("scope")) {
+                directDescendant = p("direct", className = setOf("descendant", "target"))
                 div {
-                    nestedDescendant = p("nested", className = "descendant target")
+                    nestedDescendant = p("nested", className = setOf("descendant", "target"))
                 }
             }
-            outsideDescendant = p("outside", className = "descendant target")
+            outsideDescendant = p("outside", className = setOf("descendant", "target"))
             div {
-                precedingCandidate = p("before", className = "candidate")
-                p("marker", className = "marker")
-                adjacentCandidate = p("adjacent", className = "candidate")
+                precedingCandidate = p("before", className = setOf("candidate"))
+                p("marker", className = setOf("marker"))
+                adjacentCandidate = p("adjacent", className = setOf("candidate"))
                 div(tag = "spacer")
-                laterCandidate = p("later", className = "candidate")
+                laterCandidate = p("later", className = setOf("candidate"))
                 div {
-                    nestedCandidate = p("nested candidate", className = "candidate")
+                    nestedCandidate = p("nested candidate", className = setOf("candidate"))
                 }
             }
         }
@@ -435,12 +458,12 @@ class LayoutEngineTest {
         lateinit var matching: Paragraph
         lateinit var outside: Paragraph
         val root = div(tag = "main") {
-            div(className = "scope") {
+            div(className = setOf("scope")) {
                 div {
-                    matching = p("matching", className = "leaf")
+                    matching = p("matching", className = setOf("leaf"))
                 }
             }
-            outside = p("outside", className = "leaf")
+            outside = p("outside", className = setOf("leaf"))
         }
 
         val layout = calculateLayout(
@@ -484,7 +507,7 @@ class LayoutEngineTest {
             paragraph = p(
                 "styled",
                 style = UiStyle(width = 5f.px),
-                className = "featured selected",
+                className = setOf("featured", "selected"),
             )
         }
 
@@ -544,7 +567,7 @@ class LayoutEngineTest {
         val heightSheet = styleSheet(
             TargetClass("panel") to UiStyle(height = 20f.px),
         )
-        val root = div(tag = "main", className = "panel")
+        val root = div(tag = "main", className = setOf("panel"))
 
         val oneSheetLayout = LayoutEngine.layout(root, styleSheet = widthSheet)
         val multipleSheetLayout = LayoutEngine.layout(root, listOf(widthSheet, heightSheet))
@@ -560,7 +583,7 @@ class LayoutEngineTest {
             creations++
             div(
                 style = UiStyle(width = 10f.px, height = 4f.px),
-                className = "card",
+                className = setOf("card"),
             )
         }
         lateinit var first: Div
@@ -583,7 +606,7 @@ class LayoutEngineTest {
         val inheritedColor = 0xFF123456.toInt()
         lateinit var paragraph: Paragraph
         val label = uiComponent {
-            div(className = "component") {
+            div(className = setOf("component")) {
                 paragraph = p("label")
             }
         }
@@ -620,13 +643,13 @@ class LayoutEngineTest {
         lateinit var componentLabel: Paragraph
         lateinit var outsideLabel: Paragraph
         val labelComponent = uiComponent(styleSheet = componentSheet) {
-            div(className = "component-root") {
-                componentLabel = p("inside", className = "label")
+            div(className = setOf("component-root")) {
+                componentLabel = p("inside", className = setOf("label"))
             }
         }
-        val root = div(className = "caller") {
+        val root = div(className = setOf("caller")) {
             componentRoot = component(labelComponent)
-            outsideLabel = p("outside", className = "label")
+            outsideLabel = p("outside", className = setOf("label"))
         }
 
         val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
@@ -658,7 +681,7 @@ class LayoutEngineTest {
             (TargetTag("article") and TargetClass("card")) to UiStyle(height = 9f.px),
         )
         val card = uiComponent(styleSheets = listOf(defaultSheet)) {
-            div(tag = "article", className = "card")
+            div(tag = "article", className = setOf("card"))
         }
         lateinit var defaultCard: Div
         lateinit var mountedCard: Div
@@ -697,19 +720,19 @@ class LayoutEngineTest {
         )
         lateinit var innerLabel: Paragraph
         val innerComponent = uiComponent(innerSheet) {
-            div(className = "shared") {
-                innerLabel = p("i", className = "shared")
+            div(className = setOf("shared")) {
+                innerLabel = p("i", className = setOf("shared"))
             }
         }
         lateinit var outerLabel: Paragraph
         lateinit var innerRoot: Div
         val outerComponent = uiComponent(outerSheet) {
             div {
-                outerLabel = p("o", className = "shared")
+                outerLabel = p("o", className = setOf("shared"))
                 innerRoot = component(innerComponent)
             }
         }
-        val root = div(className = "application") {
+        val root = div(className = setOf("application")) {
             component(outerComponent)
         }
 
@@ -743,7 +766,7 @@ class LayoutEngineTest {
         )
         val conditionalComponent = uiComponent(visibilitySheet) {
             creations++
-            div(className = "conditional")
+            div(className = setOf("conditional"))
         }
         val root = div {
             conditional = component(conditionalComponent)

@@ -5,7 +5,7 @@ import net.minecraft.client.input.MouseButtonEvent
 /** Base type for nodes in a UI tree. */
 sealed class UiElement(
     tag: String,
-    className: String,
+    className: Set<String>,
     id: String,
     style: UiStyle,
     open var onClick: ((MouseButtonEvent) -> Unit)? = null,
@@ -14,7 +14,7 @@ sealed class UiElement(
     open var onMouseOver: (() -> Unit)? = null,
     open var onMouseOut: (() -> Unit)? = null,
 ) {
-    /** The HTML-compatible tag name for this element. */
+    /** The tag name for this element. Names are matched exactly and may contain whitespace. */
     var tag: String = tag
         private set
 
@@ -22,15 +22,8 @@ sealed class UiElement(
     var id: String = id
         private set
 
-    /** The HTML-compatible, whitespace-separated class attribute for this element. */
-    var className: String = className
-        private set
-
-    /** The individual class names parsed from [className]. */
-    val classes: Set<String> = className
-        .splitToSequence(Regex("\\s+"))
-        .filter(String::isNotEmpty)
-        .toSet()
+    /** The class names for this element. Names are matched exactly and may contain whitespace. */
+    val className: Set<String> = className.toSet()
 
     private var styleProvider: () -> UiStyle = { style }
 
@@ -67,7 +60,7 @@ sealed class UiElement(
 /** Base type for UI elements that arrange child elements. */
 sealed class UiContainer(
     tag: String,
-    className: String,
+    className: Set<String>,
     id: String,
     style: UiStyle,
     children: Iterable<UiElement> = emptyList(),
@@ -146,7 +139,7 @@ sealed class UiContainer(
         descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
         childStyle: ((UiElement) -> UiStyle)? = null,
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
         content: Div.() -> Unit = {},
     ): Div = add(
@@ -176,7 +169,7 @@ sealed class UiContainer(
         descendantStyle: ((UiElement) -> UiStyle)? = null,
         tag: String = "div",
         childStyle: ((UiElement) -> UiStyle)? = null,
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
         content: Div.() -> Unit = {},
     ): Div = add(
@@ -203,7 +196,7 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
     ): Paragraph = add(
         Paragraph(
@@ -230,7 +223,7 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
     ): Paragraph = add(
         Paragraph(
@@ -255,7 +248,7 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
     ): Paragraph = p(
         text,
@@ -280,7 +273,7 @@ sealed class UiContainer(
         onMouseOver: (() -> Unit)? = null,
         onMouseOut: (() -> Unit)? = null,
         tag: String = "p",
-        className: String = "",
+        className: Set<String> = emptySet(),
         id: String = "",
     ): Paragraph = p(
         text,
@@ -308,7 +301,7 @@ class Div(
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
-    className: String = "",
+    className: Set<String> = emptySet(),
     id: String = "",
 ) : UiContainer(
     tag,
@@ -335,7 +328,7 @@ class Paragraph(
     override var onMouseOver: (() -> Unit)? = null,
     override var onMouseOut: (() -> Unit)? = null,
     tag: String = "p",
-    className: String = "",
+    className: Set<String> = emptySet(),
     id: String = "",
 ) : UiElement(tag, className, id, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut)
 
@@ -350,7 +343,7 @@ fun div(
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
-    className: String = "",
+    className: Set<String> = emptySet(),
     id: String = "",
     content: Div.() -> Unit = {},
 ): Div = Div(
@@ -378,7 +371,7 @@ fun div(
     descendantStyle: ((UiElement) -> UiStyle)? = null,
     tag: String = "div",
     childStyle: ((UiElement) -> UiStyle)? = null,
-    className: String = "",
+    className: Set<String> = emptySet(),
     id: String = "",
     content: Div.() -> Unit = {},
 ): Div = Div(

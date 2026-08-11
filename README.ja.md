@@ -233,8 +233,9 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
   (`" "`)、`CHILD` (`">"`)、`ADJACENT_SIBLING` (`"+"`)、`GENERAL_SIBLING` (`"~"`) を利用
   できます。結合子はネストしてチェーン化でき、
   `combine`、`descendant`、`child`、`adjacentSibling`、`generalSibling` でも構築できます。
-- `id` はHTML互換の要素IDです。`className` はHTML互換の空白区切りclass属性で、分割後の
-  classは読み取り専用の `classes` Setからも参照できます。
+- `id` はHTML互換の要素IDです。`className` は読み取り専用の `Set<String>` で、
+  `setOf("card", "active")` のように指定します。class名とtag名は空白を含めることができ、
+  文字列全体が完全一致で照合されます。
 - `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
 - `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
   親を継承します。ルートではcolorが不透明な白、文字shadowはなしが既定値です。継承したshadowを
@@ -349,8 +350,8 @@ layout.render(draw)
 ```kotlin
 val actionBar = uiComponent(styleSheet = actionBarStyleSheet) {
     div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
-        p("保存", className = "action")
-        p("閉じる", className = "action")
+        p("保存", className = setOf("action"))
+        p("閉じる", className = setOf("action"))
     }
 }
 
@@ -380,8 +381,9 @@ val composedLayout = LayoutEngine.layout(
 要素のhoverやdragなどの状態も維持されます。
 
 たとえば、次の指定では、ネストした `Div` 内も含めて段落の子孫だけにdrop shadowを適用します。
-各要素では読み取り専用のHTML互換 `tag` を参照でき、子孫の選択に利用できます。デフォルト値は
-`div` が `"div"`、`p` / `paragraph` が `"p"` で、コンストラクタ引数 `tag` から指定できます。
+各要素では読み取り専用の `tag` を参照でき、子孫の選択に利用できます。tag名には空白を含める
+ことができ、文字列全体が完全一致で照合されます。デフォルト値は `div` が `"div"`、
+`p` / `paragraph` が `"p"` で、コンストラクタ引数 `tag` から指定できます。
 
 ```kotlin
 val labels = div(
@@ -438,7 +440,7 @@ object ExampleStyleSheet : StyleSheet {
 val styledRoot = div(
     tag = "div",
     id = "main",
-    className = "screen",
+    className = setOf("screen"),
     style = UiStyle(font = font),
 ) {
     p("Red Text")

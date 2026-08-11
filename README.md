@@ -237,8 +237,9 @@ The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-lik
   `DESCENDANT` (`" "`), `CHILD` (`">"`), `ADJACENT_SIBLING` (`"+"`), and `GENERAL_SIBLING`
   (`"~"`). Combinators can be nested into a chain; `combine`, `descendant`, `child`,
   `adjacentSibling`, and `generalSibling` are builder alternatives.
-- `id` is an HTML-compatible element ID. `className` is an HTML-compatible, whitespace-separated
-  class attribute whose parsed names are also available through the read-only `classes` set.
+- `id` is an HTML-compatible element ID. `className` is a read-only `Set<String>`, specified with
+  values such as `setOf("card", "active")`. Class and tag names are matched exactly and may contain
+  whitespace.
 - `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
 - `color`, `font`, and `textShadow` are inherited from ancestors and may be overridden by a child.
   A null value inherits the parent. At the root, color defaults to opaque white and text shadow
@@ -353,8 +354,8 @@ input handling. Inherited text styles and global `StyleSheet` values passed to
 ```kotlin
 val actionBar = uiComponent(styleSheet = actionBarStyleSheet) {
     div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
-        p("Save", className = "action")
-        p("Close", className = "action")
+        p("Save", className = setOf("action"))
+        p("Close", className = setOf("action"))
     }
 }
 
@@ -384,9 +385,9 @@ recalculated after a `noneDisplay` change, it reuses the existing element tree a
 such as hover and drag state.
 
 For example, this applies a drop shadow only to paragraph descendants, including the one inside
-the nested `Div`. Every element exposes its read-only HTML-compatible `tag`, which can be used when
-selecting descendants. It defaults to `"div"` for `div` and `"p"` for `p` / `paragraph`, and can
-be specified with the `tag` constructor argument:
+the nested `Div`. Every element exposes its read-only `tag`, which can be used when selecting
+descendants. Tag names are matched exactly and may contain whitespace. It defaults to `"div"` for
+`div` and `"p"` for `p` / `paragraph`, and can be specified with the `tag` constructor argument:
 
 ```kotlin
 val labels = div(
@@ -443,7 +444,7 @@ object ExampleStyleSheet : StyleSheet {
 val styledRoot = div(
     tag = "div",
     id = "main",
-    className = "screen",
+    className = setOf("screen"),
     style = UiStyle(font = font),
 ) {
     p("Red Text")
