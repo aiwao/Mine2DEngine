@@ -694,6 +694,103 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `component create receives empty content by default`() {
+        val component = uiComponent { content ->
+            div {
+                content()
+            }
+        }
+
+        val root = component.create()
+
+        assertTrue(root.children.isEmpty())
+    }
+
+    @Test
+    fun `component builds supplied content in its selected slot only once`() {
+        var hidden = false
+        var contentBuilds = 0
+        lateinit var slot: Div
+        lateinit var supplied: Paragraph
+        val panel = uiComponent { content ->
+            div {
+                p("header")
+                slot = div(className = "slot") {
+                    content()
+                }
+            }
+        }
+        val root = div {
+            component(panel) {
+                contentBuilds++
+                supplied = p(
+                    text = "body",
+                    style = { UiStyle(noneDisplay = { hidden }) },
+                )
+            }
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+
+        assertEquals(1, contentBuilds)
+        assertSame(supplied, slot.children.single())
+        assertEquals(UiSize(30f, 20f), layout.size)
+
+        hidden = true
+        assertEquals(UiSize(30f, 10f), layout.size)
+        assertEquals(1, contentBuilds)
+    }
+
+    @Test
+    fun `component rejects building its supplied content more than once`() {
+        val repeatedContent = uiComponent { content ->
+            div {
+                content()
+                content()
+            }
+        }
+
+        val error = assertFailsWith<IllegalStateException> {
+            div {
+                component(repeatedContent) {
+                    p("content")
+                }
+            }
+        }
+
+        assertEquals("Component content may only be built once", error.message)
+    }
+
+    @Test
+    fun `supplied component content belongs to the component style scope`() {
+        val componentSheet = styleSheet(
+            (TargetScope descendant TargetClass("supplied")) to UiStyle(height = 4f.px),
+        )
+        val callerSheet = styleSheet(
+            (TargetScope descendant TargetClass("supplied")) to UiStyle(width = 40f.px),
+        )
+        lateinit var supplied: Paragraph
+        val panel = uiComponent(styleSheet = componentSheet) { content ->
+            div {
+                div {
+                    content()
+                }
+            }
+        }
+        val root = div(styleSheets = listOf(callerSheet)) {
+            component(panel) {
+                supplied = p("body", className = "supplied")
+            }
+        }
+
+        val layout = calculateLayout(root, left = 0f, top = 0f, textMeasurer)
+        val suppliedStyle = layout.nodeOf(supplied)!!.styleProvider()
+
+        assertNull(suppliedStyle.width)
+        assertEquals(4f.px, suppliedStyle.height)
+    }
+
+    @Test
     fun `mounted components participate in inheritance and style sheet matching`() {
         val inheritedColor = 0xFF123456.toInt()
         lateinit var paragraph: Paragraph

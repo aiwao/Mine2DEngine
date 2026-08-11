@@ -350,10 +350,9 @@ layout.render(draw)
 コンポーネント内へ通常どおり適用されます。
 
 ```kotlin
-val actionBar = uiComponent(styleSheet = actionBarStyleSheet) {
+val actionBar = uiComponent(styleSheet = actionBarStyleSheet) { content ->
     div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
-        p("保存", className = "action")
-        p("閉じる", className = "action")
+        content()
     }
 }
 
@@ -363,17 +362,28 @@ val composedLayout = LayoutEngine.layout(
     top = 12f,
 ) {
     p("エディター")
-    component(actionBar)
+    component(actionBar) {
+        p("保存", className = "action")
+        p("閉じる", className = "action")
+    }
     component(
         actionBar,
         style = UiStyle(gap = 2f),
         onClick = { event -> println("Compact bar: button=${event.button()}") },
-    ) // このインスタンスのrootだけを上書き
+    ) {
+        p("適用", className = "action")
+        p("キャンセル", className = "action")
+    } // このインスタンスのrootだけを上書き
 }
 ```
 
+すべてのコンポーネントはデフォルトで空のcontentを受け取ります。factoryは受け取ったcontentを
+ツリー内の任意の`UiContainer`で1回だけ呼び出せます。呼び出し側からcontentを渡さない場合や、
+contentを持たないコンポーネントでは、factoryの引数を使用しなくても構いません。
+
 `Div` に指定したシートと `uiComponent` に渡したシートは、そのスコープのルートと内部だけに
-適用され、`TargetScope` はそのルートを選択します。呼び出し側の
+適用されます。呼び出し側から渡したcontentもコンポーネントの内部として扱われます。
+`TargetScope` はそのルートを選択します。呼び出し側の
 祖先や兄弟をローカルセレクターから参照することはできません。ネストした子コンポーネントでは、
 親コンポーネントのローカルシートは子のルートには適用できますが、その内部には入りません。
 
@@ -382,9 +392,9 @@ val composedLayout = LayoutEngine.layout(
 nullのcallbackはcomponent既定値を保持します。インスタンス固有のStyleSheetは指定できません。
 rootだけを変える場合は呼び出し側style、scoped ruleには `uiComponent` のシートを使います。
 
-コンポーネントのfactoryは `component(...)` で追加するときに1回だけ呼ばれます。同じ
-`UiLayout` が `noneDisplay` の変更で再計算される場合は、既存の要素ツリーが再利用されるため、
-要素のhoverやdragなどの状態も維持されます。
+コンポーネントのfactoryと渡されたcontentは `component(...)` で追加するときにだけ実行されます。
+同じ`UiLayout` が `noneDisplay` の変更で再計算される場合は、既存の要素ツリーが再利用されるため、
+contentの再実行はなく、要素のhoverやdragなどの状態も維持されます。
 
 たとえば、次の動的ruleでは、ネストした `Div` 内も含めて段落の子孫だけにdrop shadowを
 適用します。動的declarationはstyleの解決時に一致要素を受け取ります。複数回呼ばれる可能性が
