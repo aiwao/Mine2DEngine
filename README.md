@@ -289,6 +289,43 @@ val style = UiStyle(
 
 Supported preferred/minimum/maximum size values are `AUTO`, `MIN_CONTENT`, `MAX_CONTENT`, `FitContent(...)`, and a length-percentage. Maximum sizes additionally accept `NONE`.
 
+### Overflow
+
+`overflow`, `overflowX`, and `overflowY` accept `VISIBLE`, `HIDDEN`, `CLIP`, `SCROLL`, and `AUTO`:
+
+```kotlin
+import io.github.aiwao.mine2dengine.layout.UiOverflow
+import io.github.aiwao.mine2dengine.layout.UiOverflowValue
+
+val scrollerStyle = UiStyle(
+    width = 160f.px,
+    height = 80f.px,
+    overflow = UiOverflow(UiOverflowValue.AUTO),
+)
+
+// A two-value shorthand maps to the physical x and y axes.
+val verticalScrollerStyle = UiStyle(
+    overflow = UiOverflow(
+        x = UiOverflowValue.CLIP,
+        y = UiOverflowValue.AUTO,
+    ),
+)
+```
+
+An `overflowX` or `overflowY` value overrides the corresponding shorthand axis in the same
+`UiStyle`. A later shorthand declaration resets earlier longhands during cascade. Cross-axis
+computed-value interaction follows CSS: `visible` becomes `auto` when the other axis is
+`hidden`, `scroll`, or `auto`; `clip` remains non-scrollable.
+
+`hidden` clips wheel input but remains scrollable through `UiLayout.scrollTo` and `scrollBy`.
+`clip` forbids both user and programmatic scrolling. `auto` and `scroll` accept wheel input, with
+nested scroll containers chaining at their limits. Scroll offsets survive relayout and are clamped
+to the new overflow geometry. Use `scrollOffsetOf` to query an offset; `UiLayoutNode` exposes
+`paddingBounds`, `scrollableOverflowBounds`, `maximumScrollX`, and `maximumScrollY`.
+
+Overflow uses a rectangular padding-box clip and does not currently paint scrollbars. This keeps
+the existing rule that `borderRadius` does not shape descendant clips.
+
 ### Flexbox
 
 Set the inner display type to flex with `UiDisplay.FLEX` or `UiDisplay.INLINE_FLEX`:
@@ -326,7 +363,7 @@ val toolbar = div(
 
 The supported container properties are `flexDirection`, `flexWrap`, `justifyContent`, `alignItems`, `alignContent`, `rowGap`, and `columnGap`. Item properties are `flexGrow`, `flexShrink`, `flexBasis`, `order`, and `alignSelf`.
 
-Flexible lengths are resolved from each item's flex base size with scaled shrink factors and repeated min/max clamping. The CSS automatic minimum size is content-based; specify `minWidth = 0f.px` (or `minHeight` for a column) when an item must be allowed to shrink below its content.
+Flexible lengths are resolved from each item's flex base size with scaled shrink factors and repeated min/max clamping. The CSS automatic minimum size is content-based for non-scrollable overflow and zero for a scrollable main axis. Specify `minWidth = 0f.px` (or `minHeight` for a column) when a non-scrollable item must be allowed to shrink below its content.
 
 Absolutely positioned children do not become flex items. Generated pseudo-elements do become flex items. Text directly inside a flex container is wrapped in an anonymous flex item.
 

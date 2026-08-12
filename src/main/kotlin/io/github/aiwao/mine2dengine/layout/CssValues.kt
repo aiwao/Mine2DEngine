@@ -366,6 +366,35 @@ enum class UiWhiteSpace {
     PRE,
 }
 
+/** A value accepted by the CSS overflow shorthand and its physical-axis longhands. */
+enum class UiOverflowValue {
+    VISIBLE,
+    HIDDEN,
+    CLIP,
+    SCROLL,
+    AUTO;
+
+    /** Whether this value creates a programmatically scrollable axis. */
+    internal val isScrollable: Boolean
+        get() = this == HIDDEN || this == SCROLL || this == AUTO
+
+    /** Whether content outside this axis of the overflow clip edge is clipped. */
+    internal val clips: Boolean
+        get() = this != VISIBLE
+
+    /** Whether direct user input, such as a mouse wheel, may scroll this axis. */
+    internal val acceptsUserScroll: Boolean
+        get() = this == SCROLL || this == AUTO
+}
+
+/** One- or two-value declaration for the CSS `overflow` shorthand. */
+data class UiOverflow(
+    val x: UiOverflowValue,
+    val y: UiOverflowValue,
+) {
+    constructor(all: UiOverflowValue) : this(all, all)
+}
+
 /** A resolved physical edge set used by layout geometry. */
 internal data class UsedEdges(
     val top: Float = 0f,

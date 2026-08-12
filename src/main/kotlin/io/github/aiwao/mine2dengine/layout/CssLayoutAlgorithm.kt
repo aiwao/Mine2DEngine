@@ -24,6 +24,7 @@ internal data class CssFragment(
     val borderBox: UiRect,
     val paddingBox: UiRect,
     val contentBox: UiRect,
+    val scrollableOverflow: UiRect = paddingBox,
     val usedMargin: UsedEdges,
     val children: List<CssFragment>,
     val textFragments: List<CssTextFragment>,
@@ -118,7 +119,7 @@ internal class CssLayoutAlgorithm(
             staticMarginTop = viewport.top,
             isRoot = true,
         ).fragment
-        return resolveAbsoluteDescendants(normal, viewport)
+        return resolveAbsoluteDescendants(normal, viewport).withScrollableOverflow()
     }
 
     private fun layoutBox(
@@ -1317,8 +1318,9 @@ internal class CssLayoutAlgorithm(
         val automaticMinimum = propertyMain?.let { specified ->
             min(intrinsicMain.min, specified)
         } ?: intrinsicMain.min
+        val mainOverflow = if (axis.isRow) box.style.overflow.x else box.style.overflow.y
         val minimum = if (minProperty == UiSizeValue.AUTO) {
-            automaticMinimum
+            if (mainOverflow.isScrollable) 0f else automaticMinimum
         } else {
             resolvePreferredSize(
                 minProperty,
@@ -1934,6 +1936,7 @@ private fun CssFragment.translated(deltaX: Float, deltaY: Float): CssFragment {
         borderBox = borderBox.translated(deltaX, deltaY),
         paddingBox = paddingBox.translated(deltaX, deltaY),
         contentBox = contentBox.translated(deltaX, deltaY),
+        scrollableOverflow = scrollableOverflow.translated(deltaX, deltaY),
         children = children.map { it.translated(deltaX, deltaY) },
         textFragments = textFragments.map { fragment ->
             fragment.copy(bounds = fragment.bounds.translated(deltaX, deltaY))
@@ -1945,6 +1948,47 @@ private fun CssFragment.translated(deltaX: Float, deltaY: Float): CssFragment {
             )
         },
     )
+}
+
+/**
+ * Resolves scrollable overflow after normal and absolutely-positioned descendants have reached
+ * their final coordinates. Paint-only effects such as shadows deliberately do not participate.
+ */
+private fun CssFragment.withScrollableOverflow(): CssFragment {
+    val resolvedChildren = children.map(CssFragment::withScrollableOverflow)
+    var left = paddingBox.left
+    var top = paddingBox.top
+    var right = paddingBox.right
+    var bottom = paddingBox.bottom
+
+    fun include(bounds: UiRect) {
+        left = min(left, bounds.left)
+        top = min(top, bounds.top)
+        right = max(right, bounds.right)
+        bottom = max(bottom, bounds.bottom)
+    }
+
+    textFragments.forEach { fragment -> include(fragment.bounds) }
+    resolvedChildren.forEach { child -> include(child.propagatedScrollableOverflow()) }
+
+    // Preserve the trailing padding after content that reaches beyond the padding box.
+    if (right > paddingBox.right) right += (paddingBox.right - contentBox.right).coerceAtLeast(0f)
+    if (bottom > paddingBox.bottom) bottom += (paddingBox.bottom - contentBox.bottom).coerceAtLeast(0f)
+
+    return copy(
+        children = resolvedChildren,
+        scrollableOverflow = UiRect(left, top, right - left, bottom - top),
+    )
+}
+
+/** Overflow propagated to an ancestor is clipped independently in each non-visible axis. */
+private fun CssFragment.propagatedScrollableOverflow(): UiRect {
+    val overflow = box.style.overflow
+    val left = if (overflow.x.clips) paddingBox.left else scrollableOverflow.left
+    val right = if (overflow.x.clips) paddingBox.right else scrollableOverflow.right
+    val top = if (overflow.y.clips) paddingBox.top else scrollableOverflow.top
+    val bottom = if (overflow.y.clips) paddingBox.bottom else scrollableOverflow.bottom
+    return UiRect(left, top, (right - left).coerceAtLeast(0f), (bottom - top).coerceAtLeast(0f))
 }
 
 private fun UiRect.translated(deltaX: Float, deltaY: Float): UiRect = copy(

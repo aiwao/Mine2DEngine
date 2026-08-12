@@ -284,6 +284,35 @@ val style = UiStyle(
 
 preferred / minimum / maximum sizeでは`AUTO`、`MIN_CONTENT`、`MAX_CONTENT`、`FitContent(...)`、length-percentageを利用できます。maximum sizeでは`NONE`も利用できます。
 
+### Overflow
+
+`overflow`、`overflowX`、`overflowY`では`VISIBLE`、`HIDDEN`、`CLIP`、`SCROLL`、`AUTO`を利用できます。
+
+```kotlin
+import io.github.aiwao.mine2dengine.layout.UiOverflow
+import io.github.aiwao.mine2dengine.layout.UiOverflowValue
+
+val scrollerStyle = UiStyle(
+    width = 160f.px,
+    height = 80f.px,
+    overflow = UiOverflow(UiOverflowValue.AUTO),
+)
+
+// 2値のshorthandは物理x軸、y軸の順です。
+val verticalScrollerStyle = UiStyle(
+    overflow = UiOverflow(
+        x = UiOverflowValue.CLIP,
+        y = UiOverflowValue.AUTO,
+    ),
+)
+```
+
+同じ`UiStyle`内では`overflowX`と`overflowY`がshorthandの対応軸を上書きします。cascadeで後からshorthandが指定された場合は、それ以前のlonghandをリセットします。CSSと同様に、もう一方の軸が`hidden`、`scroll`、`auto`なら`visible`のcomputed valueは`auto`になり、`clip`は非スクロールのままです。
+
+`hidden`はwheel入力を受け付けませんが、`UiLayout.scrollTo`と`scrollBy`からスクロールできます。`clip`はユーザー操作とプログラム操作の両方を禁止します。`auto`と`scroll`はwheel入力を受け付け、内側が端へ到達すると外側のscroll containerへ連鎖します。scroll offsetはrelayout後も維持され、新しいoverflow geometryへclampされます。現在値は`scrollOffsetOf`から取得でき、`UiLayoutNode`では`paddingBounds`、`scrollableOverflowBounds`、`maximumScrollX`、`maximumScrollY`を参照できます。
+
+overflow clipは矩形のpadding boxです。scrollbarは現在描画しません。既存仕様どおり、`borderRadius`は子孫のclip形状には影響しません。
+
 ### Flexbox
 
 `UiDisplay.FLEX`または`UiDisplay.INLINE_FLEX`でinner display typeをflexにします。
@@ -321,7 +350,7 @@ val toolbar = div(
 
 container propertyは`flexDirection`、`flexWrap`、`justifyContent`、`alignItems`、`alignContent`、`rowGap`、`columnGap`です。item propertyは`flexGrow`、`flexShrink`、`flexBasis`、`order`、`alignSelf`です。
 
-flexible lengthは各itemのflex base sizeから、scaled shrink factorとmin/max clampの反復処理で解決します。CSSのautomatic minimum sizeはcontent-basedです。contentより小さく縮めたいitemには`minWidth = 0f.px`を指定してください。columnの場合は`minHeight`です。
+flexible lengthは各itemのflex base sizeから、scaled shrink factorとmin/max clampの反復処理で解決します。CSSのautomatic minimum sizeはnon-scrollable overflowではcontent-based、main axisがscrollableなら0です。non-scrollable itemをcontentより小さく縮めたい場合は`minWidth = 0f.px`を指定してください。columnの場合は`minHeight`です。
 
 absolute childはflex itemになりません。生成された疑似要素はflex itemになります。flex container直下のtextはanonymous flex itemで囲まれます。
 

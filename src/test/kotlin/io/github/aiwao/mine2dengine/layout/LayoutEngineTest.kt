@@ -49,6 +49,36 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `overflow shorthand longhands and cross-axis computation follow CSS cascade`() {
+        val sameDeclaration = UiStyle(
+            overflow = UiOverflow(UiOverflowValue.HIDDEN),
+            overflowX = UiOverflowValue.CLIP,
+        ).resolveDefaults()
+        assertEquals(UiOverflowValue.CLIP, sameDeclaration.overflow.x)
+        assertEquals(UiOverflowValue.HIDDEN, sameDeclaration.overflow.y)
+
+        val shorthandOverride = UiStyle(overflowX = UiOverflowValue.AUTO)
+            .withOverrides(UiStyle(overflow = UiOverflow(UiOverflowValue.HIDDEN)))
+            .resolveDefaults()
+        assertEquals(UiOverflowValue.HIDDEN, shorthandOverride.overflow.x)
+        assertEquals(UiOverflowValue.HIDDEN, shorthandOverride.overflow.y)
+
+        val crossAxis = UiStyle(
+            overflowX = UiOverflowValue.VISIBLE,
+            overflowY = UiOverflowValue.AUTO,
+        ).resolveDefaults()
+        assertEquals(UiOverflowValue.AUTO, crossAxis.overflow.x)
+        assertEquals(UiOverflowValue.AUTO, crossAxis.overflow.y)
+
+        val singleAxis = UiStyle(
+            overflowX = UiOverflowValue.CLIP,
+            overflowY = UiOverflowValue.AUTO,
+        ).resolveDefaults()
+        assertEquals(UiOverflowValue.CLIP, singleAxis.overflow.x)
+        assertEquals(UiOverflowValue.AUTO, singleAxis.overflow.y)
+    }
+
+    @Test
     fun `UA style makes div and p block boxes`() {
         lateinit var paragraph: Paragraph
         val root = div {
@@ -617,6 +647,27 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `scrollable flex items use zero automatic minimum in the main axis`() {
+        lateinit var visible: Paragraph
+        lateinit var scrollable: Paragraph
+        val visibleRoot = div(UiStyle(display = UiDisplay.FLEX, width = 20f.px)) {
+            visible = p("abcdefghij", UiStyle(flexShrink = 1f))
+        }
+        val scrollableRoot = div(UiStyle(display = UiDisplay.FLEX, width = 20f.px)) {
+            scrollable = p(
+                "abcdefghij",
+                UiStyle(flexShrink = 1f, overflow = UiOverflow(UiOverflowValue.AUTO)),
+            )
+        }
+
+        val visibleLayout = layout(visibleRoot)
+        val scrollableLayout = layout(scrollableRoot)
+
+        assertEquals(50f, visibleLayout.nodeOf(visible)!!.contentBounds.width)
+        assertEquals(20f, scrollableLayout.nodeOf(scrollable)!!.contentBounds.width)
+    }
+
+    @Test
     fun `absolute boxes use the nearest positioned padding box`() {
         lateinit var absolute: Div
         val root = div(
@@ -865,6 +916,194 @@ class LayoutEngineTest {
         assertTrue(clicked)
         assertTrue(child.dragging)
         assertTrue(result.mouseRelease())
+    }
+
+    @Test
+    fun `overflow geometry includes positioned descendants and trailing padding`() {
+        val root = div(
+            UiStyle(
+                width = 20f.px,
+                height = 10f.px,
+                padding = UiPaddings(2f),
+                overflow = UiOverflow(UiOverflowValue.AUTO),
+            ),
+        ) {
+            div(
+                UiStyle(
+                    width = 20f.px,
+                    height = 10f.px,
+                    position = UiPosition.RELATIVE,
+                    left = 20f.px,
+                    top = 10f.px,
+                ),
+            )
+        }
+
+        val result = layout(root)
+
+        assertEquals(UiRect(0f, 0f, 24f, 14f), result.root.paddingBounds)
+        assertEquals(UiRect(0f, 0f, 44f, 24f), result.root.scrollableOverflowBounds)
+        assertEquals(20f, result.root.maximumScrollX)
+        assertEquals(10f, result.root.maximumScrollY)
+        assertEquals(result.root.scrollableOverflowBounds, result.rootFragment.scrollableOverflow)
+    }
+
+    @Test
+    fun `hidden clips hit testing but remains programmatically scrollable`() {
+        lateinit var child: Div
+        val root = div(
+            UiStyle(
+                width = 20f.px,
+                height = 10f.px,
+                overflow = UiOverflow(UiOverflowValue.HIDDEN),
+            ),
+        ) {
+            child = div(
+                UiStyle(
+                    width = 20f.px,
+                    height = 10f.px,
+                    position = UiPosition.RELATIVE,
+                    left = 20f.px,
+                ),
+            )
+        }
+        val result = layout(root)
+
+        assertNull(result.elementAt(25f, 5f))
+        assertTrue(result.scrollTo(root, 20f, 0f))
+        assertEquals(UiScrollOffset(20f, 0f), result.scrollOffsetOf(root))
+        assertSame(child, result.elementAt(5f, 5f))
+        assertFalse(result.mouseScrolled(5.0, 5.0, -1.0, 0.0))
+    }
+
+    @Test
+    fun `clip forbids programmatic scrolling`() {
+        val root = div(
+            UiStyle(
+                width = 20f.px,
+                height = 10f.px,
+                overflow = UiOverflow(UiOverflowValue.CLIP),
+            ),
+        ) {
+            div(UiStyle(width = 40f.px, height = 20f.px))
+        }
+        val result = layout(root)
+
+        assertFalse(result.scrollTo(root, 10f, 10f))
+        assertEquals(UiScrollOffset(), result.scrollOffsetOf(root))
+    }
+
+    @Test
+    fun `wheel scrolls auto overflow and clamps at its end`() {
+        val root = div(
+            UiStyle(
+                width = 20f.px,
+                height = 10f.px,
+                overflow = UiOverflow(UiOverflowValue.AUTO),
+            ),
+        ) {
+            div(UiStyle(width = 20f.px, height = 30f.px))
+        }
+        val result = layout(root)
+
+        assertTrue(result.mouseScrolled(5.0, 5.0, 0.0, -1.0))
+        assertEquals(UiScrollOffset(0f, 10f), result.scrollOffsetOf(root))
+        assertTrue(result.mouseScrolled(5.0, 5.0, 0.0, -5.0))
+        assertEquals(UiScrollOffset(0f, 20f), result.scrollOffsetOf(root))
+        assertFalse(result.mouseScrolled(5.0, 5.0, 0.0, -1.0))
+    }
+
+    @Test
+    fun `wheel chains from a saturated nested scroller to its ancestor`() {
+        lateinit var inner: Div
+        val outer = div(
+            UiStyle(
+                width = 20f.px,
+                height = 10f.px,
+                overflow = UiOverflow(UiOverflowValue.AUTO),
+            ),
+        ) {
+            inner = div(
+                UiStyle(
+                    width = 20f.px,
+                    height = 10f.px,
+                    overflow = UiOverflow(UiOverflowValue.AUTO),
+                ),
+            ) {
+                div(UiStyle(width = 20f.px, height = 20f.px))
+            }
+            div(UiStyle(width = 20f.px, height = 20f.px))
+        }
+        val result = layout(outer)
+
+        assertTrue(result.mouseScrolled(5.0, 5.0, 0.0, -1.0))
+        assertEquals(UiScrollOffset(0f, 10f), result.scrollOffsetOf(inner))
+        assertEquals(UiScrollOffset(), result.scrollOffsetOf(outer))
+
+        assertTrue(result.mouseScrolled(5.0, 5.0, 0.0, -1.0))
+        assertEquals(UiScrollOffset(0f, 10f), result.scrollOffsetOf(inner))
+        assertEquals(UiScrollOffset(0f, 10f), result.scrollOffsetOf(outer))
+    }
+
+    @Test
+    fun `clip and visible can constrain only one physical axis`() {
+        lateinit var below: Div
+        val root = div(
+            UiStyle(
+                width = 10f.px,
+                height = 10f.px,
+                position = UiPosition.RELATIVE,
+                overflowX = UiOverflowValue.CLIP,
+                overflowY = UiOverflowValue.VISIBLE,
+            ),
+        ) {
+            below = div(
+                UiStyle(
+                    position = UiPosition.ABSOLUTE,
+                    left = 0f.px,
+                    top = 10f.px,
+                    width = 10f.px,
+                    height = 10f.px,
+                ),
+            )
+            div(
+                UiStyle(
+                    position = UiPosition.ABSOLUTE,
+                    left = 10f.px,
+                    top = 0f.px,
+                    width = 10f.px,
+                    height = 10f.px,
+                ),
+            )
+        }
+        val result = layout(root)
+
+        assertSame(below, result.elementAt(5f, 15f))
+        assertNull(result.elementAt(15f, 5f))
+        assertEquals(UiOverflowValue.CLIP, result.root.overflow.x)
+        assertEquals(UiOverflowValue.VISIBLE, result.root.overflow.y)
+    }
+
+    @Test
+    fun `relayout clamps a retained scroll offset to new overflow geometry`() {
+        val child = Div(UiStyle(width = 20f.px, height = 30f.px))
+        val root = div(
+            UiStyle(
+                width = 20f.px,
+                height = 10f.px,
+                overflow = UiOverflow(UiOverflowValue.AUTO),
+            ),
+        ) {
+            add(child)
+        }
+        val result = layout(root)
+        assertTrue(result.scrollTo(root, 0f, 20f))
+
+        child.style = UiStyle(width = 20f.px, height = 15f.px)
+        result.relayout()
+
+        assertEquals(5f, result.root.maximumScrollY)
+        assertEquals(UiScrollOffset(0f, 5f), result.scrollOffsetOf(root))
     }
 
     @Test

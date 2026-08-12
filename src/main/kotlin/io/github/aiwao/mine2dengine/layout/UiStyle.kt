@@ -52,6 +52,9 @@ data class UiStyle(
     val maxWidth: UiSizeValue? = null,
     val maxHeight: UiSizeValue? = null,
     val boxSizing: UiBoxSizing? = null,
+    val overflow: UiOverflow? = null,
+    val overflowX: UiOverflowValue? = null,
+    val overflowY: UiOverflowValue? = null,
     val position: UiPosition? = null,
     val left: UiInsetValue? = null,
     val top: UiInsetValue? = null,
@@ -137,6 +140,7 @@ internal data class ResolvedUiStyle(
     val maxWidth: UiSizeValue,
     val maxHeight: UiSizeValue,
     val boxSizing: UiBoxSizing,
+    val overflow: ResolvedUiOverflow,
     val position: UiPosition,
     val left: UiInsetValue,
     val top: UiInsetValue,
@@ -166,6 +170,10 @@ internal fun UiStyle.resolveDefaults(
     initialDisplay: UiDisplay = UiDisplay.INLINE,
 ): ResolvedUiStyle {
     val commonGap = gap ?: 0f.px
+    val resolvedOverflow = resolveOverflow(
+        x = overflowX ?: overflow?.x ?: UiOverflowValue.VISIBLE,
+        y = overflowY ?: overflow?.y ?: UiOverflowValue.VISIBLE,
+    )
     return ResolvedUiStyle(
         color = color,
         backgroundColor = backgroundColor,
@@ -181,6 +189,7 @@ internal fun UiStyle.resolveDefaults(
         maxWidth = maxWidth ?: UiSizeValue.NONE,
         maxHeight = maxHeight ?: UiSizeValue.NONE,
         boxSizing = boxSizing ?: UiBoxSizing.CONTENT_BOX,
+        overflow = resolvedOverflow,
         position = position ?: UiPosition.STATIC,
         left = left ?: UiInsetValue.AUTO,
         top = top ?: UiInsetValue.AUTO,
@@ -251,6 +260,11 @@ internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
     maxWidth = overrides.maxWidth ?: maxWidth,
     maxHeight = overrides.maxHeight ?: maxHeight,
     boxSizing = overrides.boxSizing ?: boxSizing,
+    overflow = overrides.overflow ?: overflow,
+    // A later shorthand resets an earlier longhand. When both occur in the same UiStyle value,
+    // the explicit longhand wins because Kotlin constructor arguments have no declaration order.
+    overflowX = overrides.overflowX ?: if (overrides.overflow != null) null else overflowX,
+    overflowY = overrides.overflowY ?: if (overrides.overflow != null) null else overflowY,
     position = overrides.position ?: position,
     left = overrides.left ?: left,
     top = overrides.top ?: top,
@@ -275,6 +289,20 @@ internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
     boxShadow = overrides.boxShadow ?: boxShadow,
     textShadow = overrides.textShadow ?: textShadow,
     dropShadow = overrides.dropShadow ?: dropShadow,
+)
+
+/** Computed physical overflow values after the two axes have interacted. */
+data class ResolvedUiOverflow(
+    val x: UiOverflowValue,
+    val y: UiOverflowValue,
+)
+
+private fun resolveOverflow(
+    x: UiOverflowValue,
+    y: UiOverflowValue,
+): ResolvedUiOverflow = ResolvedUiOverflow(
+    x = if (x == UiOverflowValue.VISIBLE && y.isScrollable) UiOverflowValue.AUTO else x,
+    y = if (y == UiOverflowValue.VISIBLE && x.isScrollable) UiOverflowValue.AUTO else y,
 )
 
 /** Lowest-priority UA declaration for the supported HTML-like element tags. */
