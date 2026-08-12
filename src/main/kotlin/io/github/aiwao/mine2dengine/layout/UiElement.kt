@@ -50,7 +50,7 @@ sealed class UiElement(
     /** Null outside a component root; an empty list still marks a component style boundary. */
     internal var componentStyleSheets: List<StyleSheet>? = null
 
-    /** Whether this element's click callback is disabled. */
+    /** Whether this element rejects its standard interaction and click callback. */
     var disabled: Boolean = false
 
     /** Whether this element has been clicked and not yet released. */

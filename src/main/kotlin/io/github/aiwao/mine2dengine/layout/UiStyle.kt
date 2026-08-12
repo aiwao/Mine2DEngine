@@ -275,6 +275,11 @@ internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
 
 /** Lowest-priority UA declaration for the supported HTML-like element tags. */
 internal fun userAgentStyleFor(element: UiElement): UiStyle {
+    if (element is TextInput) {
+        return UiStyle(
+            display = UiDisplay.Box(UiDisplayOutside.INLINE, UiDisplayInside.FLOW_ROOT),
+        )
+    }
     val blockTags = setOf(
         "address", "article", "aside", "blockquote", "div", "footer", "form", "h1", "h2",
         "h3", "h4", "h5", "h6", "header", "hr", "main", "nav", "ol", "p", "pre",
