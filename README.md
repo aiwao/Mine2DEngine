@@ -190,395 +190,154 @@ Mine2DEngine applies linear filtering only to glyph atlases created by `Mine2DFo
 
 ## Layout engine
 
-The layout package builds trees from `Div` and `Paragraph`. It follows a CSS-like box model:
+The layout package builds an element tree from `Div` and `Paragraph`, cascades styles, generates a CSS box tree, and lays it out into box fragments. The implementation intentionally uses CSS property names and CSS initial values instead of the previous stack-layout behavior.
 
-- Every `UiStyle` property defaults to `null`, meaning unspecified. Style selectors and the
-  element's own style are composed first, then unspecified properties receive their initial
-  values during layout. Explicit initial values such as `padding = UiEdges()`, `gap = 0f`, or
-  `position = UiPosition.STATIC` therefore override lower-priority declarations.
+### Supported CSS layout profile
 
-- `boxSizing` controls whether a non-null `width` or `height` specifies the content box or the
-  complete padded box. It defaults to `UiBoxSizing.CONTENT_BOX`; use `UiBoxSizing.BORDER_BOX` to
-  include padding in the specified size. A `null` size still shrinks to the text or children.
-- Set `width` and `height` with `Float.px` (for example, `120f.px`) or `Float.percent` (for
-  example, `50f.percent`). A percentage uses the corresponding resolved containing-block
-  dimension, normally the matching content dimension of its parent.
-- Padding is inside the painted background; margin is outside it.
-- `position` supports `UiPosition.STATIC`, `RELATIVE`, and `ABSOLUTE`. The nullable `left`, `top`,
-  `right`, and `bottom` values represent CSS `auto` when null. Relative elements move from their
-  normal position without changing the space they occupy. Absolute elements are removed from
-  normal flow and use the padded box of their nearest non-static ancestor, or the root box when
-  there is none. Paired horizontal or vertical insets stretch an automatic width or height.
-  The root itself remains at the coordinates passed to `LayoutEngine.layout`.
-- `backgroundColor` is the sole condition for drawing an element background. When it is non-null,
-  the background uses `backgroundMaterial`, or the renderer's current material when no background
-  material is specified. `backgroundMaterial` alone does not draw anything.
-- `boxShadow` paints a soft rounded-box shadow behind an element. It is local to that element and
-  does not affect layout size or pointer bounds.
-- `dropShadow` follows the composited alpha of an element's background, text, and descendants, like
-  CSS `filter: drop-shadow()`. It is local to that element and does not affect layout or hit bounds.
-- When the function passed to `noneDisplay` returns `true`, the element and its descendants are removed from layout, rendering, and pointer input, like CSS `display: none`. It is also evaluated before rendering and pointer operations; the layout is recalculated automatically when its value changes.
-- `Div` places direct children vertically or horizontally.
-- A `Div` can receive `styleSheets` scoped to itself and its descendants. Nested container scopes
-  participate in the same specificity cascade, while a nested component stops an outer local sheet
-  below the component root. Mutating a container's sheet list requires recalculating the layout.
-- A `StyleSheet` passed to `LayoutEngine.layout` applies rules to matching element tags, IDs, or
-  class names. `newStyle` accepts one `StyleSheetTarget`. Use `TargetAnd` for compound selectors
-  such as `button.primary`, `.card.active.large`, and `div#main`; use `TargetOr` for selector lists
-  such as `h1, h2, h3`. Specificity is compared by ID, then class/pseudo-class, then tag; later
-  rules win at equal specificity, and an element's own specified style values win last.
-- Append `.before` or `.after` to an element selector to target a generated `::before` or
-  `::after` box. A pseudo rule uses `UiPseudoStyle`; its content is either
-  `UiGeneratedContent.Text` or `UiGeneratedContent.EmptyBox`. Generated boxes are the first or
-  last content item without being added to `UiContainer.children`, participate in the owner's
-  `direction` and `gap`, and support the regular `UiStyle` box, positioning, paint, shadow, and
-  `noneDisplay` properties. Text inherits `color`, `font`, and `textShadow` from the owner. Pointer
-  input over a generated box targets its owner. Use `UiLayout.pseudoNodeOf` to inspect its bounds.
-- `TargetScope` is the CSS `:scope` selector. It selects the layout root in a global sheet, or the
-  container/component root in a scoped sheet, and has pseudo-class specificity.
-- `TargetWildcard` is the CSS universal selector `*`. It matches every element and adds no
-  specificity, including when used in a chain such as `.parent > *`.
-- `TargetCombinator(left, combinator, right)` joins selectors with `StyleSheetCombinator`:
-  `DESCENDANT` (`" "`), `CHILD` (`">"`), `ADJACENT_SIBLING` (`"+"`), and `GENERAL_SIBLING`
-  (`"~"`). Combinators can be nested into a chain; `combine`, `descendant`, `child`,
-  `adjacentSibling`, and `generalSibling` are builder alternatives.
-- `id` is an HTML-compatible element ID. `className` is a read-only `Set<String>`, specified with
-  values such as `setOf("card", "active")`. A `String` is also accepted as shorthand for a
-  single-element set and is not split on whitespace. Class and tag names are matched exactly and
-  may contain whitespace.
-- `horizontalAlignment` and `verticalAlignment` align children and text on both axes.
-- `color`, `font`, and `textShadow` are inherited from ancestors and may be overridden by a child.
-  A null value inherits the parent. At the root, color defaults to opaque white and text shadow
-  defaults to none. Set `textShadow = UiTextShadow.NONE` to explicitly clear an inherited shadow.
-- Paragraph newlines create multiple lines.
+- `display: block | inline | flow-root | flex | inline-flex | none | contents`
+- Block flow, inline text line boxes, normal/pre/nowrap white-space processing, and `text-align`
+- Content-box and border-box sizing, pixel/percentage lengths, intrinsic size keywords, and min/max constraints
+- Physical margins and padding, horizontal `auto` margins, and adjacent block margin collapsing
+- `position: static | relative | absolute`, length/percentage insets, and automatic stretching between paired insets
+- Flexbox rows and columns, reverse directions, wrapping, grow/shrink/basis, order, gaps, auto margins, and the justify/align properties
+- Generated `::before` and `::after` boxes
+- `display: none` subtree suppression and `display: contents` principal-box suppression
+
+Grid, tables, floats, ruby layout, vertical writing modes, fragmentation, fixed/sticky positioning, borders, and replaced elements are outside this profile.
+
+### Initial containing block
+
+CSS layout needs an available width and height. Therefore, every layout call receives a viewport rectangle:
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
-import io.github.aiwao.mine2dengine.layout.Paragraph
-import io.github.aiwao.mine2dengine.layout.StyleSheet
-import io.github.aiwao.mine2dengine.layout.StyleSheetCombinator
-import io.github.aiwao.mine2dengine.layout.StyleSheetObject
-import io.github.aiwao.mine2dengine.layout.TargetAnd
-import io.github.aiwao.mine2dengine.layout.TargetClass
-import io.github.aiwao.mine2dengine.layout.TargetCombinator
-import io.github.aiwao.mine2dengine.layout.TargetId
-import io.github.aiwao.mine2dengine.layout.TargetOr
-import io.github.aiwao.mine2dengine.layout.TargetScope
-import io.github.aiwao.mine2dengine.layout.TargetTag
-import io.github.aiwao.mine2dengine.layout.TargetWildcard
-import io.github.aiwao.mine2dengine.layout.UiBoxShadow
+import io.github.aiwao.mine2dengine.layout.UiRect
+
+val layout = LayoutEngine.layout(
+    root = root,
+    viewport = UiRect(
+        left = 0f,
+        top = 0f,
+        width = screenWidth,
+        height = screenHeight,
+    ),
+)
+```
+
+A block box whose `width` is `auto` fills the available inline size. An `auto` height fits its in-flow contents. This means an unstyled root `div` normally has the viewport width rather than shrinking around its children.
+
+`div` and `p` receive `display: block` from the built-in user-agent style layer. Other tags use the CSS initial display value, `inline`. Author style sheets override the user-agent layer, and an element's directly supplied style has the highest priority.
+
+### CSS values and the box model
+
+A null property in `UiStyle` means “not declared.” CSS keywords are explicit values, so a later rule can reset a property to `auto`, `none`, or `content`.
+
+```kotlin
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
-import io.github.aiwao.mine2dengine.layout.UiDirection
-import io.github.aiwao.mine2dengine.layout.UiDropShadow
-import io.github.aiwao.mine2dengine.layout.UiEdges
-import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
-import io.github.aiwao.mine2dengine.layout.UiGeneratedContent
-import io.github.aiwao.mine2dengine.layout.UiPosition
-import io.github.aiwao.mine2dengine.layout.UiPseudoStyle
+import io.github.aiwao.mine2dengine.layout.UiMarginValue
+import io.github.aiwao.mine2dengine.layout.UiMargins
+import io.github.aiwao.mine2dengine.layout.UiPaddings
+import io.github.aiwao.mine2dengine.layout.UiSizeValue
 import io.github.aiwao.mine2dengine.layout.UiStyle
-import io.github.aiwao.mine2dengine.layout.UiTextShadow
-import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
-import io.github.aiwao.mine2dengine.layout.descendant
-import io.github.aiwao.mine2dengine.layout.after
-import io.github.aiwao.mine2dengine.layout.before
-import io.github.aiwao.mine2dengine.layout.div
 import io.github.aiwao.mine2dengine.layout.percent
 import io.github.aiwao.mine2dengine.layout.px
-import io.github.aiwao.mine2dengine.layout.uiComponent
 
-val root = div(
+val style = UiStyle(
+    width = 50f.percent,
+    minWidth = 80f.px,
+    maxWidth = UiSizeValue.MAX_CONTENT,
+    margin = UiMargins(
+        right = UiMarginValue.AUTO,
+        left = UiMarginValue.AUTO,
+    ),
+    padding = UiPaddings(vertical = 6f, horizontal = 10f),
+    boxSizing = UiBoxSizing.BORDER_BOX,
+)
+```
+
+`Float.px` and `Float.percent` create length-percentage values. Negative lengths are accepted by margins and insets; sizes, padding, and gaps reject them. Padding percentages and physical margin percentages use the containing block's width, as in CSS.
+
+Supported preferred/minimum/maximum size values are `AUTO`, `MIN_CONTENT`, `MAX_CONTENT`, `FitContent(...)`, and a length-percentage. Maximum sizes additionally accept `NONE`.
+
+### Flexbox
+
+Set the inner display type to flex with `UiDisplay.FLEX` or `UiDisplay.INLINE_FLEX`:
+
+```kotlin
+import io.github.aiwao.mine2dengine.layout.UiAlignItems
+import io.github.aiwao.mine2dengine.layout.UiDisplay
+import io.github.aiwao.mine2dengine.layout.UiFlexDirection
+import io.github.aiwao.mine2dengine.layout.UiJustifyContent
+import io.github.aiwao.mine2dengine.layout.UiStyle
+import io.github.aiwao.mine2dengine.layout.div
+import io.github.aiwao.mine2dengine.layout.px
+
+val toolbar = div(
     UiStyle(
-        font = font,
-        width = 180f.px,
-        height = 100f.px,
-        padding = UiEdges(8f),
-        boxSizing = UiBoxSizing.BORDER_BOX,
-        position = UiPosition.RELATIVE,
-        backgroundColor = 0xD0202020.toInt(),
-        boxShadow = UiBoxShadow(
-            color = 0x80000000.toInt(),
-            offsetY = 3f,
-            blurRadius = 5f,
-            cornerRadius = 6f,
-        ),
-        textShadow = UiTextShadow(
-            color = 0xA0000000.toInt(),
-            offsetY = 2f,
-            blurRadius = 1f,
-        ),
-        horizontalAlignment = UiHorizontalAlignment.CENTER,
-        verticalAlignment = UiVerticalAlignment.CENTER,
+        display = UiDisplay.FLEX,
+        width = 240f.px,
+        flexDirection = UiFlexDirection.ROW,
+        justifyContent = UiJustifyContent.SPACE_BETWEEN,
+        alignItems = UiAlignItems.CENTER,
+        columnGap = 6f.px,
     ),
 ) {
-    p(
-        "v2",
-        UiStyle(
-            position = UiPosition.ABSOLUTE,
-            top = 6f,
-            right = 6f,
-        ),
-    )
-    p(
-        "Mine2DEngine",
-        UiStyle(
-            color = 0xFFFFCC00.toInt(),
-            dropShadow = UiDropShadow(
-                color = 0x60000000,
-                offsetY = 3f,
-                blurRadius = 4f,
-            ),
-        ),
-        onClick = { event -> println("Title: button=${event.button()}") },
-        onMouseMove = { x, y -> println("Title: x=$x, y=$y") },
-        onDrag = { event ->
-            println("Dragging title: x=${event.x()}, y=${event.y()}, button=${event.button()}")
-        },
-        onMouseOver = { println("Pointer entered title") },
-        onMouseOut = { println("Pointer left title") },
-    )
-    p("A lightweight Fabric UI", UiStyle(textShadow = UiTextShadow.NONE))
-
+    div(UiStyle(width = 24f.px, height = 24f.px))
     div(
         UiStyle(
-            width = 100f.percent,
-            direction = UiDirection.HORIZONTAL,
-            margin = UiEdges(top = 6f, right = 0f, bottom = 0f, left = 0f),
+            flexGrow = 1f,
+            flexShrink = 1f,
+            flexBasis = 0f.px,
+            minWidth = 0f.px,
         ),
-    ) {
-        div(onClick = { event -> println("OK: button=${event.button()}") }) {
-            p("OK")
-        }
-        div(onClick = { event -> println("Cancel: button=${event.button()}") }) {
-            p("Cancel")
-        }
-    }
-}
-
-val layout = LayoutEngine.layout(root, left = 12f, top = 12f)
-layout.render(draw)
-```
-
-Define reusable UI trees as `UiComponent` values. Every `component(...)` call adds a fresh
-`UiElement` tree to its parent, where it participates in the parent's measurement, rendering, and
-input handling. Inherited text styles and global `StyleSheet` values passed to
-`LayoutEngine.layout` continue across component boundaries.
-
-```kotlin
-val actionBar = uiComponent(styleSheet = actionBarStyleSheet) { content ->
-    div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
-        content()
-    }
-}
-
-val composedLayout = LayoutEngine.layout(
-    rootStyle = UiStyle(font = font),
-    left = 12f,
-    top = 12f,
-) {
-    p("Editor")
-    component(actionBar) {
-        p("Save", className = "action")
-        p("Close", className = "action")
-    }
-    component(
-        actionBar,
-        style = UiStyle(gap = 2f),
-        onClick = { event -> println("Compact bar: button=${event.button()}") },
-    ) {
-        p("Apply", className = "action")
-        p("Cancel", className = "action")
-    } // Overrides only this instance's root
+    )
 }
 ```
 
-Every component receives empty content by default. Its factory may invoke supplied content once at
-any `UiContainer` in the created tree. A component that does not expose content can leave the
-factory parameter unused, and callers can omit content.
+The supported container properties are `flexDirection`, `flexWrap`, `justifyContent`, `alignItems`, `alignContent`, `rowGap`, and `columnGap`. Item properties are `flexGrow`, `flexShrink`, `flexBasis`, `order`, and `alignSelf`.
 
-Sheets attached to a `Div` or passed to `uiComponent` apply only to that scope root and its
-contents. Content supplied at the call site is also treated as part of the component's contents.
-`TargetScope` selects that root. Their local
-selectors cannot inspect ancestors or siblings at the call site. At a nested child component, a
-parent component's local sheet can style the child's root but does not enter its contents.
+Flexible lengths are resolved from each item's flex base size with scaled shrink factors and repeated min/max clamping. The CSS automatic minimum size is content-based; specify `minWidth = 0f.px` (or `minHeight` for a column) when an item must be allowed to shrink below its content.
 
-`component(...)` accepts the same static or dynamic `style` and root event callbacks as `div`.
-Specified style values override the style created by the component factory, while unspecified
-values and null callbacks preserve the component defaults. Instance-specific style sheets are not
-accepted; use the call-site style for root overrides or define scoped sheets in `uiComponent`.
+Absolutely positioned children do not become flex items. Generated pseudo-elements do become flex items. Text directly inside a flex container is wrapped in an anonymous flex item.
 
-The component factory and its supplied content run only when `component(...)` adds it. When the
-same `UiLayout` is recalculated after a `noneDisplay` change, it reuses the existing element tree
-without rerunning content and preserves state such as hover and drag state.
+### Positioning
 
-For example, this dynamic rule applies a drop shadow only to paragraph descendants, including the
-one inside the nested `Div`. A dynamic declaration receives each matching element whenever its
-style is resolved. It may run more than once and should not perform side effects. Every element
-exposes its read-only `tag`; tag names are matched exactly and may contain whitespace:
+Insets use `UiInsetValue.AUTO` or a length-percentage:
 
 ```kotlin
-object LabelStyleSheet : StyleSheet {
-    override val styles = mutableListOf<StyleSheetObject>()
-
-    init {
-        newStyle(TargetScope descendant TargetWildcard) { descendant ->
-            UiStyle(
-                dropShadow = if (descendant.tag == "p") UiDropShadow() else null,
-            )
-        }
-    }
-}
-
-val labels = div(
-    tag = "section",
-    style = UiStyle(font = font),
-    styleSheets = listOf(LabelStyleSheet),
-) {
-    p("First")
-    div {
-        p("Second")
-    }
-}
-```
-
-CSS-like rules can be shared independently of the element tree. Wrap `newStyle` calls in an
-initializer; each call appends one rule to `styles`:
-
-```kotlin
-object ExampleStyleSheet : StyleSheet {
-    override val styles = mutableListOf<StyleSheetObject>()
-
-    init {
-        newStyle(
-            target = TargetOr(TargetClass("example-class"), TargetTag("div")),
-            style = UiStyle(color = 0xFFFF0000.toInt()),
-        )
-        newStyle(
-            target = TargetAnd(
-                TargetClass("card"),
-                TargetClass("active"),
-                TargetClass("large"),
-            ),
-            style = UiStyle(width = 120f.px),
-        )
-        newStyle(
-            target = TargetAnd(TargetTag("div"), TargetId("main")),
-            style = UiStyle(backgroundColor = 0xFF202020.toInt()),
-        )
-        newStyle(
-            target = TargetCombinator(
-                left = TargetClass("screen"),
-                combinator = StyleSheetCombinator.CHILD,
-                right = TargetWildcard,
-            ),
-            style = UiStyle(padding = UiEdges(4f)),
-        )
-        newStyle(
-            target = TargetClass("featured").before,
-            pseudoStyle = UiPseudoStyle(
-                content = UiGeneratedContent.Text("Featured: "),
-                style = UiStyle(color = 0xFFFFCC00.toInt()),
-            ),
-        )
-        newStyle(
-            target = TargetClass("featured").after,
-            pseudoStyle = UiPseudoStyle(
-                content = UiGeneratedContent.EmptyBox,
-                style = UiStyle(
-                    width = 4f.px,
-                    height = 4f.px,
-                    backgroundColor = 0xFFFFCC00.toInt(),
-                ),
-            ),
-        )
-    }
-}
-
-val styledRoot = div(
-    tag = "div",
-    id = "main",
-    className = "screen",
-    style = UiStyle(font = font),
-) {
-    p("Red Text")
-}
-
-val styledLayout = LayoutEngine.layout(styledRoot, ExampleStyleSheet)
-```
-
-`style` can also be a function that receives the concrete element. It is resolved from the
-element's current state whenever layout or rendering uses it, so states such as `hovering` and
-`dragging` can change appearance without callbacks mutating the style:
-
-```kotlin
-val hoverable = div(
-    style = { element ->
-        UiStyle(
-            width = 120f.px,
-            height = 24f.px,
-            backgroundColor = if (element.hovering) {
-                0xFFFFFFFF.toInt()
-            } else {
-                0xFF000000.toInt()
-            },
-        )
-    },
+val badgeStyle = UiStyle(
+    position = UiPosition.ABSOLUTE,
+    top = 6f.px,
+    right = 8f.px,
+    width = 20f.px,
 )
-
-val hoverableLayout = LayoutEngine.layout(hoverable)
-hoverableLayout.render(draw)
-hoverableLayout.mouseMove(mouseX, mouseY)
-hoverableLayout.render(draw)
 ```
 
-Dynamic styles are supported by `div`, `p` / `paragraph`, and style-sheet declarations. Redrawing an existing
-layout refreshes drawing properties such as inherited text colors, shadows, background colors, and
-background materials.
-Drawing-only changes do not require relayout. Recalculate the
-layout when a resolved element style or style-sheet declaration changes sizing, spacing,
-direction, alignment, positioning, insets, or font. Assigning `element.style` replaces its dynamic
-style with that static value.
+A relative box keeps its normal-flow space and then receives its visual offset. An absolute box is removed from flow and uses the padding box of its nearest positioned ancestor; otherwise it uses the initial containing block. If both insets in an axis are definite while the corresponding size is `auto`, the box stretches between those insets.
 
-Every element supports `onClick`, `onMouseMove`, `onDrag`, `onMouseOver`, and `onMouseOut`, including `div` and `p` / `paragraph`. Set an element's `disabled` property to `true` to prevent its `onClick` callback from running until it is enabled again. The read-only `hovering` property reports whether the pointer is inside an element. Keep the returned `UiLayout` to perform hit testing and dispatch pointer input using the same GUI coordinate system. Pass Minecraft's `MouseButtonEvent` to `mouseClick`; the event coordinates identify the topmost clickable element, start its drag state, and forward the event to its `onClick` callback. Pass the mouse coordinates to `mouseMove` to update `hovering`, invoke boundary-crossing and `onMouseMove` callbacks, and invoke the dragging element's `onDrag` callback. The `MouseButtonEvent` passed to `onDrag` uses the current mouse coordinates and retains the button and modifier information from the `mouseClick` event that started the drag. A drag continues outside the element's bounds until `mouseRelease` is called:
+### Cascade, components, and generated content
 
-```kotlin
-val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())
-val handled = layout.mouseClick(event)
-val moveHandled = layout.mouseMove(mouseX, mouseY)
-val releaseHandled = layout.mouseRelease()
-```
+Existing tag, ID, class, scope, compound, selector-list, and combinator targets continue to participate in CSS specificity and source order. Scoped container sheets and component sheets still establish their existing boundaries.
 
-`LayoutEngine.layout(root)` calculates geometry without drawing. Call `render(renderer)` on the returned layout to draw it. Changes to `noneDisplay` trigger automatic recalculation; recalculate the layout after changing text, other styles, or children.
+A pseudo-element rule uses `UiPseudoStyle` and either `UiGeneratedContent.Text` or `UiGeneratedContent.EmptyBox`. Its display, sizing, positioning, and flex-item properties are resolved like those of a regular generated box.
 
-To move an already calculated layout, change its `left` / `top`. Every element and hit-test area moves with it. `layout.render(renderer, left, top)` moves and redraws it in one call.
+`color`, `font`, `textShadow`, `textAlign`, and `whiteSpace` inherit. Paint properties such as backgrounds and box/drop shadows do not.
+
+### Results, rendering, and input
+
+`UiLayout.root` and `nodeOf(element)` provide the element-oriented compatibility view. `UiLayout.rootFragment` exposes the generated CSS fragment tree, and `fragmentsOf(element)` returns only boxes actually generated for that element. It returns no fragments for `display: none`; `display: contents` has no principal fragment, although a generated pseudo-element can still have one.
 
 ```kotlin
-layout.left = 24f
-layout.top = 32f
+val node = layout.nodeOf(button)
+val fragments = layout.fragmentsOf(button)
+
 layout.render(draw)
-
-// Equivalent shorthand
-layout.render(draw, left = 24f, top = 32f)
+val hit = layout.elementAt(mouseX, mouseY)
 ```
 
-`UiBoxShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, non-negative `blurRadius`,
-finite positive or negative `spreadRadius`, and non-negative `cornerRadius`. Spread and blur are
-paint-only overflow: they do not change the element's geometry or hit area. The shadow follows the
-current GUI pose and scissor. For a standalone shadow outside the layout engine, call
-`Mine2DEngine.boxShadow(...)` before drawing its foreground box. This built-in effect follows a
-rectangle or rounded rectangle; use a custom shader or off-screen mask for an arbitrary alpha shape.
+Rendering, shadows, hit testing, hover, click, and drag dispatch use the final CSS geometry. Changing only `left` or `top` on a calculated layout translates nodes, fragments, and hit regions together.
 
-`UiDropShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, and non-negative `blurRadius`.
-The renderer composites the element's background, text, and complete descendant subtree into a
-temporary alpha mask, then draws one Gaussian-blurred copy behind the original pixels. The property
-is not inherited, supports nested drop shadows, and corresponds to one CSS
-`filter: drop-shadow(offsetX offsetY blurRadius color)` operation.
-
-`UiTextShadow` supports ARGB `color`, finite `offsetX` / `offsetY`, and non-negative `blurRadius`.
-It is inherited with other text properties and does not affect layout or hit bounds. Use
-`UiTextShadow.NONE` to explicitly clear an inherited shadow. These values correspond to one CSS
-`text-shadow`. Positive blur is sampled from each glyph's alpha by a Gaussian shader in one glyph
-draw instead of repeatedly drawing displaced copies of the text. Outside the layout engine, call
-`Mine2DEngine.textShadow(...)` immediately before the foreground `text(...)` call.
+A dynamic style provider that switches to or from `UiDisplay.NONE` is checked before rendering and pointer operations and triggers geometry recalculation. Rebuild the layout after changing any other layout property, text, style-sheet contents, or children.
 
 ## Custom shaders
 

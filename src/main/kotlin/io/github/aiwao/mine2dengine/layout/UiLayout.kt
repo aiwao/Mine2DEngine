@@ -8,20 +8,46 @@ import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.MouseButtonInfo
 import java.util.IdentityHashMap
 
-internal data class UiNoneDisplayKey(
+internal data class UiDisplayKey(
     val element: UiElement,
     val pseudoElement: UiPseudoElement? = null,
 )
 
-internal data class UiNoneDisplayState(
-    val key: UiNoneDisplayKey,
+internal data class UiDisplayState(
+    val key: UiDisplayKey,
     val predicate: () -> Boolean,
-    val noneDisplay: Boolean,
+    val suppressed: Boolean,
 )
 
 internal data class UiLayoutSnapshot(
     val root: UiLayoutNode,
-    val noneDisplayStates: List<UiNoneDisplayState>,
+    val rootFragment: UiBoxFragment,
+    val displayStates: List<UiDisplayState>,
+)
+
+/** One generated CSS box fragment in the final layout tree. */
+data class UiBoxFragment(
+    val element: UiElement,
+    val pseudoElement: UiPseudoElement? = null,
+    val marginBox: UiRect,
+    val borderBox: UiRect,
+    val paddingBox: UiRect,
+    val contentBox: UiRect,
+    val children: List<UiBoxFragment>,
+    /** False for an anonymous box or a root retained only as a `display: none` handle. */
+    val generatesBox: Boolean = true,
+)
+
+/** One line fragment produced while laying out text. */
+data class UiTextLayoutFragment(
+    val text: String,
+    val bounds: UiRect,
+)
+
+internal data class UiStyledTextLayoutFragment(
+    val fragment: UiTextLayoutFragment,
+    /** Null means that the element's current inherited text style should be used at paint time. */
+    val textStyle: ResolvedUiTextStyle?,
 )
 
 /** The calculated geometry for one UI element. */
@@ -45,8 +71,10 @@ data class UiLayoutNode(
     internal val beforePseudo: UiPseudoLayoutNode? = null,
     internal val afterPseudo: UiPseudoLayoutNode? = null,
     internal val textBounds: UiRect? = null,
+    internal val textFragments: List<UiTextLayoutFragment> = emptyList(),
 ) {
     internal var styleProvider: () -> ResolvedUiStyle = { element.style.resolveDefaults() }
+    internal var styledTextFragments: List<UiStyledTextLayoutFragment> = emptyList()
 }
 
 /** Calculated geometry and content for one generated pseudo-element box. */
@@ -65,6 +93,7 @@ data class UiPseudoLayoutNode(
     /** The font resolved from the pseudo-element style and its originating element. */
     val font: Mine2DFont?,
     val displayed: Boolean = true,
+    internal val textFragments: List<UiTextLayoutFragment> = emptyList(),
 ) {
     internal var pseudoStyleProvider: () -> UiPseudoStyle = { UiPseudoStyle(content) }
 }
@@ -72,12 +101,16 @@ data class UiPseudoLayoutNode(
 /** A layout result that can render and dispatch pointer input to UI elements. */
 class UiLayout internal constructor(
     snapshot: UiLayoutSnapshot,
-    private val relayout: (Float, Float, Map<UiNoneDisplayKey, Boolean>) -> UiLayoutSnapshot,
+    private val relayout: (Float, Float, Map<UiDisplayKey, Boolean>) -> UiLayoutSnapshot,
 ) {
     var root: UiLayoutNode = snapshot.root
         private set
 
-    private var noneDisplayStates: List<UiNoneDisplayState> = snapshot.noneDisplayStates
+    /** The CSS fragment tree, including pseudo-elements and anonymous layout boxes. */
+    var rootFragment: UiBoxFragment = snapshot.rootFragment
+        private set
+
+    private var displayStates: List<UiDisplayState> = snapshot.displayStates
 
     private var dragButtonInfo: MouseButtonInfo? = null
 
@@ -97,7 +130,7 @@ class UiLayout internal constructor(
 
     val size: UiSize
         get() {
-            refreshNoneDisplay()
+            refreshDisplay()
             return UiSize(root.outerBounds.width, root.outerBounds.height)
         }
 
@@ -110,11 +143,12 @@ class UiLayout internal constructor(
         if (deltaX == 0f && deltaY == 0f) return
 
         root = root.translated(deltaX, deltaY)
+        rootFragment = rootFragment.translated(deltaX, deltaY)
     }
 
     /** Renders this layout, recalculating geometry when a none-display value changes. */
     fun render(renderer: Mine2DEngine) {
-        refreshNoneDisplay()
+        refreshDisplay()
         draw(root, renderer, ResolvedUiTextStyle(), renderer.uniformTimeSeconds())
     }
 
@@ -126,7 +160,7 @@ class UiLayout internal constructor(
 
     /** Finds the deepest element at the given GUI coordinate. */
     fun elementAt(x: Float, y: Float): UiElement? {
-        refreshNoneDisplay()
+        refreshDisplay()
         return hitRegionsInPaintOrder()
             .asReversed()
             .firstOrNull { region -> region.bounds.contains(x, y) }
@@ -140,7 +174,7 @@ class UiLayout internal constructor(
      * not invoked while [UiElement.disabled] is true. Returns true when one was hit.
      */
     fun mouseClick(event: MouseButtonEvent): Boolean {
-        refreshNoneDisplay()
+        refreshDisplay()
         val x = event.x().toFloat()
         val y = event.y().toFloat()
         val nodes = nodesInPaintOrder()
@@ -171,7 +205,7 @@ class UiLayout internal constructor(
      * true when at least one callback was invoked.
      */
     fun mouseMove(x: Double, y: Double): Boolean {
-        refreshNoneDisplay()
+        refreshDisplay()
         val layoutX = x.toFloat()
         val layoutY = y.toFloat()
         val nodes = nodesInPaintOrder()
@@ -231,7 +265,7 @@ class UiLayout internal constructor(
 
     /** Stops the current drag. Returns true when an element was dragging. */
     fun mouseRelease(): Boolean {
-        refreshNoneDisplay()
+        refreshDisplay()
         val draggingElements = nodesInPaintOrder()
             .map(UiLayoutNode::element)
             .filter(UiElement::dragging)
@@ -247,14 +281,26 @@ class UiLayout internal constructor(
     }
 
     fun nodeOf(element: UiElement): UiLayoutNode? {
-        refreshNoneDisplay()
+        refreshDisplay()
         return nodesInPaintOrder().firstOrNull { it.element === element }
+    }
+
+    /** Returns every generated CSS box fragment associated with [element]. */
+    fun fragmentsOf(element: UiElement): List<UiBoxFragment> {
+        refreshDisplay()
+        return buildList {
+            fun visit(fragment: UiBoxFragment) {
+                if (fragment.generatesBox && fragment.element === element) add(fragment)
+                fragment.children.forEach(::visit)
+            }
+            visit(rootFragment)
+        }
     }
 
     /**
      * Returns the generated pseudo-element layout box owned by [element].
      *
-     * Returns null when no rule matches or the generated box currently has `noneDisplay`.
+     * Returns null when no rule matches or the generated box has `display: none`.
      */
     fun pseudoNodeOf(
         element: UiElement,
@@ -280,34 +326,106 @@ class UiLayout internal constructor(
         val bounds: UiRect,
     )
 
+    private sealed interface UiPaintContent {
+        val order: Int
+        val sourceIndex: Int
+
+        data class Pseudo(
+            val node: UiPseudoLayoutNode,
+            override val order: Int,
+            override val sourceIndex: Int,
+        ) : UiPaintContent
+
+        data object Text : UiPaintContent {
+            override val order: Int = 0
+            override val sourceIndex: Int = 0
+        }
+
+        data class Child(
+            val node: UiLayoutNode,
+            override val order: Int,
+            override val sourceIndex: Int,
+        ) : UiPaintContent
+    }
+
+    private fun paintContents(
+        node: UiLayoutNode,
+        style: ResolvedUiStyle = node.styleProvider(),
+    ): List<UiPaintContent> {
+        val contents = buildList {
+            node.beforePseudo?.let { pseudo ->
+                add(
+                    UiPaintContent.Pseudo(
+                        node = pseudo,
+                        order = pseudo.pseudoStyleProvider().style.resolveDefaults().order,
+                        sourceIndex = -1,
+                    ),
+                )
+            }
+            if (node.element is Paragraph || node.textFragments.isNotEmpty()) {
+                add(UiPaintContent.Text)
+            }
+            node.children.forEachIndexed { index, child ->
+                add(
+                    UiPaintContent.Child(
+                        node = child,
+                        order = child.styleProvider().order,
+                        sourceIndex = index,
+                    ),
+                )
+            }
+            node.afterPseudo?.let { pseudo ->
+                add(
+                    UiPaintContent.Pseudo(
+                        node = pseudo,
+                        order = pseudo.pseudoStyleProvider().style.resolveDefaults().order,
+                        sourceIndex = Int.MAX_VALUE,
+                    ),
+                )
+            }
+        }
+        return if (style.display.box?.inside == UiDisplayInside.FLEX) {
+            contents.sortedWith(
+                compareBy<UiPaintContent>(UiPaintContent::order)
+                    .thenBy(UiPaintContent::sourceIndex),
+            )
+        } else {
+            contents
+        }
+    }
+
     private fun hitRegionsInPaintOrder(): List<UiHitRegion> = buildList {
         fun addTree(node: UiLayoutNode) {
             add(UiHitRegion(node.element, node.bounds))
-            node.beforePseudo
-                ?.takeIf(UiPseudoLayoutNode::displayed)
-                ?.let { pseudo -> add(UiHitRegion(node.element, pseudo.bounds)) }
-            node.children.forEach(::addTree)
-            node.afterPseudo
-                ?.takeIf(UiPseudoLayoutNode::displayed)
-                ?.let { pseudo -> add(UiHitRegion(node.element, pseudo.bounds)) }
+            paintContents(node).forEach { content ->
+                when (content) {
+                    is UiPaintContent.Pseudo -> content.node
+                        .takeIf(UiPseudoLayoutNode::displayed)
+                        ?.let { pseudo -> add(UiHitRegion(pseudo.element, pseudo.bounds)) }
+
+                    UiPaintContent.Text -> Unit
+                    is UiPaintContent.Child -> addTree(content.node)
+                }
+            }
         }
         addTree(root)
     }
 
-    private fun refreshNoneDisplay() {
-        val evaluatedNoneDisplays = mutableMapOf<UiNoneDisplayKey, Boolean>()
+    private fun refreshDisplay() {
+        val evaluatedDisplays = mutableMapOf<UiDisplayKey, Boolean>()
         var changed = false
-        noneDisplayStates.forEach { state ->
-            val noneDisplay = state.predicate()
-            evaluatedNoneDisplays[state.key] = noneDisplay
-            changed = changed || noneDisplay != state.noneDisplay
+        displayStates.forEach { state ->
+            val suppressed = state.predicate()
+            evaluatedDisplays[state.key] = suppressed
+            changed = changed || suppressed != state.suppressed
         }
         if (!changed) return
 
         val previousNodes = nodesInPaintOrder()
-        val snapshot = relayout(left, top, evaluatedNoneDisplays)
+        val snapshot = relayout(left, top, evaluatedDisplays)
         root = snapshot.root
-        noneDisplayStates = snapshot.noneDisplayStates
+        rootFragment = snapshot.rootFragment
+        displayStates = snapshot.displayStates
 
         val displayedElements = java.util.Collections.newSetFromMap(
             IdentityHashMap<UiElement, Boolean>(),
@@ -397,28 +515,33 @@ class UiLayout internal constructor(
             }
         }
 
-        node.beforePseudo?.let { pseudo ->
-            drawPseudo(pseudo, renderer, resolvedTextStyle, timeSeconds)
-        }
+        paintContents(node, style).forEach { content ->
+            when (content) {
+                is UiPaintContent.Pseudo ->
+                    drawPseudo(content.node, renderer, resolvedTextStyle, timeSeconds)
 
-        when (val element = node.element) {
-            is UiContainer -> Unit
-            is Paragraph -> drawText(
-                element.text,
-                style,
-                resolvedTextStyle,
-                node.textBounds ?: node.contentBounds,
-                requireFont(node),
-                renderer,
-            )
-        }
+                UiPaintContent.Text -> {
+                    if (node.textFragments.isNotEmpty()) {
+                        drawStyledTextFragments(
+                            node = node,
+                            fallbackTextStyle = resolvedTextStyle,
+                            renderer = renderer,
+                        )
+                    } else if (node.element is Paragraph && node.element.text.isNotEmpty()) {
+                        drawText(
+                            node.element.text,
+                            style,
+                            resolvedTextStyle,
+                            node.textBounds ?: node.contentBounds,
+                            requireFont(node),
+                            renderer,
+                        )
+                    }
+                }
 
-        node.children.forEach { child ->
-            draw(child, renderer, resolvedTextStyle, timeSeconds)
-        }
-
-        node.afterPseudo?.let { pseudo ->
-            drawPseudo(pseudo, renderer, resolvedTextStyle, timeSeconds)
+                is UiPaintContent.Child ->
+                    draw(content.node, renderer, resolvedTextStyle, timeSeconds)
+            }
         }
     }
 
@@ -508,17 +631,73 @@ class UiLayout internal constructor(
             }
         }
         if (content is UiGeneratedContent.Text) {
-            drawText(
-                content.value,
-                style,
-                resolvedTextStyle,
-                node.contentBounds,
-                requireNotNull(node.font) {
-                    "${node.pseudoElement.cssName} on ${node.element.javaClass.simpleName} " +
-                        "requires a font in its style or originating element"
-                },
-                renderer,
+            val font = requireNotNull(node.font) {
+                "${node.pseudoElement.cssName} on ${node.element.javaClass.simpleName} " +
+                    "requires a font in its style or originating element"
+            }
+            if (node.textFragments.isNotEmpty()) {
+                drawTextFragments(node.textFragments, resolvedTextStyle, font, renderer)
+            } else {
+                drawText(
+                    content.value,
+                    style,
+                    resolvedTextStyle,
+                    node.contentBounds,
+                    font,
+                    renderer,
+                )
+            }
+        }
+    }
+
+    private fun drawTextFragments(
+        fragments: List<UiTextLayoutFragment>,
+        resolvedTextStyle: ResolvedUiTextStyle,
+        font: Mine2DFont,
+        renderer: Mine2DEngine,
+    ) {
+        fragments.forEach { fragment ->
+            val y = textRendererY(
+                lineBoxTop = fragment.bounds.top,
+                lineIndex = 0,
+                lineHeight = fragment.bounds.height,
+                rendererOffsetFromLineTop = font.rendererOffsetFromLineTop,
             )
+            val textOrigin = renderer.pixelAlignedTextOriginY(fragment.bounds.left, y)
+            resolvedTextStyle.textShadow?.let { shadow ->
+                renderer.textShadow(
+                    font = font,
+                    text = fragment.text,
+                    x = textOrigin.x,
+                    y = textOrigin.y,
+                    color = shadow.color,
+                    offsetX = shadow.offsetX,
+                    offsetY = shadow.offsetY,
+                    blurRadius = shadow.blurRadius,
+                )
+            }
+            renderer.text(
+                font,
+                fragment.text,
+                textOrigin.x,
+                textOrigin.y,
+                resolvedTextStyle.color,
+            )
+        }
+    }
+
+    private fun drawStyledTextFragments(
+        node: UiLayoutNode,
+        fallbackTextStyle: ResolvedUiTextStyle,
+        renderer: Mine2DEngine,
+    ) {
+        node.styledTextFragments.forEach { styled ->
+            val textStyle = styled.textStyle ?: fallbackTextStyle
+            val font = requireNotNull(textStyle.font) {
+                "${node.element.javaClass.simpleName} requires a font in its style or an " +
+                    "ancestor style"
+            }
+            drawTextFragments(listOf(styled.fragment), textStyle, font, renderer)
         }
     }
 
@@ -532,18 +711,14 @@ class UiLayout internal constructor(
     ) {
         val textMeasurer = Mine2DTextMeasurer(font)
         val lines = textLines(text)
-        val textTop = contentBounds.top + alignedTop(
-            availableHeight = contentBounds.height,
-            itemHeight = lines.size * textMeasurer.lineHeight,
-            alignment = style.verticalAlignment,
-        )
+        val textTop = contentBounds.top
         lines.forEachIndexed { index, line ->
             val lineWidth = textMeasurer.width(line)
-            val x = alignedLeft(
-                availableWidth = contentBounds.width,
-                itemWidth = lineWidth,
-                alignment = style.horizontalAlignment,
-            ) + contentBounds.left
+            val x = contentBounds.left + when (resolvedTextStyle.textAlign) {
+                UiTextAlign.START, UiTextAlign.LEFT -> 0f
+                UiTextAlign.END, UiTextAlign.RIGHT -> contentBounds.width - lineWidth
+                UiTextAlign.CENTER -> (contentBounds.width - lineWidth) / 2f
+            }
             val y = textRendererY(
                 lineBoxTop = textTop,
                 lineIndex = index,
@@ -613,8 +788,18 @@ private fun UiLayoutNode.translated(deltaX: Float, deltaY: Float): UiLayoutNode 
     beforePseudo = beforePseudo?.translated(deltaX, deltaY),
     afterPseudo = afterPseudo?.translated(deltaX, deltaY),
     textBounds = textBounds?.translated(deltaX, deltaY),
+    textFragments = textFragments.map { fragment ->
+        fragment.copy(bounds = fragment.bounds.translated(deltaX, deltaY))
+    },
 ).also { translated ->
     translated.styleProvider = styleProvider
+    translated.styledTextFragments = styledTextFragments.map { styled ->
+        styled.copy(
+            fragment = styled.fragment.copy(
+                bounds = styled.fragment.bounds.translated(deltaX, deltaY),
+            ),
+        )
+    }
 }
 
 private fun UiPseudoLayoutNode.translated(
@@ -624,6 +809,9 @@ private fun UiPseudoLayoutNode.translated(
     outerBounds = outerBounds.translated(deltaX, deltaY),
     bounds = bounds.translated(deltaX, deltaY),
     contentBounds = contentBounds.translated(deltaX, deltaY),
+    textFragments = textFragments.map { fragment ->
+        fragment.copy(bounds = fragment.bounds.translated(deltaX, deltaY))
+    },
 ).also { translated ->
     translated.pseudoStyleProvider = pseudoStyleProvider
 }
@@ -631,6 +819,14 @@ private fun UiPseudoLayoutNode.translated(
 private fun UiRect.translated(deltaX: Float, deltaY: Float): UiRect = copy(
     left = left + deltaX,
     top = top + deltaY,
+)
+
+private fun UiBoxFragment.translated(deltaX: Float, deltaY: Float): UiBoxFragment = copy(
+    marginBox = marginBox.translated(deltaX, deltaY),
+    borderBox = borderBox.translated(deltaX, deltaY),
+    paddingBox = paddingBox.translated(deltaX, deltaY),
+    contentBox = contentBox.translated(deltaX, deltaY),
+    children = children.map { child -> child.translated(deltaX, deltaY) },
 )
 
 private fun UiRect.toUniformRect(): Mine2DUniformRect = Mine2DUniformRect(

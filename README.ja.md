@@ -190,390 +190,154 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 ## レイアウトエンジン
 
-レイアウトパッケージでは `Div` と `Paragraph` からツリーを作ります。CSS に似たボックスモデルを採用しています。
+レイアウトパッケージは `Div` と `Paragraph` の要素ツリーへstyleをcascadeし、CSS box treeを生成してbox fragmentへ配置します。従来の独自stack layoutではなく、CSSのプロパティ名と初期値を使います。
 
-- `boxSizing` は、`null` ではない `width` と `height` がコンテンツボックスとpaddingを含む
-  ボックスのどちらを指定するかを決めます。既定値は `UiBoxSizing.CONTENT_BOX` です。
-  `UiBoxSizing.BORDER_BOX` を指定すると、指定寸法にpaddingが含まれます。寸法が `null` の場合は
-  どちらでも文字列または子要素に合わせて縮みます。
-- `width` と `height` は `Float.px`（例: `120f.px`）または `Float.percent`
-  （例: `50f.percent`）で指定します。パーセント値は、通常は親要素の対応するcontent寸法となる、
-  解決済みの包含ブロック寸法を基準にします。
-- パディングは描画される背景の内側、マージンは外側です。
-- `position` は `UiPosition.STATIC`、`RELATIVE`、`ABSOLUTE` に対応します。nullを指定した
-  `left`、`top`、`right`、`bottom` はCSSの `auto` として扱われます。relative要素は通常位置から
-  移動しますが、元の占有領域は変わりません。absolute要素は通常フローから外れ、最も近い
-  non-static祖先のpadding box（なければルートbox）を基準に配置されます。横または縦の両側を
-  指定し、対応する幅または高さがnullなら、その範囲まで自動的に伸びます。ルート自体は
-  `LayoutEngine.layout` に渡した座標に配置されます。
-- 要素の背景を描画するかどうかは `backgroundColor` だけで決まります。nullではない場合は
-  `backgroundMaterial` を使い、背景Materialが未指定ならrendererの現在のMaterialを使います。
-  `backgroundMaterial` だけを指定しても何も描画されません。
-- `boxShadow` は要素の背後に柔らかい角丸box shadowを描画します。要素内だけの指定であり、
-  レイアウト寸法やポインター判定領域には影響しません。
-- `dropShadow` はCSSの `filter: drop-shadow()` と同様に、要素の背景・文字・子孫を合成した
-  alpha形状へ影を付けます。要素内だけの指定であり、レイアウトやヒット領域には影響しません。
-- `noneDisplay` に渡した関数が `true` を返すと、CSS の `display: none` と同様に、その要素と子孫が配置、描画、ポインター入力の対象から外れます。この関数は描画やポインター操作の前にも評価され、戻り値が変わるとレイアウトが自動的に再計算されます。
-- `Div` は直接の子要素を縦または横に並べます。
-- `Div` の `styleSheets` には、そのコンテナと子孫だけに適用するシートを指定できます。ネストした
-  コンテナのスコープも同じ詳細度cascadeへ参加し、外側のローカルシートは子コンポーネントの
-  ルートには適用できますが、その内部には入りません。シート一覧を変更した場合は再レイアウトが
-  必要です。
-- `LayoutEngine.layout` に `StyleSheet` を渡すと、要素のtag、ID、classに一致するルールが適用
-  されます。`newStyle` は1つの `StyleSheetTarget` を受け取ります。`button.primary`、
-  `.card.active.large`、`div#main` のような複合セレクターには `TargetAnd`、`h1, h2, h3` の
-  ようなセレクターリストには `TargetOr` を使います。詳細度はID、class・疑似class、tagの順に
-  比較され、同じなら後のルール、最後に要素自身の指定済みstyleが優先されます。
-- 要素selectorに `.before` または `.after` を付けると、生成される `::before` / `::after`
-  boxを対象にできます。疑似要素ルールには`UiPseudoStyle`を使い、contentには
-  `UiGeneratedContent.Text`または`UiGeneratedContent.EmptyBox`を指定します。生成boxは
-  `UiContainer.children`には追加されず、元要素の最初または最後のcontentとして`direction`と
-  `gap`に参加します。通常の`UiStyle`によるbox、配置、描画、shadow、`noneDisplay`が利用でき、
-  Textは元要素から`color`、`font`、`textShadow`を継承します。生成box上のpointer入力は元要素を
-  対象にします。boundsは`UiLayout.pseudoNodeOf`で取得できます。
-- `TargetScope` はCSSの `:scope` セレクターです。グローバルシートではレイアウトのルート、
-  scopedシートではコンテナまたはコンポーネントのルートに一致し、疑似クラス相当の詳細度を持ちます。
-- `TargetWildcard` はCSSのユニバーサルセレクター `*` です。すべての要素に一致し、詳細度には
-  加算されません。`.parent > *` のように結合子内でも利用できます。
-- `TargetCombinator(left, combinator, right)` では `StyleSheetCombinator` の `DESCENDANT`
-  (`" "`)、`CHILD` (`">"`)、`ADJACENT_SIBLING` (`"+"`)、`GENERAL_SIBLING` (`"~"`) を利用
-  できます。結合子はネストしてチェーン化でき、
-  `combine`、`descendant`、`child`、`adjacentSibling`、`generalSibling` でも構築できます。
-- `id` はHTML互換の要素IDです。`className` は読み取り専用の `Set<String>` で、
-  `setOf("card", "active")` のように指定します。`String` も単一要素Setの省略形として指定でき、
-  空白では分割されません。class名とtag名は空白を含めることができ、文字列全体が完全一致で
-  照合されます。
-- `horizontalAlignment` と `verticalAlignment` は子要素と文字列を縦横の各方向に配置します。
-- `color`、`font`、`textShadow` は祖先から継承され、子要素で上書きできます。`null` の値は
-  親を継承します。ルートではcolorが不透明な白、文字shadowはなしが既定値です。継承したshadowを
-  明示的に解除するには `textShadow = UiTextShadow.NONE` を指定します。
-- 段落内の改行は複数行になります。
+### 対応するCSS layout profile
+
+- `display: block | inline | flow-root | flex | inline-flex | none | contents`
+- block flow、inline textのline box、normal/pre/nowrapの空白処理、`text-align`
+- content-box / border-box、px / percentage、intrinsic size keyword、min/max制約
+- 物理margin / padding、横方向の`auto` margin、隣接block marginのcollapse
+- `position: static | relative | absolute`、length / percentage inset、両側inset間の自動stretch
+- Flexboxのrow / column、reverse、wrap、grow / shrink / basis、order、gap、auto margin、justify / align
+- `::before` / `::after` の生成box
+- `display: none`によるsubtree除外と、`display: contents`によるprincipal box除外
+
+Grid、table、float、ruby、縦書き、fragmentation、fixed / sticky positioning、border、replaced elementは対象外です。
+
+### Initial containing block
+
+CSS layoutでは利用可能な幅と高さが必要なため、すべてのlayout呼び出しへviewport矩形を渡します。
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.LayoutEngine
-import io.github.aiwao.mine2dengine.layout.Paragraph
-import io.github.aiwao.mine2dengine.layout.StyleSheet
-import io.github.aiwao.mine2dengine.layout.StyleSheetCombinator
-import io.github.aiwao.mine2dengine.layout.StyleSheetObject
-import io.github.aiwao.mine2dengine.layout.TargetAnd
-import io.github.aiwao.mine2dengine.layout.TargetClass
-import io.github.aiwao.mine2dengine.layout.TargetCombinator
-import io.github.aiwao.mine2dengine.layout.TargetId
-import io.github.aiwao.mine2dengine.layout.TargetOr
-import io.github.aiwao.mine2dengine.layout.TargetScope
-import io.github.aiwao.mine2dengine.layout.TargetTag
-import io.github.aiwao.mine2dengine.layout.TargetWildcard
-import io.github.aiwao.mine2dengine.layout.UiBoxShadow
+import io.github.aiwao.mine2dengine.layout.UiRect
+
+val layout = LayoutEngine.layout(
+    root = root,
+    viewport = UiRect(
+        left = 0f,
+        top = 0f,
+        width = screenWidth,
+        height = screenHeight,
+    ),
+)
+```
+
+`width: auto`のblock boxは利用可能なinline sizeを埋め、`height: auto`は通常フロー内の内容に合わせます。そのため、style未指定のルート`div`は子へ縮むのではなく、通常はviewport幅になります。
+
+`div`と`p`には組み込みUA style層から`display: block`が与えられます。他のtagはCSSのdisplay初期値である`inline`です。author stylesheetはUA層を上書きし、要素へ直接指定したstyleが最優先です。
+
+### CSS値とbox model
+
+`UiStyle`のnullは「未宣言」を表し、CSSの`auto`ではありません。`auto`、`none`、`content`などは明示的な値なので、後段のruleからCSS初期値へ戻せます。
+
+```kotlin
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
-import io.github.aiwao.mine2dengine.layout.UiDirection
-import io.github.aiwao.mine2dengine.layout.UiDropShadow
-import io.github.aiwao.mine2dengine.layout.UiEdges
-import io.github.aiwao.mine2dengine.layout.UiHorizontalAlignment
-import io.github.aiwao.mine2dengine.layout.UiGeneratedContent
-import io.github.aiwao.mine2dengine.layout.UiPosition
-import io.github.aiwao.mine2dengine.layout.UiPseudoStyle
+import io.github.aiwao.mine2dengine.layout.UiMarginValue
+import io.github.aiwao.mine2dengine.layout.UiMargins
+import io.github.aiwao.mine2dengine.layout.UiPaddings
+import io.github.aiwao.mine2dengine.layout.UiSizeValue
 import io.github.aiwao.mine2dengine.layout.UiStyle
-import io.github.aiwao.mine2dengine.layout.UiTextShadow
-import io.github.aiwao.mine2dengine.layout.UiVerticalAlignment
-import io.github.aiwao.mine2dengine.layout.descendant
-import io.github.aiwao.mine2dengine.layout.after
-import io.github.aiwao.mine2dengine.layout.before
-import io.github.aiwao.mine2dengine.layout.div
 import io.github.aiwao.mine2dengine.layout.percent
 import io.github.aiwao.mine2dengine.layout.px
-import io.github.aiwao.mine2dengine.layout.uiComponent
 
-val root = div(
+val style = UiStyle(
+    width = 50f.percent,
+    minWidth = 80f.px,
+    maxWidth = UiSizeValue.MAX_CONTENT,
+    margin = UiMargins(
+        right = UiMarginValue.AUTO,
+        left = UiMarginValue.AUTO,
+    ),
+    padding = UiPaddings(vertical = 6f, horizontal = 10f),
+    boxSizing = UiBoxSizing.BORDER_BOX,
+)
+```
+
+`Float.px`と`Float.percent`でlength-percentageを作ります。負のlengthはmarginとinsetでは利用できますが、size、padding、gapでは拒否されます。CSSと同様に、padding percentageと物理margin percentageは包含blockの幅を基準にします。
+
+preferred / minimum / maximum sizeでは`AUTO`、`MIN_CONTENT`、`MAX_CONTENT`、`FitContent(...)`、length-percentageを利用できます。maximum sizeでは`NONE`も利用できます。
+
+### Flexbox
+
+`UiDisplay.FLEX`または`UiDisplay.INLINE_FLEX`でinner display typeをflexにします。
+
+```kotlin
+import io.github.aiwao.mine2dengine.layout.UiAlignItems
+import io.github.aiwao.mine2dengine.layout.UiDisplay
+import io.github.aiwao.mine2dengine.layout.UiFlexDirection
+import io.github.aiwao.mine2dengine.layout.UiJustifyContent
+import io.github.aiwao.mine2dengine.layout.UiStyle
+import io.github.aiwao.mine2dengine.layout.div
+import io.github.aiwao.mine2dengine.layout.px
+
+val toolbar = div(
     UiStyle(
-        font = font,
-        width = 180f.px,
-        height = 100f.px,
-        padding = UiEdges(8f),
-        boxSizing = UiBoxSizing.BORDER_BOX,
-        position = UiPosition.RELATIVE,
-        backgroundColor = 0xD0202020.toInt(),
-        boxShadow = UiBoxShadow(
-            color = 0x80000000.toInt(),
-            offsetY = 3f,
-            blurRadius = 5f,
-            cornerRadius = 6f,
-        ),
-        textShadow = UiTextShadow(
-            color = 0xA0000000.toInt(),
-            offsetY = 2f,
-            blurRadius = 1f,
-        ),
-        horizontalAlignment = UiHorizontalAlignment.CENTER,
-        verticalAlignment = UiVerticalAlignment.CENTER,
+        display = UiDisplay.FLEX,
+        width = 240f.px,
+        flexDirection = UiFlexDirection.ROW,
+        justifyContent = UiJustifyContent.SPACE_BETWEEN,
+        alignItems = UiAlignItems.CENTER,
+        columnGap = 6f.px,
     ),
 ) {
-    p(
-        "v2",
-        UiStyle(
-            position = UiPosition.ABSOLUTE,
-            top = 6f,
-            right = 6f,
-        ),
-    )
-    p(
-        "Mine2DEngine",
-        UiStyle(
-            color = 0xFFFFCC00.toInt(),
-            dropShadow = UiDropShadow(
-                color = 0x60000000,
-                offsetY = 3f,
-                blurRadius = 4f,
-            ),
-        ),
-        onClick = { event -> println("タイトル: button=${event.button()}") },
-        onMouseMove = { x, y -> println("タイトル: x=$x, y=$y") },
-        onDrag = { event ->
-            println("タイトルをドラッグ中: x=${event.x()}, y=${event.y()}, button=${event.button()}")
-        },
-        onMouseOver = { println("タイトルにカーソルが入りました") },
-        onMouseOut = { println("タイトルからカーソルが出ました") },
-    )
-    p("軽量な Fabric UI", UiStyle(textShadow = UiTextShadow.NONE))
-
+    div(UiStyle(width = 24f.px, height = 24f.px))
     div(
         UiStyle(
-            width = 100f.percent,
-            direction = UiDirection.HORIZONTAL,
-            margin = UiEdges(top = 6f, right = 0f, bottom = 0f, left = 0f),
+            flexGrow = 1f,
+            flexShrink = 1f,
+            flexBasis = 0f.px,
+            minWidth = 0f.px,
         ),
-    ) {
-        div(onClick = { event -> println("OK: button=${event.button()}") }) {
-            p("OK")
-        }
-        div(onClick = { event -> println("キャンセル: button=${event.button()}") }) {
-            p("キャンセル")
-        }
-    }
-}
-
-val layout = LayoutEngine.layout(root, left = 12f, top = 12f)
-layout.render(draw)
-```
-
-再利用するUIツリーは `UiComponent` として定義できます。`component(...)` を呼ぶたびに新しい
-`UiElement` ツリーが親へ追加され、親ツリーと一緒に計測、描画、入力処理されます。親からの
-文字styleの継承や、`LayoutEngine.layout` に渡したグローバルな `StyleSheet` も
-コンポーネント内へ通常どおり適用されます。
-
-```kotlin
-val actionBar = uiComponent(styleSheet = actionBarStyleSheet) { content ->
-    div(UiStyle(direction = UiDirection.HORIZONTAL, gap = 4f)) {
-        content()
-    }
-}
-
-val composedLayout = LayoutEngine.layout(
-    rootStyle = UiStyle(font = font),
-    left = 12f,
-    top = 12f,
-) {
-    p("エディター")
-    component(actionBar) {
-        p("保存", className = "action")
-        p("閉じる", className = "action")
-    }
-    component(
-        actionBar,
-        style = UiStyle(gap = 2f),
-        onClick = { event -> println("Compact bar: button=${event.button()}") },
-    ) {
-        p("適用", className = "action")
-        p("キャンセル", className = "action")
-    } // このインスタンスのrootだけを上書き
+    )
 }
 ```
 
-すべてのコンポーネントはデフォルトで空のcontentを受け取ります。factoryは受け取ったcontentを
-ツリー内の任意の`UiContainer`で1回だけ呼び出せます。呼び出し側からcontentを渡さない場合や、
-contentを持たないコンポーネントでは、factoryの引数を使用しなくても構いません。
+container propertyは`flexDirection`、`flexWrap`、`justifyContent`、`alignItems`、`alignContent`、`rowGap`、`columnGap`です。item propertyは`flexGrow`、`flexShrink`、`flexBasis`、`order`、`alignSelf`です。
 
-`Div` に指定したシートと `uiComponent` に渡したシートは、そのスコープのルートと内部だけに
-適用されます。呼び出し側から渡したcontentもコンポーネントの内部として扱われます。
-`TargetScope` はそのルートを選択します。呼び出し側の
-祖先や兄弟をローカルセレクターから参照することはできません。ネストした子コンポーネントでは、
-親コンポーネントのローカルシートは子のルートには適用できますが、その内部には入りません。
+flexible lengthは各itemのflex base sizeから、scaled shrink factorとmin/max clampの反復処理で解決します。CSSのautomatic minimum sizeはcontent-basedです。contentより小さく縮めたいitemには`minWidth = 0f.px`を指定してください。columnの場合は`minHeight`です。
 
-`component(...)` には `div` と同様に、静的または動的な `style` とroot用イベントcallbackを
-指定できます。指定済みstyle値はcomponent factoryが作成したroot styleを上書きし、未指定値と
-nullのcallbackはcomponent既定値を保持します。インスタンス固有のStyleSheetは指定できません。
-rootだけを変える場合は呼び出し側style、scoped ruleには `uiComponent` のシートを使います。
+absolute childはflex itemになりません。生成された疑似要素はflex itemになります。flex container直下のtextはanonymous flex itemで囲まれます。
 
-コンポーネントのfactoryと渡されたcontentは `component(...)` で追加するときにだけ実行されます。
-同じ`UiLayout` が `noneDisplay` の変更で再計算される場合は、既存の要素ツリーが再利用されるため、
-contentの再実行はなく、要素のhoverやdragなどの状態も維持されます。
+### Positioning
 
-たとえば、次の動的ruleでは、ネストした `Div` 内も含めて段落の子孫だけにdrop shadowを
-適用します。動的declarationはstyleの解決時に一致要素を受け取ります。複数回呼ばれる可能性が
-あるため、副作用を持たせないでください。各要素の読み取り専用 `tag` は完全一致で照合され、
-空白を含めることもできます。
+insetには`UiInsetValue.AUTO`またはlength-percentageを使います。
 
 ```kotlin
-object LabelStyleSheet : StyleSheet {
-    override val styles = mutableListOf<StyleSheetObject>()
-
-    init {
-        newStyle(TargetScope descendant TargetWildcard) { descendant ->
-            UiStyle(
-                dropShadow = if (descendant.tag == "p") UiDropShadow() else null,
-            )
-        }
-    }
-}
-
-val labels = div(
-    tag = "section",
-    style = UiStyle(font = font),
-    styleSheets = listOf(LabelStyleSheet),
-) {
-    p("First")
-    div {
-        p("Second")
-    }
-}
-```
-
-CSS風のルールは要素ツリーと分離して共有できます。`newStyle` は `styles` にルールを追加するため、
-初期化ブロック内で呼び出します。
-
-```kotlin
-object ExampleStyleSheet : StyleSheet {
-    override val styles = mutableListOf<StyleSheetObject>()
-
-    init {
-        newStyle(
-            target = TargetOr(TargetClass("example-class"), TargetTag("div")),
-            style = UiStyle(color = 0xFFFF0000.toInt()),
-        )
-        newStyle(
-            target = TargetAnd(
-                TargetClass("card"),
-                TargetClass("active"),
-                TargetClass("large"),
-            ),
-            style = UiStyle(width = 120f.px),
-        )
-        newStyle(
-            target = TargetAnd(TargetTag("div"), TargetId("main")),
-            style = UiStyle(backgroundColor = 0xFF202020.toInt()),
-        )
-        newStyle(
-            target = TargetCombinator(
-                left = TargetClass("screen"),
-                combinator = StyleSheetCombinator.CHILD,
-                right = TargetWildcard,
-            ),
-            style = UiStyle(padding = UiEdges(4f)),
-        )
-        newStyle(
-            target = TargetClass("featured").before,
-            pseudoStyle = UiPseudoStyle(
-                content = UiGeneratedContent.Text("注目: "),
-                style = UiStyle(color = 0xFFFFCC00.toInt()),
-            ),
-        )
-        newStyle(
-            target = TargetClass("featured").after,
-            pseudoStyle = UiPseudoStyle(
-                content = UiGeneratedContent.EmptyBox,
-                style = UiStyle(
-                    width = 4f.px,
-                    height = 4f.px,
-                    backgroundColor = 0xFFFFCC00.toInt(),
-                ),
-            ),
-        )
-    }
-}
-
-val styledRoot = div(
-    tag = "div",
-    id = "main",
-    className = "screen",
-    style = UiStyle(font = font),
-) {
-    p("Red Text")
-}
-
-val styledLayout = LayoutEngine.layout(styledRoot, ExampleStyleSheet)
-```
-
-`style` には具体的な要素を受け取る関数も指定できます。レイアウトまたは描画で使われるたびに
-要素の現在の状態から解決されるため、コールバックからスタイルを書き換えなくても `hovering` や
-`dragging` に応じて見た目を変えられます。
-
-```kotlin
-val hoverable = div(
-    style = { element ->
-        UiStyle(
-            width = 120f.px,
-            height = 24f.px,
-            backgroundColor = if (element.hovering) {
-                0xFFFFFFFF.toInt()
-            } else {
-                0xFF000000.toInt()
-            },
-        )
-    },
+val badgeStyle = UiStyle(
+    position = UiPosition.ABSOLUTE,
+    top = 6f.px,
+    right = 8f.px,
+    width = 20f.px,
 )
-
-val hoverableLayout = LayoutEngine.layout(hoverable)
-hoverableLayout.render(draw)
-hoverableLayout.mouseMove(mouseX, mouseY)
-hoverableLayout.render(draw)
 ```
 
-動的スタイルは `div`、`p` / `paragraph`、StyleSheetのdeclarationで利用できます。既存レイアウトを再描画すると
-継承される文字色やshadow、背景色、背景Materialなどの描画プロパティも更新されます。これらの
-描画プロパティだけを変える場合は再レイアウト不要です。解決後の要素styleまたはStyleSheetの
-declarationによってサイズ、余白、方向、配置、position、inset、フォントが変わる場合は、
-レイアウトを再計算してください。
-`element.style` に代入すると、動的スタイルはその静的な値で置き換えられます。
+relative boxは通常フローの領域を保ったままvisual offsetを受けます。absolute boxはフローから外れ、最も近いpositioned ancestorのpadding boxを使います。なければinitial containing blockを使います。同じ軸の両insetがdefiniteで対応するsizeが`auto`なら、そのinset間までstretchします。
 
-`div` と `p` / `paragraph` を含むすべての要素で `onClick`、`onMouseMove`、`onDrag`、`onMouseOver`、`onMouseOut` を利用できます。要素の `disabled` プロパティを `true` にすると、再び有効にするまで `onClick` コールバックは呼び出されません。読み取り専用の `hovering` プロパティで、カーソルが要素内にあるかを確認できます。返された `UiLayout` を保持すると、同じ GUI 座標系でヒットテストやポインター入力の通知ができます。Minecraft の `MouseButtonEvent` を `mouseClick` に渡すと、イベントの座標で最前面のクリック可能な要素を特定してドラッグ状態を開始し、そのイベントを要素の `onClick` に渡します。`mouseMove` にマウス座標を渡すと、`hovering` の更新、境界をまたいだ際のコールバック、座標上で最前面の `onMouseMove`、ドラッグ中の要素の `onDrag` が呼び出されます。`onDrag` が受け取る `MouseButtonEvent` の座標は現在のマウス座標で、ボタンと修飾キーの情報はドラッグを開始した `mouseClick` のイベントから引き継がれます。ドラッグは要素の領域外でも継続し、`mouseRelease` を呼ぶと終了します。
+### Cascade、component、generated content
 
-```kotlin
-val element = layout.elementAt(mouseX.toFloat(), mouseY.toFloat())
-val handled = layout.mouseClick(event)
-val moveHandled = layout.mouseMove(mouseX, mouseY)
-val releaseHandled = layout.mouseRelease()
-```
+既存のtag、ID、class、scope、compound、selector list、combinator targetは、引き続きCSS specificityとsource orderへ参加します。container scoped sheetとcomponent sheetの境界も維持されます。
 
-`LayoutEngine.layout(root)` は描画せずにジオメトリを計算します。返されたレイアウトの `render(renderer)` を呼び出すと描画できます。`noneDisplay` の戻り値が変わった場合は自動的に再計算されますが、文字列、その他のスタイル、子要素を変更した後はレイアウトを再計算してください。
+pseudo-element ruleでは`UiPseudoStyle`と`UiGeneratedContent.Text`または`UiGeneratedContent.EmptyBox`を使います。生成boxのdisplay、sizing、positioning、flex item propertyも通常boxと同様に解決されます。
 
-計算済みレイアウトの位置だけを変える場合は、`left` / `top` を変更します。すべての要素とヒットテスト領域が一緒に移動します。`layout.render(renderer, left, top)` を使うと、移動と再描画を一度に行えます。
+`color`、`font`、`textShadow`、`textAlign`、`whiteSpace`は継承されます。backgroundやbox / drop shadowなどのpaint propertyは継承されません。
+
+### 結果、描画、入力
+
+`UiLayout.root`と`nodeOf(element)`は要素単位の互換viewです。`UiLayout.rootFragment`はanonymous boxと疑似要素を含むCSS fragment treeを公開し、`fragmentsOf(element)`はその要素が実際に生成したboxだけを返します。`display: none`ではfragmentを返しません。`display: contents`ではprincipal fragmentを返しませんが、生成された疑似要素自身のfragmentは返る場合があります。
 
 ```kotlin
-layout.left = 24f
-layout.top = 32f
+val node = layout.nodeOf(button)
+val fragments = layout.fragmentsOf(button)
+
 layout.render(draw)
-
-// 同等の短縮形
-layout.render(draw, left = 24f, top = 32f)
+val hit = layout.elementAt(mouseX, mouseY)
 ```
 
-`UiBoxShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius`、
-正負どちらも使える有限な `spreadRadius`、0以上の `cornerRadius` を指定できます。spreadとblurは
-描画だけを要素外へ広げ、要素のジオメトリやヒット領域を変更しません。影には現在のGUI poseと
-scissorが適用されます。Layout外で単独利用する場合は、前景boxの前に
-`Mine2DEngine.boxShadow(...)` を呼び出します。この組み込み効果が追従するのは矩形または
-角丸矩形です。任意のalpha形状に沿う影には、カスタムshaderまたはオフスクリーンmaskを使用してください。
+描画、shadow、hit test、hover、click、drag dispatchは最終的なCSS geometryを使います。計算済みlayoutの`left`または`top`だけを変更すると、node、fragment、hit regionが一緒に移動します。
 
-`UiDropShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius` を
-指定できます。要素の背景、文字、子孫ツリー全体を一時alpha maskへ合成し、そのGaussian blurを
-元の描画の背後へ1回描画します。このプロパティは継承されず、ネストにも対応し、CSSの1つの
-`filter: drop-shadow(offsetX offsetY blurRadius color)`に対応します。
-
-`UiTextShadow` ではARGBの `color`、有限な `offsetX` / `offsetY`、0以上の `blurRadius` を
-指定できます。他の文字プロパティと同様に子孫へ継承され、レイアウトやヒット領域には影響しません。
-継承したshadowを明示的に解除するには`UiTextShadow.NONE`を指定します。各値はCSSの1つの
-`text-shadow`に対応します。正のblurは文字列をずらして何度も描くのではなく、各glyphのalphaを
-Gaussian shaderでサンプリングし、glyphごとに1回で描画します。Layout外では、前景の`text(...)`の直前に
-`Mine2DEngine.textShadow(...)`を呼び出します。
+dynamic style providerが`UiDisplay.NONE`へ切り替わる、またはそこから戻る変化は、描画とpointer操作の前に検査され、geometryが自動再計算されます。それ以外のlayout property、text、stylesheet内容、childを変更した場合はlayoutを作り直してください。
 
 ## カスタムシェーダー
 

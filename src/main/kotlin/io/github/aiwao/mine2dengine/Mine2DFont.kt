@@ -45,6 +45,13 @@ class Mine2DFont private constructor(
             return metrics.lineHeight
         }
 
+    /** Distance from the top of a line box to this font's baseline. */
+    internal val baselineFromLineTop: Float
+        get() {
+            checkOpen()
+            return metrics.baselineFromLineTop
+        }
+
     /** Converts the top of this font's line box to Minecraft's fixed text origin. */
     internal val rendererOffsetFromLineTop: Float
         get() = metrics.rendererOffsetFromLineTop

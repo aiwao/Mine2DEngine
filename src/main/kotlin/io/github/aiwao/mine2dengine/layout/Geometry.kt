@@ -35,35 +35,3 @@ data class UiRect(
     fun contains(x: Float, y: Float): Boolean =
         x >= left && x < right && y >= top && y < bottom
 }
-
-/** CSS-like edge values in top, right, bottom, left order. */
-data class UiEdges(
-    val top: Float,
-    val right: Float,
-    val bottom: Float,
-    val left: Float,
-) {
-    constructor() : this(0f, 0f, 0f, 0f)
-
-    constructor(all: Float) : this(all, all, all, all)
-
-    constructor(vertical: Float, horizontal: Float) : this(
-        top = vertical,
-        right = horizontal,
-        bottom = vertical,
-        left = horizontal,
-    )
-
-    init {
-        require(top.isFinite() && top >= 0f) { "Top edge must be finite and non-negative: $top" }
-        require(right.isFinite() && right >= 0f) { "Right edge must be finite and non-negative: $right" }
-        require(bottom.isFinite() && bottom >= 0f) { "Bottom edge must be finite and non-negative: $bottom" }
-        require(left.isFinite() && left >= 0f) { "Left edge must be finite and non-negative: $left" }
-    }
-
-    val horizontal: Float
-        get() = left + right
-
-    val vertical: Float
-        get() = top + bottom
-}
