@@ -100,6 +100,7 @@ Coordinates are GUI coordinates, and colors are Minecraft ARGB integers (`0xAARR
 | --- | --- |
 | `polygon(...)` | Draws a simple convex or concave polygon. Use `Mine2DVertex` for per-vertex colors, or pass one color and JOML `Vector2fc` points. |
 | `quad(x, y, width, height, color)` | Draws a filled rectangle. |
+| `roundedRect(x, y, width, height, ..., color)` | Draws a filled rounded rectangle with one circular radius or independently elliptical corners. |
 | `line(startX, startY, endX, endY, width, color)` | Draws a filled line with butt caps. |
 | `circle(centerX, centerY, radius, color, segments)` | Draws a filled regular-polygon approximation of a circle. More segments produce a smoother edge. |
 | `boxShadow(x, y, width, height, ...)` | Draws a soft rounded-box shadow without drawing the box itself. |
@@ -107,7 +108,7 @@ Coordinates are GUI coordinates, and colors are Minecraft ARGB integers (`0xAARR
 | `text(font, text, x, y, color)` | Draws text using a loaded `Mine2DFont`. |
 | `withMaterial(material) { ... }` | Temporarily changes the default polygon material and restores it after the block. |
 
-Polygon points may use clockwise or counterclockwise order. A polygon must have at least three distinct points, a non-zero area, and no self-intersections. Consecutive duplicate points and redundant collinear points are removed automatically. Lines require different endpoints and a positive width; circles require a positive radius and at least three segments.
+Polygon points may use clockwise or counterclockwise order. A polygon must have at least three distinct points, a non-zero area, and no self-intersections. Consecutive duplicate points and redundant collinear points are removed automatically. Lines require different endpoints and a positive width; circles require a positive radius and at least three segments. Rounded rectangles are tessellated automatically according to their curvature, and overlapping radii are reduced with the common scale factor defined by CSS. Use `Mine2DRoundedRectRadii` and `Mine2DCornerRadius` to specify corners independently.
 
 The engine captures `graphics.pose()` and the active scissor rectangle for every call. You can therefore use Minecraft's GUI transforms and clipping normally:
 
@@ -255,6 +256,8 @@ A null property in `UiStyle` means “not declared.” CSS keywords are explicit
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
+import io.github.aiwao.mine2dengine.layout.UiBorderRadii
+import io.github.aiwao.mine2dengine.layout.UiCornerRadius
 import io.github.aiwao.mine2dengine.layout.UiMarginValue
 import io.github.aiwao.mine2dengine.layout.UiMargins
 import io.github.aiwao.mine2dengine.layout.UiPaddings
@@ -272,11 +275,17 @@ val style = UiStyle(
         left = UiMarginValue.AUTO,
     ),
     padding = UiPaddings(vertical = 6f, horizontal = 10f),
+    borderRadius = UiBorderRadii(
+        topLeft = UiCornerRadius(16f.px),
+        bottomRight = UiCornerRadius(50f.percent, 25f.percent),
+    ),
     boxSizing = UiBoxSizing.BORDER_BOX,
 )
 ```
 
 `Float.px` and `Float.percent` create length-percentage values. Negative lengths are accepted by margins and insets; sizes, padding, and gaps reject them. Padding percentages and physical margin percentages use the containing block's width, as in CSS.
+
+`borderRadius` changes only the painted border-box shape; it does not affect layout dimensions or clip descendants. Horizontal corner percentages use the border-box width and vertical percentages use its height. A box shadow follows the resolved border radius by default. To use the legacy equal radius, specify `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)`; a positive `cornerRadius` makes `followBorderRadius` default to false.
 
 Supported preferred/minimum/maximum size values are `AUTO`, `MIN_CONTENT`, `MAX_CONTENT`, `FitContent(...)`, and a length-percentage. Maximum sizes additionally accept `NONE`.
 
@@ -512,6 +521,7 @@ val panel = div(
         height = 40f.px,
         backgroundColor = 0xFFFFFFFF.toInt(),
         backgroundMaterial = roundedPanel,
+        borderRadius = UiBorderRadii(8f.px),
     ),
 )
 ```

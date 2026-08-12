@@ -1005,6 +1005,7 @@ internal class CssLayoutAlgorithm(
             color = null,
             backgroundColor = null,
             backgroundMaterial = null,
+            borderRadius = UiBorderRadii.ZERO,
             margin = UiMargins(),
             padding = UiPaddings(),
             display = UiDisplay.BLOCK,

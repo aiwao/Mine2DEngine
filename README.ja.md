@@ -100,6 +100,7 @@ object ExampleModClient : ClientModInitializer {
 | --- |------------------------------------------------------------------------------------------------------------------------|
 | `polygon(...)` | 単純な凸・凹ポリゴンを描画します。頂点ごとの色には `Mine2DVertex`、単色には色と JOML の `Vector2fc` の各点を渡します。 |
 | `quad(x, y, width, height, color)` | 塗りつぶした矩形を描画します。                                                                                         |
+| `roundedRect(x, y, width, height, ..., color)` | 単一の円形半径、または四隅ごとの楕円半径を持つ塗りつぶした角丸矩形を描画します。                                      |
 | `line(startX, startY, endX, endY, width, color)` | 端が平らな塗りつぶし線を描画します。                                                                                   |
 | `circle(centerX, centerY, radius, color, segments)` | 正多角形で近似した塗りつぶし円を描画します。segmentsを増やすほど輪郭が滑らかになります。                               |
 | `boxShadow(x, y, width, height, ...)` | 前景のbox自体を描かず、柔らかい角丸box shadowを描画します。                                                           |
@@ -107,7 +108,7 @@ object ExampleModClient : ClientModInitializer {
 | `text(font, text, x, y, color)` | 読み込み済みの `Mine2DFont` で文字列を描画します。                                                                                 |
 | `withMaterial(material) { ... }` | ブロック内だけ既定のポリゴンMaterialを変更し、終了後に元へ戻します。                                                |
 
-ポリゴンの各点は時計回り、反時計回りのどちらでも指定できます。3 個以上の異なる点と 0 ではない面積が必要で、自己交差はできません。連続する重複点と不要な同一直線上の点は自動的に取り除かれます。線には異なる始点・終点と正の幅、円には正の半径と 3 以上の分割数が必要です。
+ポリゴンの各点は時計回り、反時計回りのどちらでも指定できます。3 個以上の異なる点と 0 ではない面積が必要で、自己交差はできません。連続する重複点と不要な同一直線上の点は自動的に取り除かれます。線には異なる始点・終点と正の幅、円には正の半径と 3 以上の分割数が必要です。角丸矩形は曲率に応じて自動的に分割され、重なり合う半径はCSSと同じ共通係数で縮小されます。四隅を個別指定する場合は `Mine2DRoundedRectRadii` と `Mine2DCornerRadius` を使用します。
 
 エンジンは呼び出しごとに `graphics.pose()` と有効なシザー矩形を取得します。そのため、Minecraft の GUI 座標変換とクリッピングを通常どおり利用できます。
 
@@ -250,6 +251,8 @@ layout.updateViewport(
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
+import io.github.aiwao.mine2dengine.layout.UiBorderRadii
+import io.github.aiwao.mine2dengine.layout.UiCornerRadius
 import io.github.aiwao.mine2dengine.layout.UiMarginValue
 import io.github.aiwao.mine2dengine.layout.UiMargins
 import io.github.aiwao.mine2dengine.layout.UiPaddings
@@ -267,11 +270,17 @@ val style = UiStyle(
         left = UiMarginValue.AUTO,
     ),
     padding = UiPaddings(vertical = 6f, horizontal = 10f),
+    borderRadius = UiBorderRadii(
+        topLeft = UiCornerRadius(16f.px),
+        bottomRight = UiCornerRadius(50f.percent, 25f.percent),
+    ),
     boxSizing = UiBoxSizing.BORDER_BOX,
 )
 ```
 
 `Float.px`と`Float.percent`でlength-percentageを作ります。負のlengthはmarginとinsetでは利用できますが、size、padding、gapでは拒否されます。CSSと同様に、padding percentageと物理margin percentageは包含blockの幅を基準にします。
+
+`borderRadius`はborder boxの描画形状だけを変更し、レイアウト寸法や子要素のclipには影響しません。角半径の水平方向percentageはborder boxの幅、垂直方向percentageは高さを基準にします。box shadowも既定では解決済みのborder radiusを使用します。従来の単一半径を使う場合は `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)` を指定します。0より大きい `cornerRadius` では `followBorderRadius` の既定値がfalseになります。
 
 preferred / minimum / maximum sizeでは`AUTO`、`MIN_CONTENT`、`MAX_CONTENT`、`FitContent(...)`、length-percentageを利用できます。maximum sizeでは`NONE`も利用できます。
 
@@ -502,6 +511,7 @@ val panel = div(
         height = 40f.px,
         backgroundColor = 0xFFFFFFFF.toInt(),
         backgroundMaterial = roundedPanel,
+        borderRadius = UiBorderRadii(8f.px),
     ),
 )
 ```

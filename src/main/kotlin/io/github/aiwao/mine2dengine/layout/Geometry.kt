@@ -1,5 +1,8 @@
 package io.github.aiwao.mine2dengine.layout
 
+import io.github.aiwao.mine2dengine.Mine2DCornerRadius
+import io.github.aiwao.mine2dengine.Mine2DRoundedRectRadii
+
 /** Width and height in GUI coordinates. */
 data class UiSize(
     val width: Float,
@@ -34,4 +37,26 @@ data class UiRect(
     /** Uses half-open bounds, matching the pixels covered by a rendered rectangle. */
     fun contains(x: Float, y: Float): Boolean =
         x >= left && x < right && y >= top && y < bottom
+}
+
+/** A border-box shape after its length-percentage corner radii have been resolved. */
+internal data class UiRoundedBox(
+    val bounds: UiRect,
+    val radii: Mine2DRoundedRectRadii,
+)
+
+internal fun UiBorderRadii.resolve(bounds: UiRect): UiRoundedBox {
+    fun resolveCorner(value: UiCornerRadius): Mine2DCornerRadius = Mine2DCornerRadius(
+        horizontal = checkNotNull(value.horizontal.resolve(bounds.width)),
+        vertical = checkNotNull(value.vertical.resolve(bounds.height)),
+    )
+    return UiRoundedBox(
+        bounds = bounds,
+        radii = Mine2DRoundedRectRadii(
+            topLeft = resolveCorner(topLeft),
+            topRight = resolveCorner(topRight),
+            bottomRight = resolveCorner(bottomRight),
+            bottomLeft = resolveCorner(bottomLeft),
+        ).normalized(bounds.width, bounds.height),
+    )
 }

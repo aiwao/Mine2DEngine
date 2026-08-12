@@ -182,7 +182,8 @@ object Mine2DShaders {
         Vector2f(1f, 1f),
     )
     internal val SHADOW_BLUR_RADIUS = Mine2DUniform.float("BlurRadius", 0f)
-    internal val BOX_SHADOW_CORNER_RADIUS = Mine2DUniform.float("CornerRadius", 0f)
+    internal val BOX_SHADOW_CORNER_RADII_HORIZONTAL = Mine2DUniform.vec4("CornerRadiiHorizontal")
+    internal val BOX_SHADOW_CORNER_RADII_VERTICAL = Mine2DUniform.vec4("CornerRadiiVertical")
 
     /** Analytic rounded-box shadow used by [Mine2DEngine.boxShadow]. */
     internal val BOX_SHADOW: Mine2DShader = Mine2DShader.register(
@@ -194,7 +195,8 @@ object Mine2DShaders {
             BOX_SHADOW_COLOR,
             BOX_SHADOW_SIZE,
             SHADOW_BLUR_RADIUS,
-            BOX_SHADOW_CORNER_RADIUS,
+            BOX_SHADOW_CORNER_RADII_HORIZONTAL,
+            BOX_SHADOW_CORNER_RADII_VERTICAL,
         ),
     )
 

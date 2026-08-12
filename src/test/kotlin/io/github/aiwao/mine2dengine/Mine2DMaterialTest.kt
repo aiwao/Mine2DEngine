@@ -188,7 +188,12 @@ class Mine2DMaterialTest {
             width = 104f,
             height = 44f,
             blurRadius = 6f,
-            cornerRadius = 10f,
+            cornerRadii = Mine2DRoundedRectRadii(
+                topLeft = Mine2DCornerRadius(10f, 11f),
+                topRight = Mine2DCornerRadius(12f, 13f),
+                bottomRight = Mine2DCornerRadius(14f, 15f),
+                bottomLeft = Mine2DCornerRadius(16f, 17f),
+            ),
         )
         val data = material.resolveBindings(defaultContext()).uniforms().single().dataUnsafe()
         val buffer = ByteBuffer.wrap(data).order(ByteOrder.nativeOrder())
@@ -196,7 +201,8 @@ class Mine2DMaterialTest {
         assertFloatSequence(buffer, 0, 64f / 255f, 32f / 255f, 16f / 255f, 128f / 255f)
         assertFloatSequence(buffer, 16, 104f, 44f)
         assertEquals(6f, buffer.getFloat(24))
-        assertEquals(10f, buffer.getFloat(28))
+        assertFloatSequence(buffer, 32, 10f, 12f, 14f, 16f)
+        assertFloatSequence(buffer, 48, 11f, 13f, 15f, 17f)
     }
 
     @Test

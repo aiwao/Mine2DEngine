@@ -76,6 +76,7 @@ data class UiStyle(
     val boxShadow: UiBoxShadow? = null,
     val textShadow: UiTextShadow? = null,
     val dropShadow: UiDropShadow? = null,
+    val borderRadius: UiBorderRadii? = null,
 ) {
     companion object {
         const val DEFAULT_COLOR: Int = -1
@@ -125,6 +126,7 @@ internal data class ResolvedUiStyle(
     val color: Int?,
     val backgroundColor: Int?,
     val backgroundMaterial: Mine2DMaterial?,
+    val borderRadius: UiBorderRadii,
     val margin: UiMargins,
     val padding: UiPaddings,
     val display: UiDisplay,
@@ -168,6 +170,7 @@ internal fun UiStyle.resolveDefaults(
         color = color,
         backgroundColor = backgroundColor,
         backgroundMaterial = backgroundMaterial,
+        borderRadius = borderRadius ?: UiBorderRadii.ZERO,
         margin = margin.toMargins(),
         padding = padding.toPaddings(),
         display = display ?: initialDisplay,
@@ -237,6 +240,7 @@ internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
     color = overrides.color ?: color,
     backgroundColor = overrides.backgroundColor ?: backgroundColor,
     backgroundMaterial = overrides.backgroundMaterial ?: backgroundMaterial,
+    borderRadius = overrides.borderRadius ?: borderRadius,
     margin = overrides.margin ?: margin,
     padding = overrides.padding ?: padding,
     display = overrides.display ?: display,

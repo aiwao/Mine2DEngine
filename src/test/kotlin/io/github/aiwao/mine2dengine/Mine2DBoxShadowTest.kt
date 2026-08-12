@@ -38,6 +38,30 @@ class Mine2DBoxShadowTest {
     }
 
     @Test
+    fun `box shadow grows and normalizes independent elliptical corner radii`() {
+        val geometry = calculateBoxShadowGeometry(
+            x = 0f,
+            y = 0f,
+            width = 100f,
+            height = 40f,
+            offsetX = 0f,
+            offsetY = 0f,
+            blurRadius = 0f,
+            spreadRadius = 2f,
+            cornerRadii = Mine2DRoundedRectRadii(
+                topLeft = Mine2DCornerRadius(10f, 4f),
+                topRight = Mine2DCornerRadius(20f, 8f),
+                bottomRight = Mine2DCornerRadius(30f, 12f),
+                bottomLeft = Mine2DCornerRadius(40f, 16f),
+            ),
+        )!!
+
+        assertEquals(Mine2DCornerRadius(12f, 6f), geometry.radii.topLeft)
+        assertEquals(Mine2DCornerRadius(32f, 14f), geometry.radii.bottomRight)
+        assertEquals(Mine2DCornerRadius(42f, 18f), geometry.radii.bottomLeft)
+    }
+
+    @Test
     fun `box shadow geometry validates public drawing inputs`() {
         assertFailsWith<IllegalArgumentException> { geometry(width = -1f) }
         assertFailsWith<IllegalArgumentException> { geometry(blurRadius = -1f) }

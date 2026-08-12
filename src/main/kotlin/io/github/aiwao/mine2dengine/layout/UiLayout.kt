@@ -5,6 +5,7 @@ import io.github.aiwao.mine2dengine.Mine2DEngine
 import io.github.aiwao.mine2dengine.Mine2DFont
 import io.github.aiwao.mine2dengine.Mine2DMaterial
 import io.github.aiwao.mine2dengine.Mine2DMaterials
+import io.github.aiwao.mine2dengine.Mine2DRoundedRectRadii
 import io.github.aiwao.mine2dengine.Mine2DUniformRect
 import io.github.aiwao.mine2dengine.Mine2DVertex
 import net.minecraft.client.Minecraft
@@ -1119,6 +1120,7 @@ class UiLayout internal constructor(
         timeSeconds: Float,
     ) {
         val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
+        val roundedBox = style.borderRadius.resolve(node.bounds)
         style.boxShadow?.let { shadow ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
                 renderer.boxShadow(
@@ -1131,17 +1133,22 @@ class UiLayout internal constructor(
                     offsetY = shadow.offsetY,
                     blurRadius = shadow.blurRadius,
                     spreadRadius = shadow.spreadRadius,
-                    cornerRadius = shadow.cornerRadius,
+                    cornerRadii = if (shadow.followBorderRadius) {
+                        roundedBox.radii
+                    } else {
+                        Mine2DRoundedRectRadii(shadow.cornerRadius)
+                    },
                 )
             }
         }
         style.drawBackground(renderer.material) { color, material ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
-                renderer.quad(
+                renderer.roundedRect(
                     node.bounds.left,
                     node.bounds.top,
                     node.bounds.width,
                     node.bounds.height,
+                    roundedBox.radii,
                     color,
                     material,
                     renderer.uniformContext(
@@ -1594,6 +1601,7 @@ class UiLayout internal constructor(
         timeSeconds: Float,
     ) {
         val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
+        val roundedBox = style.borderRadius.resolve(node.bounds)
         style.boxShadow?.let { shadow ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
                 renderer.boxShadow(
@@ -1606,17 +1614,22 @@ class UiLayout internal constructor(
                     offsetY = shadow.offsetY,
                     blurRadius = shadow.blurRadius,
                     spreadRadius = shadow.spreadRadius,
-                    cornerRadius = shadow.cornerRadius,
+                    cornerRadii = if (shadow.followBorderRadius) {
+                        roundedBox.radii
+                    } else {
+                        Mine2DRoundedRectRadii(shadow.cornerRadius)
+                    },
                 )
             }
         }
         style.drawBackground(renderer.material) { color, material ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
-                renderer.quad(
+                renderer.roundedRect(
                     node.bounds.left,
                     node.bounds.top,
                     node.bounds.width,
                     node.bounds.height,
+                    roundedBox.radii,
                     color,
                     material,
                     renderer.uniformContext(

@@ -101,6 +101,69 @@ class Mine2DEngine(
         enqueueQuad(x, y, width, height, color, material, uniformContext)
     }
 
+    /** Draws a filled rounded rectangle with four equal circular corners using [material]. */
+    fun roundedRect(
+        x: Float,
+        y: Float,
+        width: Float,
+        height: Float,
+        cornerRadius: Float,
+        color: Int,
+    ) {
+        roundedRect(x, y, width, height, Mine2DRoundedRectRadii(cornerRadius), color, material)
+    }
+
+    /** Draws a filled rounded rectangle with four equal circular corners. */
+    fun roundedRect(
+        x: Float,
+        y: Float,
+        width: Float,
+        height: Float,
+        cornerRadius: Float,
+        color: Int,
+        material: Mine2DMaterial,
+    ) {
+        roundedRect(x, y, width, height, Mine2DRoundedRectRadii(cornerRadius), color, material)
+    }
+
+    /** Draws a filled rounded rectangle with independently elliptical [radii] using [material]. */
+    fun roundedRect(
+        x: Float,
+        y: Float,
+        width: Float,
+        height: Float,
+        radii: Mine2DRoundedRectRadii,
+        color: Int,
+    ) {
+        roundedRect(x, y, width, height, radii, color, material)
+    }
+
+    /** Draws a filled rounded rectangle with independently elliptical [radii]. */
+    fun roundedRect(
+        x: Float,
+        y: Float,
+        width: Float,
+        height: Float,
+        radii: Mine2DRoundedRectRadii,
+        color: Int,
+        material: Mine2DMaterial,
+    ) {
+        enqueueRoundedRect(x, y, width, height, radii, color, material, uniformContext = null)
+    }
+
+    internal fun roundedRect(
+        x: Float,
+        y: Float,
+        width: Float,
+        height: Float,
+        radii: Mine2DRoundedRectRadii,
+        color: Int,
+        material: Mine2DMaterial,
+        uniformContext: Mine2DUniformContext,
+    ) {
+        enqueueRoundedRect(x, y, width, height, radii, color, material, uniformContext)
+    }
+
     /** Draws a line segment of [width] as a filled quadrilateral with butt caps. */
     fun line(
         startX: Float,
@@ -206,17 +269,59 @@ class Mine2DEngine(
         spreadRadius: Float = 0f,
         cornerRadius: Float = 0f,
     ) {
-        val geometry = calculateBoxShadowGeometry(
-            x = x,
-            y = y,
-            width = width,
-            height = height,
-            offsetX = offsetX,
-            offsetY = offsetY,
+        drawBoxShadow(
+            geometry = calculateBoxShadowGeometry(
+                x = x,
+                y = y,
+                width = width,
+                height = height,
+                offsetX = offsetX,
+                offsetY = offsetY,
+                blurRadius = blurRadius,
+                spreadRadius = spreadRadius,
+                cornerRadius = cornerRadius,
+            ) ?: return,
+            color = color,
             blurRadius = blurRadius,
-            spreadRadius = spreadRadius,
-            cornerRadius = cornerRadius,
-        ) ?: return
+        )
+    }
+
+    /** Draws a soft box shadow with independently elliptical [cornerRadii]. */
+    @JvmOverloads
+    fun boxShadow(
+        x: Float,
+        y: Float,
+        width: Float,
+        height: Float,
+        cornerRadii: Mine2DRoundedRectRadii,
+        color: Int = 0x80000000.toInt(),
+        offsetX: Float = 0f,
+        offsetY: Float = 0f,
+        blurRadius: Float = 4f,
+        spreadRadius: Float = 0f,
+    ) {
+        drawBoxShadow(
+            geometry = calculateBoxShadowGeometry(
+                x = x,
+                y = y,
+                width = width,
+                height = height,
+                offsetX = offsetX,
+                offsetY = offsetY,
+                blurRadius = blurRadius,
+                spreadRadius = spreadRadius,
+                cornerRadii = cornerRadii,
+            ) ?: return,
+            color = color,
+            blurRadius = blurRadius,
+        )
+    }
+
+    private fun drawBoxShadow(
+        geometry: Mine2DBoxShadowGeometry,
+        color: Int,
+        blurRadius: Float,
+    ) {
         if (color ushr 24 == 0) return
 
         val material = Mine2DMaterials.boxShadow(
@@ -224,7 +329,7 @@ class Mine2DEngine(
             width = geometry.shadowWidth,
             height = geometry.shadowHeight,
             blurRadius = blurRadius,
-            cornerRadius = geometry.cornerRadius,
+            cornerRadii = geometry.radii,
         )
         enqueuePolygon(
             listOf(
@@ -435,12 +540,33 @@ class Mine2DEngine(
         )
     }
 
+    private fun enqueueRoundedRect(
+        x: Float,
+        y: Float,
+        width: Float,
+        height: Float,
+        radii: Mine2DRoundedRectRadii,
+        color: Int,
+        material: Mine2DMaterial,
+        uniformContext: Mine2DUniformContext?,
+    ) {
+        val polygon = triangulateRoundedRect(x, y, width, height, radii, color) ?: return
+        enqueuePolygon(polygon, material, uniformContext)
+    }
+
     private fun enqueuePolygon(
         vertices: Iterable<Mine2DVertex>,
         material: Mine2DMaterial,
         uniformContext: Mine2DUniformContext?,
     ) {
-        val polygon = PolygonTriangulator.triangulate(vertices)
+        enqueuePolygon(PolygonTriangulator.triangulate(vertices), material, uniformContext)
+    }
+
+    private fun enqueuePolygon(
+        polygon: TriangulatedPolygon,
+        material: Mine2DMaterial,
+        uniformContext: Mine2DUniformContext?,
+    ) {
         val context = uniformContext ?: defaultUniformContext(polygon)
         graphics.guiRenderState.addGuiElement(
             PolygonRenderState(

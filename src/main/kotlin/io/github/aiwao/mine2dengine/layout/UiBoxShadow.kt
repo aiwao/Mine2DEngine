@@ -2,14 +2,17 @@ package io.github.aiwao.mine2dengine.layout
 
 import io.github.aiwao.mine2dengine.validateShadowParameters
 
-/** A soft rounded-box shadow painted behind one UI element without affecting its layout bounds. */
+/** A soft box shadow painted behind one UI element without affecting its layout bounds. */
 data class UiBoxShadow(
     val color: Int = 0x80000000.toInt(),
     val offsetX: Float = 0f,
     val offsetY: Float = 0f,
     val blurRadius: Float = 4f,
     val spreadRadius: Float = 0f,
+    /** Legacy equal circular radius used when [followBorderRadius] is false. */
     val cornerRadius: Float = 0f,
+    /** Whether the shadow follows its element's resolved `border-radius`. */
+    val followBorderRadius: Boolean = cornerRadius == 0f,
 ) {
     init {
         validateShadowParameters("Box shadow", offsetX, offsetY, blurRadius)

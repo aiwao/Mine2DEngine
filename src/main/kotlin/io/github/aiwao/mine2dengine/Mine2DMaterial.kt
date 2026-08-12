@@ -162,12 +162,29 @@ object Mine2DMaterials {
         width: Float,
         height: Float,
         blurRadius: Float,
-        cornerRadius: Float,
+        cornerRadii: Mine2DRoundedRectRadii,
     ): Mine2DMaterial = Mine2DShaders.BOX_SHADOW.material {
         set(Mine2DShaders.BOX_SHADOW_COLOR, color.toRgbaVector())
         set(Mine2DShaders.BOX_SHADOW_SIZE, Vector2f(width, height))
         set(Mine2DShaders.SHADOW_BLUR_RADIUS, blurRadius)
-        set(Mine2DShaders.BOX_SHADOW_CORNER_RADIUS, cornerRadius)
+        set(
+            Mine2DShaders.BOX_SHADOW_CORNER_RADII_HORIZONTAL,
+            Vector4f(
+                cornerRadii.topLeft.horizontal,
+                cornerRadii.topRight.horizontal,
+                cornerRadii.bottomRight.horizontal,
+                cornerRadii.bottomLeft.horizontal,
+            ),
+        )
+        set(
+            Mine2DShaders.BOX_SHADOW_CORNER_RADII_VERTICAL,
+            Vector4f(
+                cornerRadii.topLeft.vertical,
+                cornerRadii.topRight.vertical,
+                cornerRadii.bottomRight.vertical,
+                cornerRadii.bottomLeft.vertical,
+            ),
+        )
     }
 
     internal fun dropShadow(

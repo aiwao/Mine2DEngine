@@ -34,7 +34,13 @@ class Mine2DShaderTest {
         assertFalse(pipeline.isCull)
         assertEquals("Mine2DBoxShadow", shader.uniformBlock?.name)
         assertEquals(
-            listOf("ShadowColor", "ShadowSize", "BlurRadius", "CornerRadius"),
+            listOf(
+                "ShadowColor",
+                "ShadowSize",
+                "BlurRadius",
+                "CornerRadiiHorizontal",
+                "CornerRadiiVertical",
+            ),
             shader.uniformBlock?.uniforms?.map(Mine2DUniform<*>::name),
         )
         assertTrue(shader.samplers.isEmpty())

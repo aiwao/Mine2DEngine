@@ -233,6 +233,62 @@ data class UiPaddings(
     }
 }
 
+/** Horizontal and vertical CSS length-percentage radii of one physical corner. */
+data class UiCornerRadius(
+    val horizontal: UiLength,
+    val vertical: UiLength = horizontal,
+) {
+    /** Creates a circular radius in CSS pixels. */
+    constructor(all: Float) : this(all.px)
+
+    /** Creates an elliptical radius in CSS pixels. */
+    constructor(horizontal: Float, vertical: Float) : this(horizontal.px, vertical.px)
+
+    init {
+        require(horizontal.value >= 0f) {
+            "A horizontal border radius must be non-negative: $horizontal"
+        }
+        require(vertical.value >= 0f) {
+            "A vertical border radius must be non-negative: $vertical"
+        }
+    }
+
+    companion object {
+        @JvmField
+        val ZERO = UiCornerRadius(0f.px)
+    }
+}
+
+/** Physical `border-radius` values in top-left, top-right, bottom-right, bottom-left order. */
+data class UiBorderRadii(
+    val topLeft: UiCornerRadius = UiCornerRadius.ZERO,
+    val topRight: UiCornerRadius = UiCornerRadius.ZERO,
+    val bottomRight: UiCornerRadius = UiCornerRadius.ZERO,
+    val bottomLeft: UiCornerRadius = UiCornerRadius.ZERO,
+) {
+    /** Creates four equal circular radii. */
+    constructor(all: UiLength) : this(UiCornerRadius(all))
+
+    /** Creates four equal circular radii in CSS pixels. */
+    constructor(all: Float) : this(all.px)
+
+    /** Creates four equal elliptical radii. */
+    constructor(horizontal: UiLength, vertical: UiLength) : this(
+        UiCornerRadius(horizontal, vertical),
+    )
+
+    /** Creates four equal elliptical radii in CSS pixels. */
+    constructor(horizontal: Float, vertical: Float) : this(horizontal.px, vertical.px)
+
+    /** Creates four equal corner radii. */
+    constructor(all: UiCornerRadius) : this(all, all, all, all)
+
+    companion object {
+        @JvmField
+        val ZERO = UiBorderRadii()
+    }
+}
+
 enum class UiFlexDirection {
     ROW,
     ROW_REVERSE,
