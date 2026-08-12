@@ -6,6 +6,7 @@ import io.github.aiwao.mine2dengine.Mine2DFont
 import io.github.aiwao.mine2dengine.Mine2DMaterial
 import io.github.aiwao.mine2dengine.Mine2DMaterials
 import io.github.aiwao.mine2dengine.Mine2DUniformRect
+import io.github.aiwao.mine2dengine.Mine2DVertex
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.ComponentPath
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -26,6 +27,25 @@ import org.lwjgl.glfw.GLFW
 import java.util.IdentityHashMap
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.max
+
+internal data class ColorPickerGeometry(
+    val bounds: UiRect,
+    val saturationValueBounds: UiRect,
+    val hueBounds: UiRect,
+)
+
+private enum class ColorPickerDragTarget {
+    SATURATION_VALUE,
+    HUE,
+}
+
+private const val COLOR_PICKER_PADDING = 6f
+private const val COLOR_PICKER_GAP = 6f
+private const val COLOR_PICKER_ANCHOR_GAP = 2f
+private const val COLOR_PICKER_SATURATION_VALUE_WIDTH = 96f
+private const val COLOR_PICKER_HUE_WIDTH = 12f
+private const val COLOR_PICKER_HEIGHT = 76f
 
 internal data class UiDisplayKey(
     val element: UiElement,
@@ -148,7 +168,8 @@ class UiLayout internal constructor(
 
     private var dragButtonInfo: MouseButtonInfo? = null
     private var screenFocused: Boolean = false
-    private var pendingNavigationFocus: TextInput? = null
+    private var pendingNavigationFocus: InputControl? = null
+    private var colorPickerDragTarget: ColorPickerDragTarget? = null
     private var lastPointerX: Double? = null
     private var lastPointerY: Double? = null
     private var pointerGeometryDirty: Boolean = true
@@ -242,7 +263,7 @@ class UiLayout internal constructor(
     ): Boolean {
         val next = when (element) {
             null -> null
-            is TextInput -> element
+            is InputControl -> element
             else -> return false
         }
         if (
@@ -254,15 +275,22 @@ class UiLayout internal constructor(
             return false
         }
 
-        val previous = focusedElement as? TextInput
+        val previous = focusedElement as? InputControl
         if (previous === next) return true
 
+        val previouslyUsedPlatformTextInput = previous?.usesPlatformTextInput == true
+        val nextUsesPlatformTextInput = next?.usesPlatformTextInput == true
         focusedElement = next
         previous?.focusLost()
         next?.focusGained()
+        colorPickerDragTarget = null
 
-        if (notifyPlatform && screenFocused) {
-            notifyPlatformTextInputFocus(next != null)
+        if (
+            notifyPlatform &&
+            screenFocused &&
+            previouslyUsedPlatformTextInput != nextUsesPlatformTextInput
+        ) {
+            notifyPlatformTextInputFocus(nextUsesPlatformTextInput)
         }
         return true
     }
@@ -272,7 +300,7 @@ class UiLayout internal constructor(
     }
 
     private fun refreshFocusValidity() {
-        val focused = focusedElement as? TextInput ?: return
+        val focused = focusedElement as? InputControl ?: return
         if (
             focused.disabled ||
             nodesInPaintOrder().none { node -> node.displayed && node.element === focused }
@@ -281,11 +309,11 @@ class UiLayout internal constructor(
         }
     }
 
-    private fun focusableTextInputs(): List<TextInput> = nodesInPaintOrder()
+    private fun focusableInputControls(): List<InputControl> = nodesInPaintOrder()
         .asSequence()
         .filter(UiLayoutNode::displayed)
         .map(UiLayoutNode::element)
-        .filterIsInstance<TextInput>()
+        .filterIsInstance<InputControl>()
         .filterNot(UiElement::disabled)
         .distinct()
         .toList()
@@ -309,7 +337,7 @@ class UiLayout internal constructor(
 
     override fun setFocused(focused: Boolean) {
         if (!focused) {
-            val hadTextFocus = focusedElement is TextInput
+            val hadTextFocus = (focusedElement as? InputControl)?.usesPlatformTextInput == true
             val wasScreenFocused = screenFocused
             screenFocused = false
             focusInternal(null, notifyPlatform = false)
@@ -323,7 +351,9 @@ class UiLayout internal constructor(
             focusInternal(target, notifyPlatform = false)
         }
         pendingNavigationFocus = null
-        if (focusedElement is TextInput) notifyPlatformTextInputFocus(true)
+        if ((focusedElement as? InputControl)?.usesPlatformTextInput == true) {
+            notifyPlatformTextInputFocus(true)
+        }
     }
 
     override fun isFocused(): Boolean = screenFocused
@@ -332,7 +362,8 @@ class UiLayout internal constructor(
         refreshDisplay()
         val layoutX = x.toFloat()
         val layoutY = y.toFloat()
-        return hitRegionsInPaintOrder().any { region -> region.bounds.contains(layoutX, layoutY) }
+        return openColorPickerGeometry()?.bounds?.contains(layoutX, layoutY) == true ||
+            hitRegionsInPaintOrder().any { region -> region.bounds.contains(layoutX, layoutY) }
     }
 
     override fun getRectangle(): ScreenRectangle {
@@ -351,7 +382,7 @@ class UiLayout internal constructor(
     override fun nextFocusPath(event: FocusNavigationEvent): ComponentPath? {
         refreshDisplay()
         refreshFocusValidity()
-        val inputs = focusableTextInputs()
+        val inputs = focusableInputControls()
         if (inputs.isEmpty()) return null
 
         val forward = when (event) {
@@ -372,23 +403,21 @@ class UiLayout internal constructor(
     }
 
     override fun narrationPriority(): NarratableEntry.NarrationPriority = when {
-        focusedElement is TextInput -> NarratableEntry.NarrationPriority.FOCUSED
-        nodesInPaintOrder().any { node -> node.element is TextInput && node.element.hovering } ->
+        focusedElement is InputControl -> NarratableEntry.NarrationPriority.FOCUSED
+        nodesInPaintOrder().any { node -> node.element is InputControl && node.element.hovering } ->
             NarratableEntry.NarrationPriority.HOVERED
 
         else -> NarratableEntry.NarrationPriority.NONE
     }
 
     override fun updateNarration(output: NarrationElementOutput) {
-        val input = (focusedElement as? TextInput) ?: nodesInPaintOrder()
+        val input = (focusedElement as? InputControl) ?: nodesInPaintOrder()
             .asReversed()
             .map(UiLayoutNode::element)
-            .filterIsInstance<TextInput>()
+            .filterIsInstance<InputControl>()
             .firstOrNull(UiElement::hovering)
             ?: return
-        val label = input.placeholder.ifBlank { "Text input" }
-        val narration = if (input.value.isEmpty()) label else "$label: ${input.value}"
-        output.add(NarratedElementType.TITLE, Component.literal(narration))
+        output.add(NarratedElementType.TITLE, Component.literal(input.narration()))
     }
 
     /** Renders this layout, recalculating geometry when a none-display value changes. */
@@ -396,6 +425,7 @@ class UiLayout internal constructor(
         refreshDisplay()
         refreshFocusValidity()
         draw(root, renderer, ResolvedUiTextStyle(), renderer.uniformTimeSeconds())
+        drawOpenColorPicker(renderer)
     }
 
     /** Moves this layout to [left], [top], then renders it without recalculating its size. */
@@ -407,6 +437,10 @@ class UiLayout internal constructor(
     /** Finds the deepest element at the given GUI coordinate. */
     fun elementAt(x: Float, y: Float): UiElement? {
         refreshDisplay()
+        val openColorInput = openColorInput()
+        if (openColorInput != null && openColorPickerGeometry()?.bounds?.contains(x, y) == true) {
+            return openColorInput
+        }
         return hitRegionsInPaintOrder()
             .asReversed()
             .firstOrNull { region -> region.bounds.contains(x, y) }
@@ -415,7 +449,8 @@ class UiLayout internal constructor(
 
     /**
      * Invokes the topmost clickable element at the GUI coordinate in [event].
-     * Elements with an [UiElement.onClick] or [UiElement.onDrag] callback and [TextInput] elements
+     * Elements with an [UiElement.onClick] or [UiElement.onDrag] callback and [InputControl]
+     * elements
      * are clickable. The hit element starts dragging until [mouseRelease] is called. Its
      * [UiElement.onClick] callback is not invoked while [UiElement.disabled] is true. Returns true
      * when one was hit.
@@ -429,37 +464,64 @@ class UiLayout internal constructor(
         val x = event.x().toFloat()
         val y = event.y().toFloat()
         val nodes = nodesInPaintOrder()
+        val openColorInput = openColorInput()
+        val pickerGeometry = openColorPickerGeometry()
+        if (openColorInput != null && pickerGeometry != null) {
+            if (pickerGeometry.bounds.contains(x, y)) {
+                nodes.forEach { node -> node.element.dragging = false }
+                dragButtonInfo = null
+                colorPickerDragTarget = null
+                if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                    colorPickerDragTarget = when {
+                        pickerGeometry.saturationValueBounds.contains(x, y) ->
+                            ColorPickerDragTarget.SATURATION_VALUE
+
+                        pickerGeometry.hueBounds.contains(x, y) -> ColorPickerDragTarget.HUE
+                        else -> null
+                    }
+                    updateColorPickerFromPointer(openColorInput, pickerGeometry, x, y)
+                }
+                return true
+            }
+            openColorInput.commitPicker()
+            colorPickerDragTarget = null
+        }
         val hitRegions = hitRegionsInPaintOrder()
         val element = hitRegions.asReversed()
             .firstOrNull { region ->
                 (region.element.onClick != null ||
                     region.element.onDrag != null ||
-                    region.element is TextInput) &&
+                    region.element is InputControl) &&
                     region.bounds.contains(x, y)
             }
             ?.element
-        val focusedInput = (element as? TextInput)?.takeUnless(UiElement::disabled)
+        val focusedInput = (element as? InputControl)?.takeUnless(UiElement::disabled)
         focusInternal(focusedInput)
         element ?: return false
 
         nodes.forEach { node -> node.element.dragging = false }
         dragButtonInfo = null
-        if (element.disabled && element is TextInput) return true
+        if (element.disabled && element is InputControl) return true
 
         element.dragging = true
         dragButtonInfo = event.buttonInfo()
-        if (element is TextInput && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-            nodes
-                .asReversed()
-                .firstOrNull { node -> node.element === element }
-                ?.let { node ->
-                    val index = textInputIndexAt(node, event.x().toFloat())
-                    if (doubleClick) {
-                        element.selectWordAt(index)
-                    } else {
-                        element.moveTo(index, extendSelection = event.hasShiftDown())
+        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            when (element) {
+                is TextInput -> nodes
+                    .asReversed()
+                    .firstOrNull { node -> node.element === element }
+                    ?.let { node ->
+                        val index = textInputIndexAt(node, event.x().toFloat())
+                        if (doubleClick) {
+                            element.selectWordAt(index)
+                        } else {
+                            element.moveTo(index, extendSelection = event.hasShiftDown())
+                        }
                     }
-                }
+
+                is ColorInput -> element.openPicker()
+                else -> Unit
+            }
         }
         if (!element.disabled) {
             element.onClick?.invoke(event)
@@ -491,6 +553,17 @@ class UiLayout internal constructor(
             region.element === element && region.bounds.contains(layoutX, layoutY)
         }
         var handled = false
+
+        val pickerInput = openColorInput()
+        val pickerGeometry = openColorPickerGeometry()
+        if (
+            pickerInput != null &&
+            pickerGeometry != null &&
+            colorPickerDragTarget != null
+        ) {
+            updateColorPickerFromPointer(pickerInput, pickerGeometry, layoutX, layoutY)
+            handled = true
+        }
 
         nodes
             .asReversed()
@@ -563,13 +636,15 @@ class UiLayout internal constructor(
     /** Stops the current drag. Returns true when an element was dragging. */
     fun mouseRelease(): Boolean {
         refreshDisplay()
+        val wasDraggingPicker = colorPickerDragTarget != null
+        colorPickerDragTarget = null
         val draggingElements = nodesInPaintOrder()
             .map(UiLayoutNode::element)
             .filter(UiElement::dragging)
             .distinct()
         if (draggingElements.isEmpty()) {
             dragButtonInfo = null
-            return false
+            return wasDraggingPicker
         }
 
         draggingElements.forEach { element -> element.dragging = false }
@@ -579,14 +654,14 @@ class UiLayout internal constructor(
 
     override fun mouseReleased(event: MouseButtonEvent): Boolean = mouseRelease()
 
-    /** Dispatches a key press to the focused text input. */
+    /** Dispatches a key press to the focused input control. */
     override fun keyPressed(event: KeyEvent): Boolean {
         refreshDisplay()
         refreshFocusValidity()
 
         if (event.isCycleFocus()) {
             if (screenFocused) return false
-            val inputs = focusableTextInputs()
+            val inputs = focusableInputControls()
             if (inputs.isEmpty()) return false
             val currentIndex = inputs.indexOfFirst { input -> input === focusedElement }
             val nextIndex = if (event.hasShiftDown()) {
@@ -597,7 +672,10 @@ class UiLayout internal constructor(
             return focusInternal(inputs[nextIndex])
         }
 
-        val input = focusedElement as? TextInput ?: return false
+        val focused = focusedElement as? InputControl ?: return false
+        if (focused is ColorInput) return colorInputKeyPressed(focused, event)
+
+        val input = focused as TextInput
         if (event.isSelectAll()) {
             input.selectAll()
             return true
@@ -718,6 +796,128 @@ class UiLayout internal constructor(
             node.children.forEach(::addTree)
         }
         addTree(root)
+    }
+
+    internal fun colorPickerGeometry(input: ColorInput): ColorPickerGeometry? {
+        val node = nodesInPaintOrder().firstOrNull { node ->
+            node.displayed && node.element === input
+        } ?: return null
+        val width = COLOR_PICKER_PADDING * 2f +
+            COLOR_PICKER_SATURATION_VALUE_WIDTH +
+            COLOR_PICKER_GAP +
+            COLOR_PICKER_HUE_WIDTH
+        val height = COLOR_PICKER_PADDING * 2f + COLOR_PICKER_HEIGHT
+        val maximumLeft = max(viewport.left, viewport.right - width)
+        val left = node.bounds.left.coerceIn(viewport.left, maximumLeft)
+        val below = node.bounds.bottom + COLOR_PICKER_ANCHOR_GAP
+        val top = if (below + height <= viewport.bottom) {
+            below
+        } else {
+            max(viewport.top, node.bounds.top - COLOR_PICKER_ANCHOR_GAP - height)
+        }
+        val saturationValueBounds = UiRect(
+            left = left + COLOR_PICKER_PADDING,
+            top = top + COLOR_PICKER_PADDING,
+            width = COLOR_PICKER_SATURATION_VALUE_WIDTH,
+            height = COLOR_PICKER_HEIGHT,
+        )
+        return ColorPickerGeometry(
+            bounds = UiRect(left, top, width, height),
+            saturationValueBounds = saturationValueBounds,
+            hueBounds = UiRect(
+                left = saturationValueBounds.right + COLOR_PICKER_GAP,
+                top = saturationValueBounds.top,
+                width = COLOR_PICKER_HUE_WIDTH,
+                height = COLOR_PICKER_HEIGHT,
+            ),
+        )
+    }
+
+    private fun openColorInput(): ColorInput? =
+        (focusedElement as? ColorInput)?.takeIf(ColorInput::pickerOpen)
+
+    private fun openColorPickerGeometry(): ColorPickerGeometry? =
+        openColorInput()?.let(::colorPickerGeometry)
+
+    private fun updateColorPickerFromPointer(
+        input: ColorInput,
+        geometry: ColorPickerGeometry,
+        x: Float,
+        y: Float,
+    ) {
+        when (colorPickerDragTarget) {
+            ColorPickerDragTarget.SATURATION_VALUE -> {
+                val saturation =
+                    ((x - geometry.saturationValueBounds.left) /
+                        geometry.saturationValueBounds.width).coerceIn(0f, 1f)
+                val brightness =
+                    (1f - (y - geometry.saturationValueBounds.top) /
+                        geometry.saturationValueBounds.height).coerceIn(0f, 1f)
+                input.updateSaturationValue(saturation, brightness)
+            }
+
+            ColorPickerDragTarget.HUE -> {
+                val hue =
+                    ((y - geometry.hueBounds.top) / geometry.hueBounds.height)
+                        .coerceIn(0f, 0.999_999f) * 360f
+                input.updateHue(hue)
+            }
+
+            null -> Unit
+        }
+    }
+
+    private fun colorInputKeyPressed(input: ColorInput, event: KeyEvent): Boolean {
+        when (event.key()) {
+            GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
+                if (input.pickerOpen) input.commitPicker() else input.openPicker()
+                return true
+            }
+
+            GLFW.GLFW_KEY_ESCAPE -> {
+                if (!input.pickerOpen) return false
+                input.cancelPicker()
+                colorPickerDragTarget = null
+                return true
+            }
+        }
+        if (!input.pickerOpen) return false
+
+        val amount = if (event.hasShiftDown()) 0.1f else 0.01f
+        val state = input.pickerState()
+        return when (event.key()) {
+            GLFW.GLFW_KEY_LEFT -> {
+                input.updateSaturationValue(state.saturation - amount, state.value)
+                true
+            }
+
+            GLFW.GLFW_KEY_RIGHT -> {
+                input.updateSaturationValue(state.saturation + amount, state.value)
+                true
+            }
+
+            GLFW.GLFW_KEY_UP -> {
+                input.updateSaturationValue(state.saturation, state.value + amount)
+                true
+            }
+
+            GLFW.GLFW_KEY_DOWN -> {
+                input.updateSaturationValue(state.saturation, state.value - amount)
+                true
+            }
+
+            GLFW.GLFW_KEY_PAGE_UP -> {
+                input.adjustHue(if (event.hasShiftDown()) 15f else 1f)
+                true
+            }
+
+            GLFW.GLFW_KEY_PAGE_DOWN -> {
+                input.adjustHue(if (event.hasShiftDown()) -15f else -1f)
+                true
+            }
+
+            else -> false
+        }
     }
 
     private fun textInputIndexAt(
@@ -953,8 +1153,17 @@ class UiLayout internal constructor(
             }
         }
 
-        (node.element as? TextInput)?.let { input ->
-            drawTextInput(node, input, resolvedTextStyle, requireFont(node), renderer)
+        when (val element = node.element) {
+            is TextInput -> drawTextInput(
+                node,
+                element,
+                resolvedTextStyle,
+                requireFont(node),
+                renderer,
+            )
+
+            is ColorInput -> drawColorInput(node, element, renderer)
+            else -> Unit
         }
 
         paintContents(node, style).forEach { content ->
@@ -985,6 +1194,187 @@ class UiLayout internal constructor(
                     draw(content.node, renderer, resolvedTextStyle, timeSeconds)
             }
         }
+    }
+
+    private fun drawColorInput(
+        node: UiLayoutNode,
+        input: ColorInput,
+        renderer: Mine2DEngine,
+    ) {
+        if (input.hovering) {
+            renderer.graphics.requestCursor(
+                if (input.disabled) CursorTypes.NOT_ALLOWED else CursorTypes.POINTING_HAND,
+            )
+        }
+        val content = node.contentBounds
+        if (content.width <= 0f || content.height <= 0f) return
+
+        val borderColor = when {
+            input.disabled -> 0xFF555555.toInt()
+            input.focused -> 0xFFFFFFFF.toInt()
+            else -> 0xFF909090.toInt()
+        }
+        renderer.quad(
+            content.left,
+            content.top,
+            content.width,
+            content.height,
+            borderColor,
+            Mine2DMaterials.COLOR,
+        )
+        val border = 2f.coerceAtMost(minOf(content.width, content.height) / 2f)
+        val innerWidth = (content.width - border * 2f).coerceAtLeast(0f)
+        val innerHeight = (content.height - border * 2f).coerceAtLeast(0f)
+        if (innerWidth > 0f && innerHeight > 0f) {
+            renderer.quad(
+                content.left + border,
+                content.top + border,
+                innerWidth,
+                innerHeight,
+                input.value,
+                Mine2DMaterials.COLOR,
+            )
+            if (input.disabled) {
+                renderer.quad(
+                    content.left + border,
+                    content.top + border,
+                    innerWidth,
+                    innerHeight,
+                    0x88000000.toInt(),
+                    Mine2DMaterials.COLOR,
+                )
+            }
+        }
+    }
+
+    private fun drawOpenColorPicker(renderer: Mine2DEngine) {
+        val input = openColorInput() ?: return
+        val geometry = colorPickerGeometry(input) ?: return
+        val state = input.pickerState()
+
+        renderer.quad(
+            geometry.bounds.left - 1f,
+            geometry.bounds.top - 1f,
+            geometry.bounds.width + 2f,
+            geometry.bounds.height + 2f,
+            0xFF000000.toInt(),
+            Mine2DMaterials.COLOR,
+        )
+        renderer.quad(
+            geometry.bounds.left,
+            geometry.bounds.top,
+            geometry.bounds.width,
+            geometry.bounds.height,
+            0xFF252525.toInt(),
+            Mine2DMaterials.COLOR,
+        )
+
+        val hueColor = hsvToArgb(state.hue, 1f, 1f)
+        drawGradientQuad(
+            renderer,
+            geometry.saturationValueBounds,
+            topLeft = 0xFFFFFFFF.toInt(),
+            topRight = hueColor,
+            bottomRight = hueColor,
+            bottomLeft = 0xFFFFFFFF.toInt(),
+        )
+        drawGradientQuad(
+            renderer,
+            geometry.saturationValueBounds,
+            topLeft = 0x00000000,
+            topRight = 0x00000000,
+            bottomRight = 0xFF000000.toInt(),
+            bottomLeft = 0xFF000000.toInt(),
+        )
+
+        repeat(6) { section ->
+            val top = geometry.hueBounds.top + geometry.hueBounds.height * section / 6f
+            val bottom = geometry.hueBounds.top + geometry.hueBounds.height * (section + 1) / 6f
+            drawGradientQuad(
+                renderer,
+                UiRect(
+                    geometry.hueBounds.left,
+                    top,
+                    geometry.hueBounds.width,
+                    bottom - top,
+                ),
+                topLeft = hsvToArgb(section * 60f, 1f, 1f),
+                topRight = hsvToArgb(section * 60f, 1f, 1f),
+                bottomRight = hsvToArgb((section + 1) * 60f, 1f, 1f),
+                bottomLeft = hsvToArgb((section + 1) * 60f, 1f, 1f),
+            )
+        }
+
+        val saturationX = geometry.saturationValueBounds.left +
+            state.saturation * geometry.saturationValueBounds.width
+        val brightnessY = geometry.saturationValueBounds.top +
+            (1f - state.value) * geometry.saturationValueBounds.height
+        renderer.circle(
+            saturationX,
+            brightnessY,
+            3.5f,
+            0xFF000000.toInt(),
+            16,
+            Mine2DMaterials.COLOR,
+        )
+        renderer.circle(
+            saturationX,
+            brightnessY,
+            2f,
+            0xFFFFFFFF.toInt(),
+            16,
+            Mine2DMaterials.COLOR,
+        )
+
+        val hueY = geometry.hueBounds.top + state.hue / 360f * geometry.hueBounds.height
+        renderer.quad(
+            geometry.hueBounds.left - 2f,
+            hueY - 1.5f,
+            geometry.hueBounds.width + 4f,
+            3f,
+            0xFF000000.toInt(),
+            Mine2DMaterials.COLOR,
+        )
+        renderer.quad(
+            geometry.hueBounds.left - 1f,
+            hueY - 0.5f,
+            geometry.hueBounds.width + 2f,
+            1f,
+            0xFFFFFFFF.toInt(),
+            Mine2DMaterials.COLOR,
+        )
+
+        val pointerX = lastPointerX?.toFloat()
+        val pointerY = lastPointerY?.toFloat()
+        if (
+            pointerX != null &&
+            pointerY != null &&
+            (
+                geometry.saturationValueBounds.contains(pointerX, pointerY) ||
+                    geometry.hueBounds.contains(pointerX, pointerY)
+                )
+        ) {
+            renderer.graphics.requestCursor(CursorTypes.CROSSHAIR)
+        }
+    }
+
+    private fun drawGradientQuad(
+        renderer: Mine2DEngine,
+        bounds: UiRect,
+        topLeft: Int,
+        topRight: Int,
+        bottomRight: Int,
+        bottomLeft: Int,
+    ) {
+        renderer.polygon(
+            listOf(
+                Mine2DVertex(bounds.left, bounds.top, topLeft),
+                Mine2DVertex(bounds.right, bounds.top, topRight),
+                Mine2DVertex(bounds.right, bounds.bottom, bottomRight),
+                Mine2DVertex(bounds.left, bounds.bottom, bottomLeft),
+            ),
+            Mine2DMaterials.COLOR,
+        )
     }
 
     private fun drawTextInput(

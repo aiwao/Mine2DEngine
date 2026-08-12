@@ -190,7 +190,7 @@ Mine2DEngine applies linear filtering only to glyph atlases created by `Mine2DFo
 
 ## Layout engine
 
-The layout package builds an element tree from `Div`, `Paragraph`, and `TextInput`, cascades styles, generates a CSS box tree, and lays it out into box fragments. The implementation intentionally uses CSS property names and CSS initial values instead of the previous stack-layout behavior.
+The layout package builds an element tree from containers, paragraphs, and typed input controls, cascades styles, generates a CSS box tree, and lays it out into box fragments. The implementation intentionally uses CSS property names and CSS initial values instead of the previous stack-layout behavior.
 
 ### Supported CSS layout profile
 
@@ -200,11 +200,11 @@ The layout package builds an element tree from `Div`, `Paragraph`, and `TextInpu
 - Physical margins and padding, horizontal `auto` margins, and adjacent block margin collapsing
 - `position: static | relative | absolute`, length/percentage insets, and automatic stretching between paired insets
 - Flexbox rows and columns, reverse directions, wrapping, grow/shrink/basis, order, gaps, auto margins, and the justify/align properties
-- Single-line `TextInput` as a replaced element
+- Single-line `TextInput` and opaque RGB `ColorInput` controls as replaced elements
 - Generated `::before` and `::after` boxes
 - `display: none` subtree suppression and `display: contents` principal-box suppression
 
-Grid, tables, floats, ruby layout, vertical writing modes, fragmentation, fixed/sticky positioning, borders, and replaced elements other than `TextInput` are outside this profile.
+Grid, tables, floats, ruby layout, vertical writing modes, fragmentation, fixed/sticky positioning, borders, and replaced elements other than the built-in input controls are outside this profile.
 
 ### Initial containing block
 
@@ -378,7 +378,7 @@ val root = div(UiStyle(font = uiFont)) {
 
 With CSS `width: auto`, the intrinsic width is the advance of `size` zero glyphs. An `auto` height uses the font's line height. Changing the value, placeholder, caret, or selection does not affect geometry and requires no `relayout()`. Call `relayout()` after changing `size` or a layout property.
 
-A layout containing a `TextInput` can be registered directly as a renderable widget in `Screen.init()`. Registration lets Minecraft automatically dispatch rendering, mouse, keyboard, character, Tab-focus, and IME-preedit events:
+A layout containing input controls can be registered directly as a renderable widget in `Screen.init()`. Registration lets Minecraft automatically dispatch rendering, mouse, keyboard, character, Tab-focus, and IME-preedit events:
 
 ```kotlin
 private lateinit var layout: UiLayout
@@ -397,6 +397,39 @@ override fun repositionElements() {
 ```
 
 Do not also call `layout.render(...)` for a layout registered as a widget. Manual event forwarding remains available, but Screen registration is recommended to enable IME and receive preedit events correctly. Use `layout.focus(playerName)`, `layout.clearFocus()`, and `layout.focusedElement` to control or inspect focus.
+
+### Color input
+
+`colorInput()` creates a `ColorInput` corresponding to HTML `input type="color"`. Its value uses Mine2DEngine's `0xAARRGGBB` integer format and is always normalized to opaque `0xFFRRGGBB`; assigning a transparent color therefore discards its alpha channel.
+
+```kotlin
+lateinit var accent: ColorInput
+
+val root = div {
+    accent = colorInput(
+        value = 0xFF4CAF50.toInt(),
+        label = "Accent color",
+        style = { input ->
+            UiStyle(
+                width = 40f.px,
+                height = 24f.px,
+                padding = UiPaddings(2f),
+                backgroundColor = if (input.focused) {
+                    0xFF303840.toInt()
+                } else {
+                    0xFF202428.toInt()
+                },
+            )
+        },
+        onInput = { color -> previewAccent(color) },
+        onChange = { color -> saveAccent(color) },
+    )
+}
+```
+
+Clicking the swatch opens an HSV picker overlay. Dragging its saturation/value field or hue strip dispatches `onInput`; dismissing or confirming an edited picker dispatches `onChange` once. Programmatic `value` assignment dispatches neither callback. Enter or Space opens/confirms the picker, Escape restores the color from when the picker opened, arrow keys adjust saturation/value, and Page Up/Down adjusts hue. Holding Shift uses larger keyboard steps.
+
+The default `width: auto` and `height: auto` content size is `36 × 20` GUI pixels; these intrinsic metrics do not depend on a font. An inline formatting context can still require a parent font for its line box. `ColorInput` participates in the same focus and Tab order as `TextInput`, but does not activate the platform text-input/IME path. Both controls use the `input` tag by default; use a class or ID when they need distinct style-sheet rules.
 
 ### Results, rendering, and input
 

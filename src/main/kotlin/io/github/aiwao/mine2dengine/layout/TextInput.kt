@@ -23,11 +23,13 @@ class TextInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
-) : UiElement(
+) : InputControl(
     tag = tag,
     className = className,
     id = id,
     style = style,
+    onFocus = onFocus,
+    onBlur = onBlur,
     onClick = onClick,
     onMouseMove = onMouseMove,
     onDrag = onDrag,
@@ -83,9 +85,6 @@ class TextInput(
 
     var onInput: ((String) -> Unit)? = onInput
     var onChange: ((String) -> Unit)? = onChange
-    var onFocus: (() -> Unit)? = onFocus
-    var onBlur: (() -> Unit)? = onBlur
-
     /** Color used for placeholder text. */
     var placeholderColor: Int = 0xFF808080.toInt()
 
@@ -94,10 +93,6 @@ class TextInput(
 
     /** Optional caret color. Null uses the resolved text color. */
     var caretColor: Int? = null
-
-    /** True while this control owns its [UiLayout]'s keyboard focus. */
-    var focused: Boolean = false
-        internal set
 
     /** Smaller UTF-16 endpoint of the current selection. */
     val selectionStart: Int
@@ -124,6 +119,22 @@ class TextInput(
         require(size > 0) { "size must be positive: $size" }
     }
 
+    override val usesPlatformTextInput: Boolean = true
+
+    override fun intrinsicMetrics(textMeasurer: () -> UiTextMeasurer): InputIntrinsicMetrics {
+        val measurer = textMeasurer()
+        return InputIntrinsicMetrics(
+            width = measurer.width("0") * size,
+            height = measurer.lineHeight,
+            baselineFromTop = measurer.baselineFromLineTop,
+        )
+    }
+
+    override fun narration(): String {
+        val label = placeholder.ifBlank { "Text input" }
+        return if (value.isEmpty()) label else "$label: $value"
+    }
+
     fun selectAll() {
         editor.selectAll()
         restartCaretBlink()
@@ -134,24 +145,18 @@ class TextInput(
         restartCaretBlink()
     }
 
-    internal fun focusGained() {
-        if (focused) return
-        focused = true
+    override fun didGainFocus() {
         valueAtFocus = value
         changedByUserSinceFocus = false
         preedit = null
         restartCaretBlink()
-        onFocus?.invoke()
     }
 
-    internal fun focusLost() {
-        if (!focused) return
-        focused = false
+    override fun didLoseFocus() {
         preedit = null
         restartCaretBlink()
         if (changedByUserSinceFocus && value != valueAtFocus) onChange?.invoke(value)
         changedByUserSinceFocus = false
-        onBlur?.invoke()
     }
 
     internal fun moveLeft(extendSelection: Boolean, byWord: Boolean) {
