@@ -118,7 +118,7 @@ private fun calculateLayout(
     }
 
     val snapshot = calculateSnapshot(viewport, emptyMap())
-    return UiLayout(snapshot, viewport, ::calculateSnapshot)
+    return UiLayout(snapshot, viewport, ::calculateSnapshot, textMeasurer)
 }
 
 private fun CssFragment.toLayoutNode(): UiLayoutNode {
@@ -144,6 +144,7 @@ private fun CssFragment.toLayoutNode(): UiLayoutNode {
         font = box.textStyle.font,
         color = box.textStyle.color,
         textShadow = box.textStyle.textShadow,
+        textAlign = box.textStyle.textAlign,
         displayed = !box.suppressed,
         beforePseudo = directPseudo
             .firstOrNull { child -> child.box.pseudoElement == UiPseudoElement.BEFORE }

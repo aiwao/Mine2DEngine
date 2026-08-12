@@ -198,23 +198,35 @@ internal class CssLayoutAlgorithm(
             percentageWidth = contentWidth,
             percentageHeight = specifiedContentHeight,
         )
-        val contentLayout = when (display.inside) {
-            UiDisplayInside.FLOW, UiDisplayInside.FLOW_ROOT -> layoutFlowContent(
-                box = box,
-                contentLeft = contentLeft,
-                contentTop = contentTop,
-                contentWidth = contentWidth,
-                constraints = contentConstraints,
+        val contentLayout = if (box.element is TextInput && box.kind == CssBoxKind.PRINCIPAL) {
+            val inputMeasurer = measurer(box)
+            ContentLayout(
+                naturalWidth = intrinsic.max,
+                naturalHeight = inputMeasurer.lineHeight,
+                children = emptyList(),
+                textFragments = emptyList(),
+                pendingAbsolute = emptyList(),
+                baselineFromTop = inputMeasurer.baselineFromLineTop,
             )
+        } else {
+            when (display.inside) {
+                UiDisplayInside.FLOW, UiDisplayInside.FLOW_ROOT -> layoutFlowContent(
+                    box = box,
+                    contentLeft = contentLeft,
+                    contentTop = contentTop,
+                    contentWidth = contentWidth,
+                    constraints = contentConstraints,
+                )
 
-            UiDisplayInside.FLEX -> layoutFlexContent(
-                box = box,
-                contentLeft = contentLeft,
-                contentTop = contentTop,
-                contentWidth = contentWidth,
-                specifiedContentHeight = specifiedContentHeight,
-                constraints = contentConstraints,
-            )
+                UiDisplayInside.FLEX -> layoutFlexContent(
+                    box = box,
+                    contentLeft = contentLeft,
+                    contentTop = contentTop,
+                    contentWidth = contentWidth,
+                    specifiedContentHeight = specifiedContentHeight,
+                    constraints = contentConstraints,
+                )
+            }
         }
         var contentHeight = specifiedContentHeight ?: contentLayout.naturalHeight
         contentHeight = clampHeight(
@@ -228,6 +240,7 @@ internal class CssLayoutAlgorithm(
         // A definite cross size can change flex line stretching and therefore item geometry. Run
         // the flex context once more with its final clamped height when necessary.
         val finalContentLayout = if (
+            box.element !is TextInput &&
             display.inside == UiDisplayInside.FLEX &&
             contentHeight != specifiedContentHeight
         ) {
@@ -250,6 +263,16 @@ internal class CssLayoutAlgorithm(
         val borderHeight = contentHeight + metrics.padding.vertical
         val borderBox = UiRect(borderLeft, borderTop, borderWidth, borderHeight)
         val contentBox = UiRect(contentLeft, contentTop, contentWidth, contentHeight)
+        val baselineFromTop = if (box.element is TextInput && box.kind == CssBoxKind.PRINCIPAL) {
+            val inputMeasurer = measurer(box)
+            metrics.padding.top +
+                (contentHeight - inputMeasurer.lineHeight) / 2f +
+                inputMeasurer.baselineFromLineTop
+        } else {
+            finalContentLayout.baselineFromTop?.let { baseline ->
+                metrics.padding.top + baseline
+            }
+        }
         var fragment = CssFragment(
             box = box,
             marginBox = safeMarginRect(
@@ -265,9 +288,7 @@ internal class CssLayoutAlgorithm(
             children = finalContentLayout.children,
             textFragments = finalContentLayout.textFragments,
             pendingAbsolute = finalContentLayout.pendingAbsolute,
-            baselineFromTop = finalContentLayout.baselineFromTop?.let { baseline ->
-                metrics.padding.top + baseline
-            },
+            baselineFromTop = baselineFromTop,
         )
         if (!isRoot && style.position == UiPosition.RELATIVE) {
             val (offsetX, offsetY) = relativeOffset(style, constraints)
@@ -823,6 +844,12 @@ internal class CssLayoutAlgorithm(
         }
 
     private fun calculateIntrinsicWidths(box: CssBox): IntrinsicWidths {
+        if (box.element is TextInput && box.kind == CssBoxKind.PRINCIPAL) {
+            val input = box.element
+            val zeroWidth = measurer(box).width("0")
+            val width = zeroWidth * input.size
+            return IntrinsicWidths(width, width)
+        }
         val metrics = resolveMetrics(box.style, percentageWidth = null)
         var inlineMin = 0f
         var inlineMax = 0f

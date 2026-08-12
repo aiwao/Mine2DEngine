@@ -188,6 +188,7 @@ internal class CssBoxTreeBuilder(
 
         val children = when (element) {
             is Paragraph -> emptyList()
+            is TextInput -> emptyList()
             is UiContainer -> {
                 val scopesForChildren = if (ownComponentScope == null) {
                     elementScopedScopes

@@ -1,12 +1,31 @@
 package io.github.aiwao.mine2dengine.layout
 
+import com.mojang.blaze3d.platform.cursor.CursorTypes
 import io.github.aiwao.mine2dengine.Mine2DEngine
 import io.github.aiwao.mine2dengine.Mine2DFont
 import io.github.aiwao.mine2dengine.Mine2DMaterial
+import io.github.aiwao.mine2dengine.Mine2DMaterials
 import io.github.aiwao.mine2dengine.Mine2DUniformRect
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.ComponentPath
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.components.Renderable
+import net.minecraft.client.gui.components.events.GuiEventListener
+import net.minecraft.client.gui.narration.NarratableEntry
+import net.minecraft.client.gui.narration.NarratedElementType
+import net.minecraft.client.gui.narration.NarrationElementOutput
+import net.minecraft.client.gui.navigation.FocusNavigationEvent
+import net.minecraft.client.gui.navigation.ScreenRectangle
+import net.minecraft.client.input.CharacterEvent
+import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.MouseButtonInfo
+import net.minecraft.client.input.PreeditEvent
+import net.minecraft.network.chat.Component
+import org.lwjgl.glfw.GLFW
 import java.util.IdentityHashMap
+import kotlin.math.ceil
+import kotlin.math.floor
 
 internal data class UiDisplayKey(
     val element: UiElement,
@@ -66,6 +85,8 @@ data class UiLayoutNode(
     val color: Int = UiStyle.DEFAULT_COLOR,
     /** The configurable text shadow resolved from this element's style and its ancestors. */
     val textShadow: UiTextShadow? = null,
+    /** The text alignment resolved from this element's style and its ancestors. */
+    val textAlign: UiTextAlign = UiTextAlign.START,
     /** Whether this node generated a layout box. */
     internal val displayed: Boolean = true,
     internal val beforePseudo: UiPseudoLayoutNode? = null,
@@ -98,7 +119,11 @@ data class UiPseudoLayoutNode(
     internal var pseudoStyleProvider: () -> UiPseudoStyle = { UiPseudoStyle(content) }
 }
 
-/** A layout result that can render and dispatch pointer input to UI elements. */
+/**
+ * A layout result that renders and dispatches pointer, keyboard, character, and IME input.
+ *
+ * It is also a Minecraft renderable widget and may be registered directly with a Screen.
+ */
 class UiLayout internal constructor(
     snapshot: UiLayoutSnapshot,
     viewport: UiRect,
@@ -106,7 +131,8 @@ class UiLayout internal constructor(
         UiRect,
         Map<UiDisplayKey, Boolean>,
     ) -> UiLayoutSnapshot,
-) {
+    private val textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
+) : Renderable, GuiEventListener, NarratableEntry {
     /** The current initial containing block used by CSS layout. */
     var viewport: UiRect = viewport
         private set
@@ -121,6 +147,18 @@ class UiLayout internal constructor(
     private var displayStates: List<UiDisplayState> = snapshot.displayStates
 
     private var dragButtonInfo: MouseButtonInfo? = null
+    private var screenFocused: Boolean = false
+    private var pendingNavigationFocus: TextInput? = null
+    private var lastPointerX: Double? = null
+    private var lastPointerY: Double? = null
+    private var pointerGeometryDirty: Boolean = true
+    internal var textInputFocusNotifier: (Boolean) -> Unit = { focused ->
+        Minecraft.getInstance().onTextInputFocusChange(this, focused)
+    }
+
+    /** The element that currently receives keyboard input, or null when focus is outside a control. */
+    var focusedElement: UiElement? = null
+        private set
 
     /** The viewport's left coordinate. Changing it translates the complete layout. */
     var left: Float
@@ -166,6 +204,7 @@ class UiLayout internal constructor(
             root = translatedRoot
             rootFragment = translatedRootFragment
             this.viewport = viewport
+            pointerGeometryDirty = true
             return
         }
 
@@ -186,9 +225,176 @@ class UiLayout internal constructor(
         applySnapshot(snapshot)
     }
 
+    /** Gives keyboard focus to [element]. Passing null clears the current focus. */
+    fun focus(element: UiElement?): Boolean {
+        refreshDisplay()
+        return focusInternal(element)
+    }
+
+    /** Clears keyboard focus and commits the focused input's current change, if any. */
+    fun clearFocus() {
+        focus(null)
+    }
+
+    private fun focusInternal(
+        element: UiElement?,
+        notifyPlatform: Boolean = true,
+    ): Boolean {
+        val next = when (element) {
+            null -> null
+            is TextInput -> element
+            else -> return false
+        }
+        if (
+            next != null &&
+            (next.disabled || nodesInPaintOrder().none { node ->
+                node.displayed && node.element === next
+            })
+        ) {
+            return false
+        }
+
+        val previous = focusedElement as? TextInput
+        if (previous === next) return true
+
+        focusedElement = next
+        previous?.focusLost()
+        next?.focusGained()
+
+        if (notifyPlatform && screenFocused) {
+            notifyPlatformTextInputFocus(next != null)
+        }
+        return true
+    }
+
+    private fun notifyPlatformTextInputFocus(focused: Boolean) {
+        textInputFocusNotifier(focused)
+    }
+
+    private fun refreshFocusValidity() {
+        val focused = focusedElement as? TextInput ?: return
+        if (
+            focused.disabled ||
+            nodesInPaintOrder().none { node -> node.displayed && node.element === focused }
+        ) {
+            focusInternal(null)
+        }
+    }
+
+    private fun focusableTextInputs(): List<TextInput> = nodesInPaintOrder()
+        .asSequence()
+        .filter(UiLayoutNode::displayed)
+        .map(UiLayoutNode::element)
+        .filterIsInstance<TextInput>()
+        .filterNot(UiElement::disabled)
+        .distinct()
+        .toList()
+
+    /** Allows the complete layout to be registered with `Screen.addRenderableWidget`. */
+    override fun extractRenderState(
+        graphics: GuiGraphicsExtractor,
+        mouseX: Int,
+        mouseY: Int,
+        partialTick: Float,
+    ) {
+        if (
+            pointerGeometryDirty ||
+            lastPointerX != mouseX.toDouble() ||
+            lastPointerY != mouseY.toDouble()
+        ) {
+            mouseMove(mouseX.toDouble(), mouseY.toDouble())
+        }
+        render(Mine2DEngine(graphics))
+    }
+
+    override fun setFocused(focused: Boolean) {
+        if (!focused) {
+            val hadTextFocus = focusedElement is TextInput
+            val wasScreenFocused = screenFocused
+            screenFocused = false
+            focusInternal(null, notifyPlatform = false)
+            if (wasScreenFocused && hadTextFocus) notifyPlatformTextInputFocus(false)
+            return
+        }
+
+        if (screenFocused && pendingNavigationFocus == null) return
+        screenFocused = true
+        pendingNavigationFocus?.let { target ->
+            focusInternal(target, notifyPlatform = false)
+        }
+        pendingNavigationFocus = null
+        if (focusedElement is TextInput) notifyPlatformTextInputFocus(true)
+    }
+
+    override fun isFocused(): Boolean = screenFocused
+
+    override fun isMouseOver(x: Double, y: Double): Boolean {
+        refreshDisplay()
+        val layoutX = x.toFloat()
+        val layoutY = y.toFloat()
+        return hitRegionsInPaintOrder().any { region -> region.bounds.contains(layoutX, layoutY) }
+    }
+
+    override fun getRectangle(): ScreenRectangle {
+        refreshDisplay()
+        val bounds = root.bounds
+        val left = floor(bounds.left.toDouble()).toInt()
+        val top = floor(bounds.top.toDouble()).toInt()
+        return ScreenRectangle(
+            left,
+            top,
+            (ceil(bounds.right.toDouble()).toInt() - left).coerceAtLeast(0),
+            (ceil(bounds.bottom.toDouble()).toInt() - top).coerceAtLeast(0),
+        )
+    }
+
+    override fun nextFocusPath(event: FocusNavigationEvent): ComponentPath? {
+        refreshDisplay()
+        refreshFocusValidity()
+        val inputs = focusableTextInputs()
+        if (inputs.isEmpty()) return null
+
+        val forward = when (event) {
+            is FocusNavigationEvent.TabNavigation -> event.forward()
+            is FocusNavigationEvent.ArrowNavigation -> event.direction().isPositive
+            else -> true
+        }
+        val currentIndex = inputs.indexOfFirst { input -> input === focusedElement }
+        val nextIndex = when {
+            currentIndex < 0 -> if (forward) 0 else inputs.lastIndex
+            forward -> currentIndex + 1
+            else -> currentIndex - 1
+        }
+        if (nextIndex !in inputs.indices) return null
+
+        pendingNavigationFocus = inputs[nextIndex]
+        return ComponentPath.leaf(this)
+    }
+
+    override fun narrationPriority(): NarratableEntry.NarrationPriority = when {
+        focusedElement is TextInput -> NarratableEntry.NarrationPriority.FOCUSED
+        nodesInPaintOrder().any { node -> node.element is TextInput && node.element.hovering } ->
+            NarratableEntry.NarrationPriority.HOVERED
+
+        else -> NarratableEntry.NarrationPriority.NONE
+    }
+
+    override fun updateNarration(output: NarrationElementOutput) {
+        val input = (focusedElement as? TextInput) ?: nodesInPaintOrder()
+            .asReversed()
+            .map(UiLayoutNode::element)
+            .filterIsInstance<TextInput>()
+            .firstOrNull(UiElement::hovering)
+            ?: return
+        val label = input.placeholder.ifBlank { "Text input" }
+        val narration = if (input.value.isEmpty()) label else "$label: ${input.value}"
+        output.add(NarratedElementType.TITLE, Component.literal(narration))
+    }
+
     /** Renders this layout, recalculating geometry when a none-display value changes. */
     fun render(renderer: Mine2DEngine) {
         refreshDisplay()
+        refreshFocusValidity()
         draw(root, renderer, ResolvedUiTextStyle(), renderer.uniformTimeSeconds())
     }
 
@@ -209,33 +415,60 @@ class UiLayout internal constructor(
 
     /**
      * Invokes the topmost clickable element at the GUI coordinate in [event].
-     * Elements with an [UiElement.onClick] or [UiElement.onDrag] callback are clickable. The hit
-     * element starts dragging until [mouseRelease] is called. Its [UiElement.onClick] callback is
-     * not invoked while [UiElement.disabled] is true. Returns true when one was hit.
+     * Elements with an [UiElement.onClick] or [UiElement.onDrag] callback and [TextInput] elements
+     * are clickable. The hit element starts dragging until [mouseRelease] is called. Its
+     * [UiElement.onClick] callback is not invoked while [UiElement.disabled] is true. Returns true
+     * when one was hit.
      */
-    fun mouseClick(event: MouseButtonEvent): Boolean {
+    fun mouseClick(event: MouseButtonEvent): Boolean = mouseClick(event, doubleClick = false)
+
+    /** Dispatches a pointer press, including the standard text-input focus and selection behavior. */
+    fun mouseClick(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         refreshDisplay()
+        refreshFocusValidity()
         val x = event.x().toFloat()
         val y = event.y().toFloat()
         val nodes = nodesInPaintOrder()
-        val element = hitRegionsInPaintOrder()
-            .asReversed()
+        val hitRegions = hitRegionsInPaintOrder()
+        val element = hitRegions.asReversed()
             .firstOrNull { region ->
                 (region.element.onClick != null ||
-                    region.element.onDrag != null) &&
+                    region.element.onDrag != null ||
+                    region.element is TextInput) &&
                     region.bounds.contains(x, y)
             }
             ?.element
-            ?: return false
+        val focusedInput = (element as? TextInput)?.takeUnless(UiElement::disabled)
+        focusInternal(focusedInput)
+        element ?: return false
 
         nodes.forEach { node -> node.element.dragging = false }
+        dragButtonInfo = null
+        if (element.disabled && element is TextInput) return true
+
         element.dragging = true
         dragButtonInfo = event.buttonInfo()
+        if (element is TextInput && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            nodes
+                .asReversed()
+                .firstOrNull { node -> node.element === element }
+                ?.let { node ->
+                    val index = textInputIndexAt(node, event.x().toFloat())
+                    if (doubleClick) {
+                        element.selectWordAt(index)
+                    } else {
+                        element.moveTo(index, extendSelection = event.hasShiftDown())
+                    }
+                }
+        }
         if (!element.disabled) {
             element.onClick?.invoke(event)
         }
         return true
     }
+
+    override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean =
+        mouseClick(event, doubleClick)
 
     /**
      * Updates [UiElement.hovering] and invokes mouse-over or mouse-out callbacks, invokes the
@@ -246,6 +479,10 @@ class UiLayout internal constructor(
      */
     fun mouseMove(x: Double, y: Double): Boolean {
         refreshDisplay()
+        refreshFocusValidity()
+        lastPointerX = x
+        lastPointerY = y
+        pointerGeometryDirty = false
         val layoutX = x.toFloat()
         val layoutY = y.toFloat()
         val nodes = nodesInPaintOrder()
@@ -287,21 +524,41 @@ class UiLayout internal constructor(
                 handled = true
             }
 
-        nodes
+        val draggingNode = nodes
             .asReversed()
-            .firstOrNull { node -> node.element.dragging && node.element.onDrag != null }
-            ?.element
-            ?.onDrag
-            ?.let { onDrag ->
+            .firstOrNull { node -> node.element.dragging }
+        draggingNode?.let { node ->
+            val element = node.element
+            if (
+                element is TextInput &&
+                !element.disabled &&
+                dragButtonInfo?.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT
+            ) {
+                val index = textInputIndexAt(node, layoutX, allowScroll = true)
+                element.moveTo(index, extendSelection = true)
+                handled = true
+            }
+            element.onDrag?.let { onDrag ->
                 val buttonInfo = checkNotNull(dragButtonInfo) {
                     "A dragging element must have mouse button information"
                 }
                 onDrag(MouseButtonEvent(x, y, buttonInfo))
                 handled = true
             }
+        }
 
         return handled
     }
+
+    override fun mouseMoved(x: Double, y: Double) {
+        mouseMove(x, y)
+    }
+
+    override fun mouseDragged(
+        event: MouseButtonEvent,
+        dragX: Double,
+        dragY: Double,
+    ): Boolean = mouseMove(event.x(), event.y())
 
     /** Stops the current drag. Returns true when an element was dragging. */
     fun mouseRelease(): Boolean {
@@ -317,6 +574,108 @@ class UiLayout internal constructor(
 
         draggingElements.forEach { element -> element.dragging = false }
         dragButtonInfo = null
+        return true
+    }
+
+    override fun mouseReleased(event: MouseButtonEvent): Boolean = mouseRelease()
+
+    /** Dispatches a key press to the focused text input. */
+    override fun keyPressed(event: KeyEvent): Boolean {
+        refreshDisplay()
+        refreshFocusValidity()
+
+        if (event.isCycleFocus()) {
+            if (screenFocused) return false
+            val inputs = focusableTextInputs()
+            if (inputs.isEmpty()) return false
+            val currentIndex = inputs.indexOfFirst { input -> input === focusedElement }
+            val nextIndex = if (event.hasShiftDown()) {
+                if (currentIndex <= 0) inputs.lastIndex else currentIndex - 1
+            } else {
+                if (currentIndex < 0 || currentIndex == inputs.lastIndex) 0 else currentIndex + 1
+            }
+            return focusInternal(inputs[nextIndex])
+        }
+
+        val input = focusedElement as? TextInput ?: return false
+        if (event.isSelectAll()) {
+            input.selectAll()
+            return true
+        }
+        if (event.isCopy()) {
+            Minecraft.getInstance().keyboardHandler.setClipboard(input.selectedText)
+            return true
+        }
+        if (event.isPaste()) {
+            if (!input.readOnly) {
+                input.insertUserText(Minecraft.getInstance().keyboardHandler.clipboard)
+            }
+            return true
+        }
+        if (event.isCut()) {
+            Minecraft.getInstance().keyboardHandler.setClipboard(input.selectedText)
+            if (!input.readOnly) input.cutSelection()
+            return true
+        }
+
+        val extendSelection = event.hasShiftDown()
+        val byWord = event.hasControlDownWithQuirk()
+        return when (event.key()) {
+            GLFW.GLFW_KEY_LEFT -> {
+                input.moveLeft(extendSelection, byWord)
+                true
+            }
+
+            GLFW.GLFW_KEY_RIGHT -> {
+                input.moveRight(extendSelection, byWord)
+                true
+            }
+
+            GLFW.GLFW_KEY_HOME -> {
+                input.moveToStart(extendSelection)
+                true
+            }
+
+            GLFW.GLFW_KEY_END -> {
+                input.moveToEnd(extendSelection)
+                true
+            }
+
+            GLFW.GLFW_KEY_BACKSPACE -> {
+                if (!input.readOnly) input.deleteBackward(byWord)
+                true
+            }
+
+            GLFW.GLFW_KEY_DELETE -> {
+                if (!input.readOnly) input.deleteForward(byWord)
+                true
+            }
+
+            else -> false
+        }
+    }
+
+    /** Inserts a committed Unicode code point into the focused text input. */
+    override fun charTyped(event: CharacterEvent): Boolean {
+        refreshDisplay()
+        refreshFocusValidity()
+        val input = focusedElement as? TextInput ?: return false
+        if (!event.isAllowedChatCharacter()) return false
+        input.clearPreedit()
+        if (!input.readOnly) input.insertUserText(event.codepointAsString())
+        return true
+    }
+
+    /** Updates the transient IME composition without changing the input's committed value. */
+    override fun preeditUpdated(event: PreeditEvent?): Boolean {
+        refreshDisplay()
+        refreshFocusValidity()
+        val input = focusedElement as? TextInput ?: return false
+        if (event == null) {
+            input.clearPreedit()
+        } else {
+            input.updatePreedit(event.fullText(), event.caretPosition())
+        }
         return true
     }
 
@@ -359,6 +718,35 @@ class UiLayout internal constructor(
             node.children.forEach(::addTree)
         }
         addTree(root)
+    }
+
+    private fun textInputIndexAt(
+        node: UiLayoutNode,
+        pointerX: Float,
+        allowScroll: Boolean = false,
+    ): Int {
+        val input = node.element as TextInput
+        val measurer = textMeasurer(input, node.font)
+        val content = node.contentBounds
+        val textWidth = measurer.width(input.value)
+        val maximumScroll = (textWidth - content.width).coerceAtLeast(0f)
+        var scroll = input.horizontalScroll.coerceIn(0f, maximumScroll)
+        if (allowScroll) {
+            scroll = when {
+                pointerX < content.left -> scroll - (content.left - pointerX)
+                pointerX > content.right -> scroll + (pointerX - content.right)
+                else -> scroll
+            }.coerceIn(0f, maximumScroll)
+        }
+        input.horizontalScroll = scroll
+        val alignment = textInputAlignmentOffset(
+            availableWidth = content.width,
+            textWidth = textWidth,
+            alignment = node.textAlign,
+            scroll = scroll,
+        )
+        val textX = pointerX - content.left - alignment + scroll
+        return textIndexAtHorizontalPosition(input.value, textX, measurer::width)
     }
 
     private data class UiHitRegion(
@@ -470,6 +858,7 @@ class UiLayout internal constructor(
         root = snapshot.root
         rootFragment = snapshot.rootFragment
         displayStates = snapshot.displayStates
+        pointerGeometryDirty = true
 
         val displayedElements = java.util.Collections.newSetFromMap(
             IdentityHashMap<UiElement, Boolean>(),
@@ -482,6 +871,11 @@ class UiLayout internal constructor(
             .filterNot(displayedElements::contains)
         if (hiddenElements.any(UiElement::dragging)) {
             dragButtonInfo = null
+        }
+        focusedElement?.let { focused ->
+            if (hiddenElements.any { element -> element === focused }) {
+                focusInternal(null)
+            }
         }
         hiddenElements.forEach { element ->
             element.dragging = false
@@ -559,6 +953,10 @@ class UiLayout internal constructor(
             }
         }
 
+        (node.element as? TextInput)?.let { input ->
+            drawTextInput(node, input, resolvedTextStyle, requireFont(node), renderer)
+        }
+
         paintContents(node, style).forEach { content ->
             when (content) {
                 is UiPaintContent.Pseudo ->
@@ -586,6 +984,171 @@ class UiLayout internal constructor(
                 is UiPaintContent.Child ->
                     draw(content.node, renderer, resolvedTextStyle, timeSeconds)
             }
+        }
+    }
+
+    private fun drawTextInput(
+        node: UiLayoutNode,
+        input: TextInput,
+        textStyle: ResolvedUiTextStyle,
+        font: Mine2DFont,
+        renderer: Mine2DEngine,
+    ) {
+        if (input.hovering) {
+            renderer.graphics.requestCursor(
+                if (input.disabled) CursorTypes.NOT_ALLOWED else CursorTypes.IBEAM,
+            )
+        }
+
+        val content = node.contentBounds
+        if (content.width <= 0f || content.height <= 0f) return
+
+        val preedit = input.preedit.takeIf { input.focused }
+        val preeditStart = input.selectionStart
+        val displayText: String
+        val caretPrefix: String
+        if (preedit == null) {
+            displayText = input.value
+            caretPrefix = input.value.substring(0, input.caretPosition)
+        } else {
+            val before = input.value.substring(0, preeditStart)
+            displayText = before + preedit.text + input.value.substring(input.selectionEnd)
+            caretPrefix = before + preedit.text.substring(0, preedit.caretPosition)
+        }
+
+        val displayWidth = font.width(displayText)
+        val caretAdvance = font.width(caretPrefix)
+        val rightInset = 1f.coerceAtMost(content.width)
+        val maximumScroll = maxOf(
+            displayWidth - content.width,
+            caretAdvance - (content.width - rightInset),
+        ).coerceAtLeast(0f)
+        var scroll = input.horizontalScroll.coerceIn(0f, maximumScroll)
+        if (caretAdvance < scroll) {
+            scroll = caretAdvance
+        } else if (caretAdvance - scroll > content.width - rightInset) {
+            scroll = caretAdvance - (content.width - rightInset)
+        }
+        scroll = scroll.coerceIn(0f, maximumScroll)
+        input.horizontalScroll = scroll
+
+        val alignmentOffset = textInputAlignmentOffset(
+            availableWidth = content.width,
+            textWidth = displayWidth,
+            alignment = textStyle.textAlign,
+            scroll = scroll,
+        )
+        val textX = content.left + alignmentOffset - scroll
+        val lineTop = content.top + (content.height - font.lineHeight) / 2f
+        val rendererY = textRendererY(
+            lineBoxTop = lineTop,
+            lineIndex = 0,
+            lineHeight = font.lineHeight,
+            rendererOffsetFromLineTop = font.rendererOffsetFromLineTop,
+        )
+
+        val scissorLeft = floor(content.left.toDouble()).toInt()
+        val scissorTop = floor(content.top.toDouble()).toInt()
+        val scissorRight = ceil(content.right.toDouble()).toInt()
+        val scissorBottom = ceil(content.bottom.toDouble()).toInt()
+        if (scissorRight <= scissorLeft || scissorBottom <= scissorTop) return
+
+        renderer.graphics.enableScissor(scissorLeft, scissorTop, scissorRight, scissorBottom)
+        try {
+            if (preedit == null && input.focused && input.selectionStart != input.selectionEnd) {
+                val selectionLeft = textX + font.width(input.value.substring(0, input.selectionStart))
+                val selectionRight = textX + font.width(input.value.substring(0, input.selectionEnd))
+                if (selectionRight > selectionLeft) {
+                    renderer.quad(
+                        selectionLeft,
+                        lineTop,
+                        selectionRight - selectionLeft,
+                        font.lineHeight,
+                        input.selectionColor,
+                        Mine2DMaterials.COLOR,
+                    )
+                }
+            }
+
+            val paintedText = if (displayText.isEmpty()) input.placeholder else displayText
+            if (paintedText.isNotEmpty()) {
+                val paintedWidth = if (displayText.isEmpty()) font.width(paintedText) else displayWidth
+                val paintedAlignment = if (displayText.isEmpty()) {
+                    textInputAlignmentOffset(
+                        availableWidth = content.width,
+                        textWidth = paintedWidth,
+                        alignment = textStyle.textAlign,
+                        scroll = 0f,
+                    )
+                } else {
+                    alignmentOffset
+                }
+                val paintedX = if (displayText.isEmpty()) {
+                    content.left + paintedAlignment
+                } else {
+                    textX
+                }
+                val textOrigin = renderer.pixelAlignedTextOriginY(paintedX, rendererY)
+                textStyle.textShadow?.let { shadow ->
+                    renderer.textShadow(
+                        font = font,
+                        text = paintedText,
+                        x = textOrigin.x,
+                        y = textOrigin.y,
+                        color = shadow.color,
+                        offsetX = shadow.offsetX,
+                        offsetY = shadow.offsetY,
+                        blurRadius = shadow.blurRadius,
+                    )
+                }
+                renderer.text(
+                    font = font,
+                    text = paintedText,
+                    x = textOrigin.x,
+                    y = textOrigin.y,
+                    color = if (displayText.isEmpty()) input.placeholderColor else textStyle.color,
+                )
+            }
+
+            if (preedit != null) {
+                val compositionX = textX + font.width(input.value.substring(0, preeditStart))
+                val compositionWidth = font.width(preedit.text)
+                if (compositionWidth > 0f) {
+                    renderer.quad(
+                        compositionX,
+                        lineTop + font.lineHeight - 1f,
+                        compositionWidth,
+                        1f,
+                        input.caretColor ?: textStyle.color,
+                        Mine2DMaterials.COLOR,
+                    )
+                }
+            }
+
+            if (input.focused && (preedit != null || input.isCaretVisible())) {
+                val caretX = textX + caretAdvance
+                renderer.quad(
+                    caretX,
+                    lineTop,
+                    1f,
+                    font.lineHeight,
+                    input.caretColor ?: textStyle.color,
+                    Mine2DMaterials.COLOR,
+                )
+            }
+        } finally {
+            renderer.graphics.disableScissor()
+        }
+
+        if (screenFocused && focusedElement === input) {
+            val caretX = floor((textX + caretAdvance).toDouble()).toInt()
+            val caretTop = floor(lineTop.toDouble()).toInt()
+            Minecraft.getInstance().textInputManager().setTextInputArea(
+                caretX,
+                caretTop,
+                caretX + 1,
+                ceil((lineTop + font.lineHeight).toDouble()).toInt(),
+            )
         }
     }
 
@@ -805,6 +1368,38 @@ internal fun textRendererY(
     lineHeight: Float,
     rendererOffsetFromLineTop: Float,
 ): Float = lineBoxTop + rendererOffsetFromLineTop + lineIndex * lineHeight
+
+internal fun textIndexAtHorizontalPosition(
+    text: String,
+    x: Float,
+    measure: (String) -> Float,
+): Int {
+    if (text.isEmpty() || x <= 0f) return 0
+    var index = 0
+    var previousWidth = 0f
+    while (index < text.length) {
+        val next = text.offsetByCodePoints(index, 1)
+        val nextWidth = measure(text.substring(0, next))
+        if (x < (previousWidth + nextWidth) / 2f) return index
+        index = next
+        previousWidth = nextWidth
+    }
+    return text.length
+}
+
+internal fun textInputAlignmentOffset(
+    availableWidth: Float,
+    textWidth: Float,
+    alignment: UiTextAlign,
+    scroll: Float,
+): Float {
+    if (scroll > 0f || textWidth > availableWidth) return 0f
+    return when (alignment) {
+        UiTextAlign.START, UiTextAlign.LEFT -> 0f
+        UiTextAlign.END, UiTextAlign.RIGHT -> availableWidth - textWidth
+        UiTextAlign.CENTER -> (availableWidth - textWidth) / 2f
+    }
+}
 
 internal fun UiStyle.drawBackground(
     rendererMaterial: Mine2DMaterial,

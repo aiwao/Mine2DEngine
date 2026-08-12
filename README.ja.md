@@ -190,7 +190,7 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 ## レイアウトエンジン
 
-レイアウトパッケージは `Div` と `Paragraph` の要素ツリーへstyleをcascadeし、CSS box treeを生成してbox fragmentへ配置します。従来の独自stack layoutではなく、CSSのプロパティ名と初期値を使います。
+レイアウトパッケージは `Div`、`Paragraph`、`TextInput` の要素ツリーへstyleをcascadeし、CSS box treeを生成してbox fragmentへ配置します。従来の独自stack layoutではなく、CSSのプロパティ名と初期値を使います。
 
 ### 対応するCSS layout profile
 
@@ -200,10 +200,11 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - 物理margin / padding、横方向の`auto` margin、隣接block marginのcollapse
 - `position: static | relative | absolute`、length / percentage inset、両側inset間の自動stretch
 - Flexboxのrow / column、reverse、wrap、grow / shrink / basis、order、gap、auto margin、justify / align
+- replaced elementとしての単一行`TextInput`
 - `::before` / `::after` の生成box
 - `display: none`によるsubtree除外と、`display: contents`によるprincipal box除外
 
-Grid、table、float、ruby、縦書き、fragmentation、fixed / sticky positioning、border、replaced elementは対象外です。
+Grid、table、float、ruby、縦書き、fragmentation、fixed / sticky positioning、border、および `TextInput` 以外のreplaced elementは対象外です。
 
 ### Initial containing block
 
@@ -337,6 +338,60 @@ relative boxは通常フローの領域を保ったままvisual offsetを受け�
 pseudo-element ruleでは`UiPseudoStyle`と`UiGeneratedContent.Text`または`UiGeneratedContent.EmptyBox`を使います。生成boxのdisplay、sizing、positioning、flex item propertyも通常boxと同様に解決されます。
 
 `color`、`font`、`textShadow`、`textAlign`、`whiteSpace`は継承されます。backgroundやbox / drop shadowなどのpaint propertyは継承されません。
+
+### Text input
+
+`input()`はHTMLの`input type="text"`に対応する単一行の`TextInput`を作ります。値、caret、選択範囲、横スクロール、clipboard shortcut、IME preeditを独自に管理しており、Minecraftの`EditBox`は使用しません。
+
+```kotlin
+lateinit var playerName: TextInput
+
+val root = div(UiStyle(font = uiFont)) {
+    playerName = input(
+        value = "",
+        placeholder = "Player name",
+        maxLength = 32,
+        style = { input ->
+            UiStyle(
+                width = 180f.px,
+                height = 24f.px,
+                padding = UiPaddings(vertical = 5f, horizontal = 6f),
+                backgroundColor = if (input.focused) {
+                    0xFF303840.toInt()
+                } else {
+                    0xFF202428.toInt()
+                },
+            )
+        },
+        onInput = { value -> println("editing: $value") },
+        onChange = { value -> println("committed: $value") },
+    )
+}
+```
+
+`onInput`はユーザー操作で確定値が変わるたびに呼ばれ、`onChange`は編集後にfocusを失った時に呼ばれます。`value`へのプログラムからの代入ではどちらも呼ばれません。`readOnly`ではfocus、選択、copyは可能ですが編集できず、`disabled`ではfocusできません。
+
+CSSの`width:auto`では`size`個の`0` glyph相当がintrinsic widthとなり、`height:auto`ではfontのline heightが使われます。`value`、placeholder、caret、選択の変更はgeometryを変えないため`relayout()`は不要です。`size`やlayout propertyを変更した場合は`relayout()`を呼んでください。
+
+`TextInput`を含むlayoutは、`Screen.init()`でそのままrenderable widgetとして登録できます。登録すると描画に加え、mouse、keyboard、character、Tab focus、IME preeditがMinecraftから自動配送されます。
+
+```kotlin
+private lateinit var layout: UiLayout
+
+override fun init() {
+    layout = LayoutEngine.layout(
+        root = root,
+        viewport = UiRect(0f, 0f, width.toFloat(), height.toFloat()),
+    )
+    addRenderableWidget(layout)
+}
+
+override fun repositionElements() {
+    layout.updateViewport(UiRect(0f, 0f, width.toFloat(), height.toFloat()))
+}
+```
+
+widgetとして登録したlayoutを別途`layout.render(...)`で描画しないでください。手動配送もできますが、IMEを有効化してpreeditを正しく受け取るにはScreenへの登録が推奨です。focusは`layout.focus(playerName)`、`layout.clearFocus()`、`layout.focusedElement`から制御・確認できます。
 
 ### 結果、描画、入力
 
