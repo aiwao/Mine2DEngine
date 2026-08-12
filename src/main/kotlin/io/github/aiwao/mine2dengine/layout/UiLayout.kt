@@ -105,6 +105,12 @@ private data class UiAxisClip(
         )
     }
 
+    fun contains(x: Float, y: Float): Boolean =
+        (left == null || x >= left) &&
+            (right == null || x < right) &&
+            (top == null || y >= top) &&
+            (bottom == null || y < bottom)
+
     private fun maxNullable(first: Float?, second: Float?): Float? = when {
         first == null -> second
         second == null -> first
@@ -116,6 +122,24 @@ private data class UiAxisClip(
         second == null -> first
         else -> minOf(first, second)
     }
+}
+
+private data class UiClipStack(
+    val axisClip: UiAxisClip,
+    val roundedClips: List<UiRoundedBox> = emptyList(),
+) {
+    fun intersect(other: UiClipStack): UiClipStack? {
+        val intersection = axisClip.intersect(other.axisClip) ?: return null
+        return UiClipStack(
+            axisClip = intersection,
+            roundedClips = roundedClips + other.roundedClips,
+        )
+    }
+
+    fun clip(bounds: UiRect): UiRect? = axisClip.clip(bounds)
+
+    fun contains(x: Float, y: Float): Boolean =
+        axisClip.contains(x, y) && roundedClips.all { clip -> clip.contains(x, y) }
 }
 
 internal data class UiLayoutSnapshot(
@@ -462,7 +486,7 @@ class UiLayout internal constructor(
         val layoutX = x.toFloat()
         val layoutY = y.toFloat()
         return openColorPickerGeometry()?.bounds?.contains(layoutX, layoutY) == true ||
-            hitRegionsInPaintOrder().any { region -> region.bounds.contains(layoutX, layoutY) }
+            hitRegionsInPaintOrder().any { region -> region.contains(layoutX, layoutY) }
     }
 
     override fun getRectangle(): ScreenRectangle {
@@ -542,7 +566,7 @@ class UiLayout internal constructor(
         }
         return hitRegionsInPaintOrder()
             .asReversed()
-            .firstOrNull { region -> region.bounds.contains(x, y) }
+            .firstOrNull { region -> region.contains(x, y) }
             ?.element
     }
 
@@ -591,7 +615,7 @@ class UiLayout internal constructor(
                 (region.element.onClick != null ||
                     region.element.onDrag != null ||
                     region.element is InputControl) &&
-                    region.bounds.contains(x, y)
+                    region.contains(x, y)
             }
         val element = hitRegion?.element
         val focusedInput = (element as? InputControl)?.takeUnless(UiElement::disabled)
@@ -651,7 +675,7 @@ class UiLayout internal constructor(
         val nodes = nodesInPaintOrder()
         val hitRegions = hitRegionsInPaintOrder()
         fun contains(element: UiElement): Boolean = hitRegions.any { region ->
-            region.element === element && region.bounds.contains(layoutX, layoutY)
+            region.element === element && region.contains(layoutX, layoutY)
         }
         var handled = false
 
@@ -689,7 +713,7 @@ class UiLayout internal constructor(
             .asReversed()
             .firstOrNull { region ->
                 region.element.onMouseMove != null &&
-                    region.bounds.contains(layoutX, layoutY)
+                    region.contains(layoutX, layoutY)
             }
             ?.element
             ?.onMouseMove
@@ -753,7 +777,7 @@ class UiLayout internal constructor(
         if (openColorPickerGeometry()?.bounds?.contains(pointerX, pointerY) == true) return true
         val hit = hitRegionsInPaintOrder()
             .asReversed()
-            .firstOrNull { region -> region.bounds.contains(pointerX, pointerY) }
+            .firstOrNull { region -> region.contains(pointerX, pointerY) }
             ?: return false
         val deltaX = (-horizontalAmount * SCROLL_WHEEL_STEP).toFloat()
         val deltaY = (-verticalAmount * SCROLL_WHEEL_STEP).toFloat()
@@ -1131,7 +1155,11 @@ class UiLayout internal constructor(
         val visualOffsetX: Float,
         val visualOffsetY: Float,
         val scrollChain: List<UiScrollTarget>,
-    )
+        val clip: UiClipStack?,
+    ) {
+        fun contains(x: Float, y: Float): Boolean =
+            bounds.contains(x, y) && (clip == null || clip.contains(x, y))
+    }
 
     private sealed interface UiPaintContent {
         val order: Int
@@ -1206,7 +1234,7 @@ class UiLayout internal constructor(
             node: UiLayoutNode,
             visualOffsetX: Float,
             visualOffsetY: Float,
-            inheritedClip: UiAxisClip?,
+            inheritedClip: UiClipStack?,
             ancestorScrollChain: List<UiScrollTarget>,
         ) {
             if (!node.displayed) return
@@ -1222,6 +1250,7 @@ class UiLayout internal constructor(
                         visualOffsetX = visualOffsetX,
                         visualOffsetY = visualOffsetY,
                         scrollChain = nodeScrollChain,
+                        clip = inheritedClip,
                     ),
                 )
             }
@@ -1262,6 +1291,7 @@ class UiLayout internal constructor(
                                         visualOffsetX = contentOffsetX,
                                         visualOffsetY = contentOffsetY,
                                         scrollChain = nodeScrollChain + pseudo.scrollTarget(),
+                                        clip = contentClip,
                                     ),
                                 )
                             }
@@ -1402,6 +1432,7 @@ class UiLayout internal constructor(
     private fun drawOverflowContents(
         target: UiScrollTarget,
         paddingBounds: UiRect,
+        clipRadii: Mine2DRoundedRectRadii,
         renderer: Mine2DEngine,
         visualOffsetX: Float,
         visualOffsetY: Float,
@@ -1409,20 +1440,36 @@ class UiLayout internal constructor(
     ) {
         val clip = target.overflow.overflowClip(
             paddingBounds.translated(visualOffsetX, visualOffsetY),
+            clipRadii,
         )
-        withAxisClip(renderer, clip) {
-            val scroll = scrollOffsets[target.key] ?: UiScrollOffset()
-            val pose = renderer.graphics.pose()
-            if (scroll == UiScrollOffset()) {
-                draw(visualOffsetX, visualOffsetY)
-                return@withAxisClip
+        withAxisClip(renderer, clip?.axisClip) {
+            fun drawScrolledContents() {
+                val scroll = scrollOffsets[target.key] ?: UiScrollOffset()
+                val pose = renderer.graphics.pose()
+                if (scroll == UiScrollOffset()) {
+                    draw(visualOffsetX, visualOffsetY)
+                    return
+                }
+                pose.pushMatrix()
+                try {
+                    pose.translate(-scroll.x, -scroll.y)
+                    draw(visualOffsetX - scroll.x, visualOffsetY - scroll.y)
+                } finally {
+                    pose.popMatrix()
+                }
             }
-            pose.pushMatrix()
-            try {
-                pose.translate(-scroll.x, -scroll.y)
-                draw(visualOffsetX - scroll.x, visualOffsetY - scroll.y)
-            } finally {
-                pose.popMatrix()
+
+            if (clip?.roundedClips?.isNotEmpty() == true) {
+                renderer.withRoundedClip(
+                    x = paddingBounds.left,
+                    y = paddingBounds.top,
+                    width = paddingBounds.width,
+                    height = paddingBounds.height,
+                    radii = clipRadii,
+                    draw = { drawScrolledContents() },
+                )
+            } else {
+                drawScrolledContents()
             }
         }
     }
@@ -1554,6 +1601,7 @@ class UiLayout internal constructor(
         drawOverflowContents(
             target = node.scrollTarget(),
             paddingBounds = node.paddingBounds,
+            clipRadii = roundedBox.radii,
             renderer = renderer,
             visualOffsetX = visualOffsetX,
             visualOffsetY = visualOffsetY,
@@ -2072,6 +2120,7 @@ class UiLayout internal constructor(
         drawOverflowContents(
             target = node.scrollTarget(),
             paddingBounds = node.paddingBounds,
+            clipRadii = roundedBox.radii,
             renderer = renderer,
             visualOffsetX = visualOffsetX,
             visualOffsetY = visualOffsetY,
@@ -2330,17 +2379,37 @@ private fun UiPseudoLayoutNode.scrollTarget(): UiScrollTarget = UiScrollTarget(
 private fun UiLayoutNode.overflowClip(
     visualOffsetX: Float,
     visualOffsetY: Float,
-): UiAxisClip? = overflow.overflowClip(
-    paddingBounds.translated(visualOffsetX, visualOffsetY),
-)
+): UiClipStack? {
+    val radii = styleProvider().borderRadius.resolve(bounds).radii
+    return overflow.overflowClip(
+        paddingBounds.translated(visualOffsetX, visualOffsetY),
+        radii,
+    )
+}
 
-private fun ResolvedUiOverflow.overflowClip(paddingBounds: UiRect): UiAxisClip? {
+private fun ResolvedUiOverflow.overflowClip(
+    paddingBounds: UiRect,
+    radii: Mine2DRoundedRectRadii,
+): UiClipStack? {
     if (!x.clips && !y.clips) return null
-    return UiAxisClip(
-        left = paddingBounds.left.takeIf { x.clips },
-        right = paddingBounds.right.takeIf { x.clips },
-        top = paddingBounds.top.takeIf { y.clips },
-        bottom = paddingBounds.bottom.takeIf { y.clips },
+    val roundedClip = if (x.clips && y.clips && !radii.isZero) {
+        listOf(
+            UiRoundedBox(
+                paddingBounds,
+                radii.normalized(paddingBounds.width, paddingBounds.height),
+            ),
+        )
+    } else {
+        emptyList()
+    }
+    return UiClipStack(
+        axisClip = UiAxisClip(
+            left = paddingBounds.left.takeIf { x.clips },
+            right = paddingBounds.right.takeIf { x.clips },
+            top = paddingBounds.top.takeIf { y.clips },
+            bottom = paddingBounds.bottom.takeIf { y.clips },
+        ),
+        roundedClips = roundedClip,
     )
 }
 

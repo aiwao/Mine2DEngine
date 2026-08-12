@@ -2,6 +2,8 @@ package io.github.aiwao.mine2dengine
 
 import com.mojang.blaze3d.PrimitiveTopology
 import com.mojang.blaze3d.pipeline.BindGroupLayout
+import com.mojang.blaze3d.pipeline.BlendFunction
+import com.mojang.blaze3d.pipeline.ColorTargetState
 import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.shaders.UniformType
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
@@ -244,6 +246,56 @@ object Mine2DShaders {
                 .build(),
         ),
         uniformBlock = DROP_SHADOW_UNIFORM_BLOCK,
+    )
+
+    internal const val ROUNDED_CLIP_SAMPLER_NAME = "ClipSampler"
+    internal val ROUNDED_CLIP_BOUNDS = Mine2DUniform.vec4("ClipBounds")
+    internal val ROUNDED_CLIP_RADII_HORIZONTAL = Mine2DUniform.vec4("CornerRadiiHorizontal")
+    internal val ROUNDED_CLIP_RADII_VERTICAL = Mine2DUniform.vec4("CornerRadiiVertical")
+    internal val ROUNDED_CLIP_SCREEN_TO_LOCAL_X = Mine2DUniform.vec4("ScreenToLocalX")
+    internal val ROUNDED_CLIP_SCREEN_TO_LOCAL_Y = Mine2DUniform.vec4("ScreenToLocalY")
+    internal val ROUNDED_CLIP_VIEWPORT = Mine2DUniform.vec4("ClipViewport")
+    private val ROUNDED_CLIP_UNIFORM_BLOCK = Mine2DUniformBlock(
+        "Mine2DRoundedClip",
+        ROUNDED_CLIP_BOUNDS,
+        ROUNDED_CLIP_RADII_HORIZONTAL,
+        ROUNDED_CLIP_RADII_VERTICAL,
+        ROUNDED_CLIP_SCREEN_TO_LOCAL_X,
+        ROUNDED_CLIP_SCREEN_TO_LOCAL_Y,
+        ROUNDED_CLIP_VIEWPORT,
+    )
+
+    /** Composites a premultiplied GUI layer through an analytic rounded rectangle. */
+    internal val ROUNDED_CLIP: Mine2DShader = Mine2DShader.from(
+        pipeline = RenderPipelines.register(
+            RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
+                .withLocation(
+                    Identifier.fromNamespaceAndPath(
+                        "mine2dengine",
+                        "pipeline/mine2d_rounded_clip",
+                    ),
+                )
+                .withVertexShader(
+                    Identifier.fromNamespaceAndPath("mine2dengine", "core/rounded_clip"),
+                )
+                .withFragmentShader(
+                    Identifier.fromNamespaceAndPath("mine2dengine", "core/rounded_clip"),
+                )
+                .withBindGroupLayout(
+                    BindGroupLayout.builder()
+                        .withUniform("Mine2DRoundedClip", UniformType.UNIFORM_BUFFER)
+                        .withSampler(ROUNDED_CLIP_SAMPLER_NAME)
+                        .build(),
+                )
+                .withColorTargetState(
+                    ColorTargetState(BlendFunction.TRANSLUCENT_PREMULTIPLIED_ALPHA),
+                )
+                .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
+                .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
+                .withCull(false)
+                .build(),
+        ),
+        uniformBlock = ROUNDED_CLIP_UNIFORM_BLOCK,
     )
 
     internal val TEXT_SHADOW_UV_BOUNDS = Mine2DUniform.vec4("UvBounds")

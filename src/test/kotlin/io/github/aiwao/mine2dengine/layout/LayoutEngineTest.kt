@@ -977,6 +977,25 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `rounded overflow excludes descendants from corner hit regions`() {
+        lateinit var child: Div
+        val root = div(
+            UiStyle(
+                width = 40f.px,
+                height = 40f.px,
+                overflow = UiOverflow(UiOverflowValue.HIDDEN),
+                borderRadius = UiBorderRadii(20f),
+            ),
+        ) {
+            child = div(UiStyle(width = 40f.px, height = 40f.px))
+        }
+        val result = layout(root)
+
+        assertSame(root, result.elementAt(1f, 1f))
+        assertSame(child, result.elementAt(20f, 20f))
+    }
+
+    @Test
     fun `clip forbids programmatic scrolling`() {
         val root = div(
             UiStyle(

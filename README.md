@@ -107,6 +107,7 @@ Coordinates are GUI coordinates, and colors are Minecraft ARGB integers (`0xAARR
 | `textShadow(font, text, x, y, ...)` | Draws a configurable glyph shadow without drawing the foreground text. |
 | `text(font, text, x, y, color)` | Draws text using a loaded `Mine2DFont`. |
 | `withMaterial(material) { ... }` | Temporarily changes the default polygon material and restores it after the block. |
+| `withRoundedClip(x, y, width, height, ...) { ... }` | Clips every deferred GUI draw in the block, including text, to a transformed rounded rectangle. |
 
 Polygon points may use clockwise or counterclockwise order. A polygon must have at least three distinct points, a non-zero area, and no self-intersections. Consecutive duplicate points and redundant collinear points are removed automatically. Lines require different endpoints and a positive width; circles require a positive radius and at least three segments. Rounded rectangles are tessellated automatically according to their curvature, and overlapping radii are reduced with the common scale factor defined by CSS. Use `Mine2DRoundedRectRadii` and `Mine2DCornerRadius` to specify corners independently.
 
@@ -285,7 +286,7 @@ val style = UiStyle(
 
 `Float.px` and `Float.percent` create length-percentage values. Negative lengths are accepted by margins and insets; sizes, padding, and gaps reject them. Padding percentages and physical margin percentages use the containing block's width, as in CSS.
 
-`borderRadius` changes only the painted border-box shape; it does not affect layout dimensions or clip descendants. Horizontal corner percentages use the border-box width and vertical percentages use its height. A box shadow follows the resolved border radius by default. To use the legacy equal radius, specify `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)`; a positive `cornerRadius` makes `followBorderRadius` default to false.
+`borderRadius` does not affect layout dimensions. Horizontal corner percentages use the border-box width and vertical percentages use its height. When both overflow axes clip, the resolved radius also shapes the descendant padding-box clip. A box shadow follows the resolved border radius by default. To use the legacy equal radius, specify `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)`; a positive `cornerRadius` makes `followBorderRadius` default to false.
 
 Supported preferred/minimum/maximum size values are `AUTO`, `MIN_CONTENT`, `MAX_CONTENT`, `FitContent(...)`, and a length-percentage. Maximum sizes additionally accept `NONE`.
 
@@ -323,8 +324,8 @@ nested scroll containers chaining at their limits. Scroll offsets survive relayo
 to the new overflow geometry. Use `scrollOffsetOf` to query an offset; `UiLayoutNode` exposes
 `paddingBounds`, `scrollableOverflowBounds`, `maximumScrollX`, and `maximumScrollY`.
 
-Overflow uses a rectangular padding-box clip and does not currently paint scrollbars. This keeps
-the existing rule that `borderRadius` does not shape descendant clips.
+Overflow clips at the padding box and does not currently paint scrollbars. When both axes clip,
+`borderRadius` shapes the clip and pointer hit testing; a single clipped axis remains rectangular.
 
 ### Flexbox
 

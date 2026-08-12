@@ -229,6 +229,35 @@ class Mine2DMaterialTest {
     }
 
     @Test
+    fun `rounded clip material packs bounds radii transform and viewport`() {
+        val material = Mine2DMaterials.roundedClip(
+            left = 10f,
+            top = 20f,
+            width = 80f,
+            height = 40f,
+            radii = Mine2DRoundedRectRadii(
+                topLeft = Mine2DCornerRadius(1f, 2f),
+                topRight = Mine2DCornerRadius(3f, 4f),
+                bottomRight = Mine2DCornerRadius(5f, 6f),
+                bottomLeft = Mine2DCornerRadius(7f, 8f),
+            ),
+            screenToLocalX = Vector4f(1f, 2f, 3f, 0f),
+            screenToLocalY = Vector4f(4f, 5f, 6f, 0f),
+            viewportWidth = 320f,
+            viewportHeight = 180f,
+        )
+        val data = material.resolveBindings(defaultContext()).uniforms().single().dataUnsafe()
+        val buffer = ByteBuffer.wrap(data).order(ByteOrder.nativeOrder())
+
+        assertFloatSequence(buffer, 0, 10f, 20f, 80f, 40f)
+        assertFloatSequence(buffer, 16, 1f, 3f, 5f, 7f)
+        assertFloatSequence(buffer, 32, 2f, 4f, 6f, 8f)
+        assertFloatSequence(buffer, 48, 1f, 2f, 3f, 0f)
+        assertFloatSequence(buffer, 64, 4f, 5f, 6f, 0f)
+        assertFloatSequence(buffer, 80, 320f, 180f, 0f, 0f)
+    }
+
+    @Test
     fun `built-in text shadow material packs glyph atlas and blur parameters`() {
         val material = Mine2DMaterials.textShadow(
             minU = 0.1f,

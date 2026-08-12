@@ -211,6 +211,44 @@ object Mine2DMaterials {
         set(Mine2DShaders.DROP_SHADOW_PARAMETERS, Vector4f(blurRadius, 0f, 0f, 0f))
     }
 
+    internal fun roundedClip(
+        left: Float,
+        top: Float,
+        width: Float,
+        height: Float,
+        radii: Mine2DRoundedRectRadii,
+        screenToLocalX: Vector4f,
+        screenToLocalY: Vector4f,
+        viewportWidth: Float,
+        viewportHeight: Float,
+    ): Mine2DMaterial = Mine2DShaders.ROUNDED_CLIP.material {
+        set(Mine2DShaders.ROUNDED_CLIP_BOUNDS, Vector4f(left, top, width, height))
+        set(
+            Mine2DShaders.ROUNDED_CLIP_RADII_HORIZONTAL,
+            Vector4f(
+                radii.topLeft.horizontal,
+                radii.topRight.horizontal,
+                radii.bottomRight.horizontal,
+                radii.bottomLeft.horizontal,
+            ),
+        )
+        set(
+            Mine2DShaders.ROUNDED_CLIP_RADII_VERTICAL,
+            Vector4f(
+                radii.topLeft.vertical,
+                radii.topRight.vertical,
+                radii.bottomRight.vertical,
+                radii.bottomLeft.vertical,
+            ),
+        )
+        set(Mine2DShaders.ROUNDED_CLIP_SCREEN_TO_LOCAL_X, screenToLocalX)
+        set(Mine2DShaders.ROUNDED_CLIP_SCREEN_TO_LOCAL_Y, screenToLocalY)
+        set(
+            Mine2DShaders.ROUNDED_CLIP_VIEWPORT,
+            Vector4f(viewportWidth, viewportHeight, 0f, 0f),
+        )
+    }
+
     internal fun textShadow(
         minU: Float,
         minV: Float,

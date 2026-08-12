@@ -1,6 +1,7 @@
 package io.github.aiwao.mine2dengine.layout
 
 import io.github.aiwao.mine2dengine.Mine2DCornerRadius
+import io.github.aiwao.mine2dengine.Mine2DRoundedRectRadii
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -59,5 +60,20 @@ class BorderRadiusTest {
         assertTrue(UiBoxShadow().followBorderRadius)
         assertFalse(UiBoxShadow(cornerRadius = 4f).followBorderRadius)
         assertFalse(UiBoxShadow(cornerRadius = 0f, followBorderRadius = false).followBorderRadius)
+    }
+
+    @Test
+    fun `rounded box containment follows independently elliptical corners`() {
+        val box = UiRoundedBox(
+            bounds = UiRect(10f, 20f, 100f, 40f),
+            radii = Mine2DRoundedRectRadii(20f, 10f),
+        )
+
+        assertFalse(box.contains(10f, 20f))
+        assertFalse(box.contains(11f, 21f))
+        assertTrue(box.contains(30f, 20f))
+        assertTrue(box.contains(20f, 25f))
+        assertTrue(box.contains(50f, 40f))
+        assertFalse(box.contains(110f, 40f))
     }
 }

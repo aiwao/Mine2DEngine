@@ -107,6 +107,7 @@ object ExampleModClient : ClientModInitializer {
 | `textShadow(font, text, x, y, ...)` | 前景文字を描かず、設定可能なglyph shadowを描画します。                                                                |
 | `text(font, text, x, y, color)` | 読み込み済みの `Mine2DFont` で文字列を描画します。                                                                                 |
 | `withMaterial(material) { ... }` | ブロック内だけ既定のポリゴンMaterialを変更し、終了後に元へ戻します。                                                |
+| `withRoundedClip(x, y, width, height, ...) { ... }` | textを含むブロック内のすべてのdeferred GUI描画を、座標変換された角丸矩形でclipします。 |
 
 ポリゴンの各点は時計回り、反時計回りのどちらでも指定できます。3 個以上の異なる点と 0 ではない面積が必要で、自己交差はできません。連続する重複点と不要な同一直線上の点は自動的に取り除かれます。線には異なる始点・終点と正の幅、円には正の半径と 3 以上の分割数が必要です。角丸矩形は曲率に応じて自動的に分割され、重なり合う半径はCSSと同じ共通係数で縮小されます。四隅を個別指定する場合は `Mine2DRoundedRectRadii` と `Mine2DCornerRadius` を使用します。
 
@@ -280,7 +281,7 @@ val style = UiStyle(
 
 `Float.px`と`Float.percent`でlength-percentageを作ります。負のlengthはmarginとinsetでは利用できますが、size、padding、gapでは拒否されます。CSSと同様に、padding percentageと物理margin percentageは包含blockの幅を基準にします。
 
-`borderRadius`はborder boxの描画形状だけを変更し、レイアウト寸法や子要素のclipには影響しません。角半径の水平方向percentageはborder boxの幅、垂直方向percentageは高さを基準にします。box shadowも既定では解決済みのborder radiusを使用します。従来の単一半径を使う場合は `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)` を指定します。0より大きい `cornerRadius` では `followBorderRadius` の既定値がfalseになります。
+`borderRadius`はレイアウト寸法には影響しません。角半径の水平方向percentageはborder boxの幅、垂直方向percentageは高さを基準にします。overflowの両軸がclipする場合は、解決済みの半径が子孫のpadding-box clipにも適用されます。box shadowも既定では解決済みのborder radiusを使用します。従来の単一半径を使う場合は `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)` を指定します。0より大きい `cornerRadius` では `followBorderRadius` の既定値がfalseになります。
 
 preferred / minimum / maximum sizeでは`AUTO`、`MIN_CONTENT`、`MAX_CONTENT`、`FitContent(...)`、length-percentageを利用できます。maximum sizeでは`NONE`も利用できます。
 
@@ -311,7 +312,7 @@ val verticalScrollerStyle = UiStyle(
 
 `hidden`はwheel入力を受け付けませんが、`UiLayout.scrollTo`と`scrollBy`からスクロールできます。`clip`はユーザー操作とプログラム操作の両方を禁止します。`auto`と`scroll`はwheel入力を受け付け、内側が端へ到達すると外側のscroll containerへ連鎖します。scroll offsetはrelayout後も維持され、新しいoverflow geometryへclampされます。現在値は`scrollOffsetOf`から取得でき、`UiLayoutNode`では`paddingBounds`、`scrollableOverflowBounds`、`maximumScrollX`、`maximumScrollY`を参照できます。
 
-overflow clipは矩形のpadding boxです。scrollbarは現在描画しません。既存仕様どおり、`borderRadius`は子孫のclip形状には影響しません。
+overflowはpadding boxでclipし、scrollbarは現在描画しません。両軸がclipする場合は`borderRadius`がclipとpointer hit testの形状にも適用されます。片軸だけがclipする場合は矩形のままです。
 
 ### Flexbox
 

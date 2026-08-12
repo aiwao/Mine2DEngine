@@ -2,6 +2,7 @@ package io.github.aiwao.mine2dengine
 
 import com.mojang.blaze3d.PrimitiveTopology
 import com.mojang.blaze3d.pipeline.BindGroupLayout
+import com.mojang.blaze3d.pipeline.BlendFunction
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import net.minecraft.client.renderer.RenderPipelines
 import kotlin.test.Test
@@ -83,6 +84,36 @@ class Mine2DShaderTest {
         )
         assertTrue(
             Mine2DShaders.DROP_SHADOW_SAMPLER_NAME in
+                BindGroupLayout.flattenSamplers(pipeline.bindGroupLayouts),
+        )
+    }
+
+    @Test
+    fun `rounded clip shader uses a premultiplied compositor pipeline`() {
+        val shader = Mine2DShaders.ROUNDED_CLIP
+        val pipeline = shader.pipeline
+
+        assertSame(DefaultVertexFormat.POSITION_COLOR, pipeline.getVertexFormatBinding(0))
+        assertEquals(PrimitiveTopology.TRIANGLES, pipeline.primitiveTopology)
+        assertFalse(pipeline.isCull)
+        assertEquals(
+            BlendFunction.TRANSLUCENT_PREMULTIPLIED_ALPHA,
+            requireNotNull(pipeline.colorTargetState).blendFunction().orElseThrow(),
+        )
+        assertEquals("Mine2DRoundedClip", shader.uniformBlock?.name)
+        assertEquals(
+            listOf(
+                "ClipBounds",
+                "CornerRadiiHorizontal",
+                "CornerRadiiVertical",
+                "ScreenToLocalX",
+                "ScreenToLocalY",
+                "ClipViewport",
+            ),
+            shader.uniformBlock?.uniforms?.map(Mine2DUniform<*>::name),
+        )
+        assertTrue(
+            Mine2DShaders.ROUNDED_CLIP_SAMPLER_NAME in
                 BindGroupLayout.flattenSamplers(pipeline.bindGroupLayouts),
         )
     }

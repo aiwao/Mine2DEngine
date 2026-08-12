@@ -2,8 +2,8 @@ package io.github.aiwao.mine2dengine
 
 import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.vertex.VertexConsumer
-import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowCompositeRenderState
-import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowMemberRenderState
+import io.github.aiwao.mine2dengine.internal.render.Mine2DEffect
+import io.github.aiwao.mine2dengine.internal.render.Mine2DEffectCompositeRenderState
 import io.github.aiwao.mine2dengine.internal.render.Mine2DMaterialRenderState
 import io.github.aiwao.mine2dengine.internal.render.Mine2DRenderBindings
 import net.minecraft.client.gui.navigation.ScreenRectangle
@@ -13,8 +13,7 @@ import org.joml.Matrix3x2f
 
 /** Draws a prepared full-frame alpha mask through the drop-shadow compositor. */
 internal class DropShadowRenderState(
-    private val groupId: Long,
-    private val outerGroups: List<Long>,
+    private val effect: Mine2DEffect,
     private val bindings: Mine2DRenderBindings,
     private val left: Float,
     private val top: Float,
@@ -23,8 +22,7 @@ internal class DropShadowRenderState(
     private val scissor: ScreenRectangle?,
 ) : GuiElementRenderState,
     Mine2DMaterialRenderState,
-    Mine2DDropShadowMemberRenderState,
-    Mine2DDropShadowCompositeRenderState {
+    Mine2DEffectCompositeRenderState {
     private val pose = Matrix3x2f()
     private val boundsLeft = kotlin.math.floor(left).toInt()
     private val boundsTop = kotlin.math.floor(top).toInt()
@@ -54,9 +52,7 @@ internal class DropShadowRenderState(
 
     override fun mine2dengineBindings(): Mine2DRenderBindings = bindings
 
-    override fun mine2dengineDropShadowGroups(): List<Long> = outerGroups
-
-    override fun mine2dengineDropShadowGroup(): Long = groupId
+    override fun mine2dengineEffect(): Mine2DEffect = effect
 
     private fun addVertex(vertexConsumer: VertexConsumer, x: Float, y: Float) {
         vertexConsumer.addVertexWith2DPose(pose, x, y).setColor(-1)
