@@ -8,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -877,10 +878,170 @@ class LayoutEngineTest {
         result.left = 12f
         result.top = 13f
 
+        assertEquals(UiRect(12f, 13f, 100f, 100f), result.viewport)
         assertEquals(UiRect(12f, 13f, 20f, 10f), result.root.bounds)
         assertEquals(12f, result.nodeOf(child)!!.bounds.left)
         assertEquals(12f, result.fragmentsOf(root).single().borderBox.left)
         assertSame(child, result.elementAt(13f, 14f))
+    }
+
+    @Test
+    fun `updating viewport width recomputes flex wrapping in the same layout`() {
+        lateinit var third: Div
+        val root = div(UiStyle(display = UiDisplay.FLEX, flexWrap = UiFlexWrap.WRAP)) {
+            repeat(3) { index ->
+                val child = div(
+                    UiStyle(width = 20f.px, height = 10f.px, flexShrink = 0f),
+                )
+                if (index == 2) third = child
+            }
+        }
+        val result = layout(root, width = 50f, height = 30f)
+        val previousRoot = result.root
+        assertEquals(10f, result.nodeOf(third)!!.bounds.top)
+
+        result.updateViewport(UiRect(0f, 0f, 60f, 30f))
+
+        assertEquals(UiRect(0f, 0f, 60f, 30f), result.viewport)
+        assertNotSame(previousRoot, result.root)
+        assertEquals(60f, result.root.bounds.width)
+        assertEquals(0f, result.nodeOf(third)!!.bounds.top)
+    }
+
+    @Test
+    fun `updating viewport height recomputes percentages and absolute insets`() {
+        lateinit var absolute: Div
+        val root = div(
+            UiStyle(height = 50f.percent, position = UiPosition.RELATIVE),
+        ) {
+            absolute = div(
+                UiStyle(
+                    position = UiPosition.ABSOLUTE,
+                    left = 0f.px,
+                    bottom = 0f.px,
+                    width = 10f.px,
+                    height = 10f.px,
+                ),
+            )
+        }
+        val result = layout(root, width = 100f, height = 100f)
+        assertEquals(UiRect(0f, 40f, 10f, 10f), result.nodeOf(absolute)!!.bounds)
+
+        result.updateViewport(UiRect(0f, 0f, 100f, 200f))
+
+        assertEquals(100f, result.root.bounds.height)
+        assertEquals(UiRect(0f, 90f, 10f, 10f), result.nodeOf(absolute)!!.bounds)
+    }
+
+    @Test
+    fun `same viewport is a no-op and origin-only update does not resolve styles`() {
+        var styleResolutions = 0
+        val root = div(style = {
+            styleResolutions += 1
+            UiStyle(width = 20f.px, height = 10f.px)
+        })
+        val result = layout(root, width = 80f, height = 40f)
+        val originalRoot = result.root
+        val resolutionsAfterLayout = styleResolutions
+
+        result.updateViewport(result.viewport)
+
+        assertSame(originalRoot, result.root)
+        assertEquals(resolutionsAfterLayout, styleResolutions)
+
+        result.updateViewport(UiRect(5f, 7f, 80f, 40f))
+        val translatedRoot = result.root
+
+        assertEquals(resolutionsAfterLayout, styleResolutions)
+        assertEquals(UiRect(5f, 7f, 20f, 10f), translatedRoot.bounds)
+        assertEquals(5f, result.rootFragment.borderBox.left)
+
+        result.updateViewport(result.viewport)
+        assertSame(translatedRoot, result.root)
+    }
+
+    @Test
+    fun `relayout reflects style text and child mutations at the current viewport`() {
+        lateinit var paragraph: Paragraph
+        val root = div(UiStyle(width = 20f.px)) {
+            paragraph = p("a")
+        }
+        val result = layout(root, width = 100f, height = 50f, left = 2f, top = 3f)
+        val previousRoot = result.root
+        val added = Div(UiStyle(height = 5f.px))
+        root.style = UiStyle(width = 40f.px)
+        paragraph.text = "aaaa"
+        root.add(added)
+
+        result.relayout()
+
+        assertEquals(UiRect(2f, 3f, 100f, 50f), result.viewport)
+        assertNotSame(previousRoot, result.root)
+        assertEquals(40f, result.root.bounds.width)
+        assertEquals("aaaa", result.nodeOf(paragraph)!!.textFragments.single().text)
+        assertNotNull(result.nodeOf(added))
+        assertEquals(15f, result.root.bounds.height)
+    }
+
+    @Test
+    fun `viewport relayout preserves input state for displayed elements and clears removed ones`() {
+        lateinit var child: Div
+        val root = div {
+            child = div(
+                UiStyle(width = 10f.px, height = 10f.px),
+                onClick = {},
+            )
+        }
+        val result = layout(root, width = 50f, height = 30f)
+        result.mouseMove(5.0, 5.0)
+        result.mouseClick(MouseButtonEvent(5.0, 5.0, MouseButtonInfo(0, 0)))
+        assertTrue(child.hovering)
+        assertTrue(child.dragging)
+
+        result.updateViewport(UiRect(0f, 0f, 60f, 30f))
+
+        assertTrue(child.hovering)
+        assertTrue(child.dragging)
+        root.children.remove(child)
+
+        result.relayout()
+
+        assertFalse(child.hovering)
+        assertFalse(child.dragging)
+        assertFalse(result.mouseRelease())
+    }
+
+    @Test
+    fun `failed viewport update keeps the previous viewport and snapshot`() {
+        var fail = false
+        val root = div(style = {
+            check(!fail) { "style failure" }
+            UiStyle(height = 10f.px)
+        })
+        val result = layout(root, width = 100f, height = 50f)
+        val previousViewport = result.viewport
+        val previousRoot = result.root
+        val previousFragment = result.rootFragment
+        fail = true
+
+        assertFailsWith<IllegalStateException> {
+            result.updateViewport(UiRect(0f, 0f, 80f, 50f))
+        }
+
+        assertEquals(previousViewport, result.viewport)
+        assertSame(previousRoot, result.root)
+        assertSame(previousFragment, result.rootFragment)
+    }
+
+    @Test
+    fun `viewport may be updated to an empty initial containing block`() {
+        val result = layout(div(UiStyle(height = 5f.px)), width = 20f, height = 20f)
+
+        result.updateViewport(UiRect(0f, 0f, 0f, 0f))
+
+        assertEquals(UiRect(0f, 0f, 0f, 0f), result.viewport)
+        assertEquals(0f, result.root.bounds.width)
+        assertEquals(5f, result.root.bounds.height)
     }
 
     @Test
@@ -889,6 +1050,7 @@ class LayoutEngineTest {
 
         val result = LayoutEngine.layout(root, UiRect(4f, 6f, 70f, 40f))
 
+        assertEquals(UiRect(4f, 6f, 70f, 40f), result.viewport)
         assertEquals(UiRect(4f, 6f, 70f, 5f), result.root.bounds)
     }
 

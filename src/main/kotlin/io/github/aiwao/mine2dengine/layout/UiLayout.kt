@@ -101,8 +101,16 @@ data class UiPseudoLayoutNode(
 /** A layout result that can render and dispatch pointer input to UI elements. */
 class UiLayout internal constructor(
     snapshot: UiLayoutSnapshot,
-    private val relayout: (Float, Float, Map<UiDisplayKey, Boolean>) -> UiLayoutSnapshot,
+    viewport: UiRect,
+    private val snapshotCalculator: (
+        UiRect,
+        Map<UiDisplayKey, Boolean>,
+    ) -> UiLayoutSnapshot,
 ) {
+    /** The current initial containing block used by CSS layout. */
+    var viewport: UiRect = viewport
+        private set
+
     var root: UiLayoutNode = snapshot.root
         private set
 
@@ -114,18 +122,18 @@ class UiLayout internal constructor(
 
     private var dragButtonInfo: MouseButtonInfo? = null
 
-    /** The left coordinate of the root's outer box. Changing it translates the complete layout. */
+    /** The viewport's left coordinate. Changing it translates the complete layout. */
     var left: Float
-        get() = root.outerBounds.left
+        get() = viewport.left
         set(value) {
-            moveTo(value, top)
+            updateViewport(viewport.copy(left = value))
         }
 
-    /** The top coordinate of the root's outer box. Changing it translates the complete layout. */
+    /** The viewport's top coordinate. Changing it translates the complete layout. */
     var top: Float
-        get() = root.outerBounds.top
+        get() = viewport.top
         set(value) {
-            moveTo(left, value)
+            updateViewport(viewport.copy(top = value))
         }
 
     val size: UiSize
@@ -134,16 +142,48 @@ class UiLayout internal constructor(
             return UiSize(root.outerBounds.width, root.outerBounds.height)
         }
 
-    internal fun moveTo(left: Float, top: Float) {
-        require(left.isFinite()) { "Left must be finite: $left" }
-        require(top.isFinite()) { "Top must be finite: $top" }
+    /**
+     * Changes the initial containing block and updates this layout synchronously.
+     *
+     * An origin-only change translates the existing geometry. A width or height change rebuilds
+     * the CSS box and fragment trees so percentages, wrapping, flex sizing, and positioned boxes
+     * use the new available size. The previous viewport and snapshot remain installed if layout
+     * calculation fails. Previously obtained node and fragment objects are snapshots and must be
+     * queried again after this method returns.
+     *
+     * This method does not dispatch pointer callbacks. Existing drag and hover state is retained
+     * for elements that still generate boxes and cleared for elements removed by the new layout.
+     */
+    fun updateViewport(viewport: UiRect) {
+        val previous = this.viewport
+        if (viewport == previous) return
 
-        val deltaX = left - this.left
-        val deltaY = top - this.top
-        if (deltaX == 0f && deltaY == 0f) return
+        if (viewport.width == previous.width && viewport.height == previous.height) {
+            val deltaX = viewport.left - previous.left
+            val deltaY = viewport.top - previous.top
+            val translatedRoot = root.translated(deltaX, deltaY)
+            val translatedRootFragment = rootFragment.translated(deltaX, deltaY)
+            root = translatedRoot
+            rootFragment = translatedRootFragment
+            this.viewport = viewport
+            return
+        }
 
-        root = root.translated(deltaX, deltaY)
-        rootFragment = rootFragment.translated(deltaX, deltaY)
+        val snapshot = snapshotCalculator(viewport, emptyMap())
+        applySnapshot(snapshot)
+        this.viewport = viewport
+    }
+
+    /**
+     * Rebuilds this layout synchronously using the current [viewport].
+     *
+     * Use this after changing styles other than `display`, text, style sheets, or children.
+     * Dynamic transitions to or from `display: none` continue to refresh automatically before
+     * rendering and pointer operations.
+     */
+    fun relayout() {
+        val snapshot = snapshotCalculator(viewport, emptyMap())
+        applySnapshot(snapshot)
     }
 
     /** Renders this layout, recalculating geometry when a none-display value changes. */
@@ -154,7 +194,7 @@ class UiLayout internal constructor(
 
     /** Moves this layout to [left], [top], then renders it without recalculating its size. */
     fun render(renderer: Mine2DEngine, left: Float, top: Float) {
-        moveTo(left, top)
+        updateViewport(viewport.copy(left = left, top = top))
         render(renderer)
     }
 
@@ -421,8 +461,12 @@ class UiLayout internal constructor(
         }
         if (!changed) return
 
+        val snapshot = snapshotCalculator(viewport, evaluatedDisplays)
+        applySnapshot(snapshot)
+    }
+
+    private fun applySnapshot(snapshot: UiLayoutSnapshot) {
         val previousNodes = nodesInPaintOrder()
-        val snapshot = relayout(left, top, evaluatedDisplays)
         root = snapshot.root
         rootFragment = snapshot.rootFragment
         displayStates = snapshot.displayStates

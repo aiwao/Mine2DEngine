@@ -31,7 +31,8 @@ class Mine2DTextMeasurer(
  *
  * [viewport] is the initial containing block. A viewport is mandatory because CSS block
  * `width:auto`, percentages, absolute positioning, and flex free-space resolution all require an
- * available size supplied by the embedding application.
+ * available size supplied by the embedding application. The returned [UiLayout] can update it
+ * later with [UiLayout.updateViewport].
  */
 object LayoutEngine {
     /** Builds a root [Div] and lays it out inside [viewport]. */
@@ -98,13 +99,9 @@ private fun calculateLayout(
     val sheets = styleSheets.toList()
 
     fun calculateSnapshot(
-        left: Float,
-        top: Float,
+        currentViewport: UiRect,
         evaluatedDisplays: Map<UiDisplayKey, Boolean>,
     ): UiLayoutSnapshot {
-        require(left.isFinite()) { "Left must be finite: $left" }
-        require(top.isFinite()) { "Top must be finite: $top" }
-        val currentViewport = viewport.copy(left = left, top = top)
         val displayStates = mutableListOf<UiDisplayState>()
         val boxTree = CssBoxTreeBuilder(
             root = root,
@@ -120,8 +117,8 @@ private fun calculateLayout(
         )
     }
 
-    val snapshot = calculateSnapshot(viewport.left, viewport.top, emptyMap())
-    return UiLayout(snapshot, ::calculateSnapshot)
+    val snapshot = calculateSnapshot(viewport, emptyMap())
+    return UiLayout(snapshot, viewport, ::calculateSnapshot)
 }
 
 private fun CssFragment.toLayoutNode(): UiLayoutNode {

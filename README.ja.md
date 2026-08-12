@@ -224,6 +224,21 @@ val layout = LayoutEngine.layout(
 )
 ```
 
+`layout.viewport`から現在のinitial containing blockを取得できます。利用可能なGUI領域が変わった場合は、`UiLayout`インスタンスを置き換えずに更新できます。
+
+```kotlin
+layout.updateViewport(
+    UiRect(
+        left = panelLeft,
+        top = panelTop,
+        width = newWidth,
+        height = newHeight,
+    ),
+)
+```
+
+`updateViewport`は同期処理です。現在と同じ矩形なら何もせず、原点だけが変わった場合は全geometryを平行移動し、幅または高さが変わった場合はCSS layout全体を再計算します。計算に失敗した場合は以前のviewportとgeometryを維持します。取得済みの`UiLayoutNode`と`UiBoxFragment`はsnapshotなので、更新後は`root`、`nodeOf`、`rootFragment`、`fragmentsOf`から取得し直してください。
+
 `width: auto`のblock boxは利用可能なinline sizeを埋め、`height: auto`は通常フロー内の内容に合わせます。そのため、style未指定のルート`div`は子へ縮むのではなく、通常はviewport幅になります。
 
 `div`と`p`には組み込みUA style層から`display: block`が与えられます。他のtagはCSSのdisplay初期値である`inline`です。author stylesheetはUA層を上書きし、要素へ直接指定したstyleが最優先です。
@@ -337,7 +352,9 @@ val hit = layout.elementAt(mouseX, mouseY)
 
 描画、shadow、hit test、hover、click、drag dispatchは最終的なCSS geometryを使います。計算済みlayoutの`left`または`top`だけを変更すると、node、fragment、hit regionが一緒に移動します。
 
-dynamic style providerが`UiDisplay.NONE`へ切り替わる、またはそこから戻る変化は、描画とpointer操作の前に検査され、geometryが自動再計算されます。それ以外のlayout property、text、stylesheet内容、childを変更した場合はlayoutを作り直してください。
+viewport更新ではpointer callbackを発火しません。完全な再レイアウト後もboxを生成する要素のhoverとdrag状態は維持し、削除された要素の状態は解除します。次の`mouseMove`で新しいgeometryに対してhoverを同期します。
+
+dynamic style providerが`UiDisplay.NONE`へ切り替わる、またはそこから戻る変化は、描画とpointer操作の前に検査され、geometryが自動再計算されます。それ以外のlayout property、text、stylesheet内容、childを変更した場合は`layout.relayout()`を呼び、現在のviewportでgeometryを再構築してください。
 
 ## カスタムシェーダー
 

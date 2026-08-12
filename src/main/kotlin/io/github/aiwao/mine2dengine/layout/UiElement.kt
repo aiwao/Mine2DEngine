@@ -83,7 +83,7 @@ sealed class UiContainer(
      *
      * [TargetScope] selects this container. An outer container's sheets can style a nested
      * component root but do not enter that component's descendants. Mutating this list after
-     * layout requires recalculating the layout.
+     * layout requires calling [UiLayout.relayout].
      */
     val styleSheets: MutableList<StyleSheet> = styleSheets.toMutableList()
 

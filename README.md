@@ -224,6 +224,26 @@ val layout = LayoutEngine.layout(
 )
 ```
 
+`layout.viewport` exposes the current initial containing block. Update it without replacing the
+`UiLayout` instance when the available GUI area changes:
+
+```kotlin
+layout.updateViewport(
+    UiRect(
+        left = panelLeft,
+        top = panelTop,
+        width = newWidth,
+        height = newHeight,
+    ),
+)
+```
+
+`updateViewport` is synchronous. Supplying the current rectangle is a no-op; changing only its
+origin translates all geometry, while changing its width or height performs a complete CSS
+relayout. The old viewport and geometry remain installed if calculation fails. Previously obtained
+`UiLayoutNode` and `UiBoxFragment` objects are snapshots, so query them again through `root`,
+`nodeOf`, `rootFragment`, or `fragmentsOf` after an update.
+
 A block box whose `width` is `auto` fills the available inline size. An `auto` height fits its in-flow contents. This means an unstyled root `div` normally has the viewport width rather than shrinking around its children.
 
 `div` and `p` receive `display: block` from the built-in user-agent style layer. Other tags use the CSS initial display value, `inline`. Author style sheets override the user-agent layer, and an element's directly supplied style has the highest priority.
@@ -337,7 +357,14 @@ val hit = layout.elementAt(mouseX, mouseY)
 
 Rendering, shadows, hit testing, hover, click, and drag dispatch use the final CSS geometry. Changing only `left` or `top` on a calculated layout translates nodes, fragments, and hit regions together.
 
-A dynamic style provider that switches to or from `UiDisplay.NONE` is checked before rendering and pointer operations and triggers geometry recalculation. Rebuild the layout after changing any other layout property, text, style-sheet contents, or children.
+A viewport update does not dispatch pointer callbacks. Hover and drag state is retained for elements
+that still generate boxes and cleared for elements removed by a complete relayout; the next
+`mouseMove` reconciles hover against the new geometry.
+
+A dynamic style provider that switches to or from `UiDisplay.NONE` is checked before rendering and
+pointer operations and triggers geometry recalculation. After changing any other layout property,
+text, style-sheet contents, or children, call `layout.relayout()` to rebuild geometry with the
+current viewport.
 
 ## Custom shaders
 
