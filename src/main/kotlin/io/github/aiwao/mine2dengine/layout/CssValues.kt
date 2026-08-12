@@ -1,0 +1,325 @@
+package io.github.aiwao.mine2dengine.layout
+
+/** The outer role of a generated CSS box in its parent's flow formatting context. */
+enum class UiDisplayOutside {
+    BLOCK,
+    INLINE,
+}
+
+/** The formatting context established for the contents of a generated CSS box. */
+enum class UiDisplayInside {
+    FLOW,
+    FLOW_ROOT,
+    FLEX,
+}
+
+/**
+ * CSS `display` as either a pair of outer/inner display types or a box-suppression value.
+ *
+ * The constants mirror the commonly used single-keyword CSS values. [Box] remains public so a
+ * caller can spell multi-keyword values such as `inline flow-root` without adding another enum
+ * constant.
+ */
+sealed interface UiDisplay {
+    data class Box(
+        val outside: UiDisplayOutside,
+        val inside: UiDisplayInside,
+    ) : UiDisplay
+
+    data object None : UiDisplay
+
+    data object Contents : UiDisplay
+
+    companion object {
+        @JvmField
+        val BLOCK: UiDisplay = Box(UiDisplayOutside.BLOCK, UiDisplayInside.FLOW)
+
+        @JvmField
+        val INLINE: UiDisplay = Box(UiDisplayOutside.INLINE, UiDisplayInside.FLOW)
+
+        @JvmField
+        val FLOW_ROOT: UiDisplay = Box(UiDisplayOutside.BLOCK, UiDisplayInside.FLOW_ROOT)
+
+        @JvmField
+        val FLEX: UiDisplay = Box(UiDisplayOutside.BLOCK, UiDisplayInside.FLEX)
+
+        @JvmField
+        val INLINE_FLEX: UiDisplay = Box(UiDisplayOutside.INLINE, UiDisplayInside.FLEX)
+
+        @JvmField
+        val NONE: UiDisplay = None
+
+        @JvmField
+        val CONTENTS: UiDisplay = Contents
+    }
+}
+
+internal val UiDisplay.box: UiDisplay.Box?
+    get() = this as? UiDisplay.Box
+
+/** A CSS preferred/minimum/maximum size value. */
+sealed interface UiSizeValue {
+    data object Auto : UiSizeValue
+
+    /** Used as the initial value of max-width and max-height. */
+    data object None : UiSizeValue
+
+    data object MinContent : UiSizeValue
+
+    data object MaxContent : UiSizeValue
+
+    data class FitContent(
+        val limit: UiLength? = null,
+    ) : UiSizeValue {
+        init {
+            require(limit == null || limit.value >= 0f) {
+                "A fit-content limit must be non-negative: $limit"
+            }
+        }
+    }
+
+    companion object {
+        @JvmField
+        val AUTO: UiSizeValue = Auto
+
+        @JvmField
+        val NONE: UiSizeValue = None
+
+        @JvmField
+        val MIN_CONTENT: UiSizeValue = MinContent
+
+        @JvmField
+        val MAX_CONTENT: UiSizeValue = MaxContent
+    }
+}
+
+/** A CSS margin value. */
+sealed interface UiMarginValue {
+    data object Auto : UiMarginValue
+
+    companion object {
+        @JvmField
+        val AUTO: UiMarginValue = Auto
+    }
+}
+
+/** A CSS inset (`top`, `right`, `bottom`, or `left`) value. */
+sealed interface UiInsetValue {
+    data object Auto : UiInsetValue
+
+    companion object {
+        @JvmField
+        val AUTO: UiInsetValue = Auto
+    }
+}
+
+/** A CSS flex-basis value. */
+sealed interface UiFlexBasis {
+    data object Auto : UiFlexBasis
+
+    data object Content : UiFlexBasis
+
+    data object MinContent : UiFlexBasis
+
+    data object MaxContent : UiFlexBasis
+
+    companion object {
+        @JvmField
+        val AUTO: UiFlexBasis = Auto
+
+        @JvmField
+        val CONTENT: UiFlexBasis = Content
+
+        @JvmField
+        val MIN_CONTENT: UiFlexBasis = MinContent
+
+        @JvmField
+        val MAX_CONTENT: UiFlexBasis = MaxContent
+    }
+}
+
+/** Unit used by CSS length-percentage values. */
+enum class UiLengthUnit {
+    PX,
+    PERCENT,
+}
+
+/**
+ * A finite CSS length-percentage.
+ *
+ * Negative values are represented because CSS margins and insets permit them. Properties that do
+ * not accept negative values validate the value when [UiStyle] is constructed.
+ */
+data class UiLength(
+    val value: Float,
+    val unit: UiLengthUnit,
+) : UiSizeValue, UiMarginValue, UiInsetValue, UiFlexBasis {
+    init {
+        require(value.isFinite()) { "Length must be finite: $value" }
+    }
+}
+
+/** Treats this value as a CSS pixel length. */
+val Float.px: UiLength
+    get() = UiLength(this, UiLengthUnit.PX)
+
+/** Treats this value as a CSS percentage. */
+val Float.percent: UiLength
+    get() = UiLength(this, UiLengthUnit.PERCENT)
+
+internal fun UiLength.resolve(percentageBase: Float?): Float? {
+    val resolved = when (unit) {
+        UiLengthUnit.PX -> value
+        UiLengthUnit.PERCENT -> percentageBase?.let { it * value / 100f }
+    }
+    require(resolved == null || resolved.isFinite()) {
+        "Resolved length must be finite: $resolved"
+    }
+    return resolved
+}
+
+/** Declaration accepted by the CSS margin longhands/shorthand. */
+sealed interface UiMarginDeclaration
+
+/** Declaration accepted by the CSS padding longhands/shorthand. */
+sealed interface UiPaddingDeclaration
+
+/** Physical CSS margin values in top, right, bottom, left order. */
+data class UiMargins(
+    val top: UiMarginValue = 0f.px,
+    val right: UiMarginValue = 0f.px,
+    val bottom: UiMarginValue = 0f.px,
+    val left: UiMarginValue = 0f.px,
+) : UiMarginDeclaration {
+    constructor(all: UiMarginValue) : this(all, all, all, all)
+
+    constructor(vertical: UiMarginValue, horizontal: UiMarginValue) : this(
+        top = vertical,
+        right = horizontal,
+        bottom = vertical,
+        left = horizontal,
+    )
+
+    constructor(all: Float) : this(all.px)
+
+    constructor(vertical: Float, horizontal: Float) : this(vertical.px, horizontal.px)
+}
+
+/** Physical CSS padding values in top, right, bottom, left order. */
+data class UiPaddings(
+    val top: UiLength = 0f.px,
+    val right: UiLength = 0f.px,
+    val bottom: UiLength = 0f.px,
+    val left: UiLength = 0f.px,
+) : UiPaddingDeclaration {
+    constructor(all: UiLength) : this(all, all, all, all)
+
+    constructor(vertical: UiLength, horizontal: UiLength) : this(
+        top = vertical,
+        right = horizontal,
+        bottom = vertical,
+        left = horizontal,
+    )
+
+    constructor(all: Float) : this(all.px)
+
+    constructor(vertical: Float, horizontal: Float) : this(vertical.px, horizontal.px)
+
+    init {
+        require(top.value >= 0f) { "Padding top must be non-negative: $top" }
+        require(right.value >= 0f) { "Padding right must be non-negative: $right" }
+        require(bottom.value >= 0f) { "Padding bottom must be non-negative: $bottom" }
+        require(left.value >= 0f) { "Padding left must be non-negative: $left" }
+    }
+}
+
+enum class UiFlexDirection {
+    ROW,
+    ROW_REVERSE,
+    COLUMN,
+    COLUMN_REVERSE,
+}
+
+enum class UiFlexWrap {
+    NOWRAP,
+    WRAP,
+    WRAP_REVERSE,
+}
+
+enum class UiJustifyContent {
+    NORMAL,
+    START,
+    END,
+    FLEX_START,
+    FLEX_END,
+    CENTER,
+    SPACE_BETWEEN,
+    SPACE_AROUND,
+    SPACE_EVENLY,
+}
+
+enum class UiAlignItems {
+    NORMAL,
+    STRETCH,
+    START,
+    END,
+    FLEX_START,
+    FLEX_END,
+    CENTER,
+    BASELINE,
+}
+
+enum class UiAlignSelf {
+    AUTO,
+    NORMAL,
+    STRETCH,
+    START,
+    END,
+    FLEX_START,
+    FLEX_END,
+    CENTER,
+    BASELINE,
+}
+
+enum class UiAlignContent {
+    NORMAL,
+    STRETCH,
+    START,
+    END,
+    FLEX_START,
+    FLEX_END,
+    CENTER,
+    SPACE_BETWEEN,
+    SPACE_AROUND,
+    SPACE_EVENLY,
+}
+
+/** Alignment of inline content within a line box. */
+enum class UiTextAlign {
+    START,
+    END,
+    LEFT,
+    RIGHT,
+    CENTER,
+}
+
+/** The supported subset of CSS white-space processing. */
+enum class UiWhiteSpace {
+    NORMAL,
+    NOWRAP,
+    PRE,
+}
+
+/** A resolved physical edge set used by layout geometry. */
+internal data class UsedEdges(
+    val top: Float = 0f,
+    val right: Float = 0f,
+    val bottom: Float = 0f,
+    val left: Float = 0f,
+) {
+    val horizontal: Float
+        get() = left + right
+
+    val vertical: Float
+        get() = top + bottom
+}

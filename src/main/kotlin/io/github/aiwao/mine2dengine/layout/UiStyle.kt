@@ -3,134 +3,76 @@ package io.github.aiwao.mine2dengine.layout
 import io.github.aiwao.mine2dengine.Mine2DFont
 import io.github.aiwao.mine2dengine.Mine2DMaterial
 
-private val DEFAULT_NONE_DISPLAY: () -> Boolean = { false }
-
-/** The direction in which a container lays out its direct children. */
-enum class UiDirection {
-    VERTICAL,
-    HORIZONTAL,
-}
-
-/** Horizontal alignment inside the content area of an element. */
+/** Physical horizontal alignment used by low-level geometry helpers. */
 enum class UiHorizontalAlignment {
     LEFT,
     CENTER,
     RIGHT,
 }
 
-/** Vertical alignment inside the content area of an element. */
+/** Physical vertical alignment used by low-level geometry helpers. */
 enum class UiVerticalAlignment {
     TOP,
     CENTER,
     BOTTOM,
 }
 
-/** Determines whether an explicit size applies to the content or the padded box. */
+/** Determines which CSS box an explicit size describes. Borders are not currently implemented. */
 enum class UiBoxSizing {
     CONTENT_BOX,
     BORDER_BOX,
 }
 
-/** Determines whether an element participates in normal flow and how its offsets are applied. */
+/** Supported CSS positioning schemes. */
 enum class UiPosition {
     STATIC,
     RELATIVE,
     ABSOLUTE,
 }
 
-/** Unit used by CSS-like [UiStyle.width] and [UiStyle.height] values. */
-enum class UiLengthUnit {
-    PX,
-    PERCENT,
-}
-
-/** A non-negative, finite CSS-like length used by [UiStyle.width] and [UiStyle.height]. */
-data class UiLength(
-    val value: Float,
-    val unit: UiLengthUnit,
-) {
-    init {
-        require(value.isFinite() && value >= 0f) {
-            "Length must be finite and non-negative: $value"
-        }
-    }
-}
-
-/** Treats this value as a pixel length. */
-val Float.px: UiLength
-    get() = UiLength(this, UiLengthUnit.PX)
-
-/** Treats this value as a percentage of the corresponding containing-block dimension. */
-val Float.percent: UiLength
-    get() = UiLength(this, UiLengthUnit.PERCENT)
-
-internal fun UiLength.resolve(percentageBase: Float?): Float? {
-    val resolved = when (unit) {
-        UiLengthUnit.PX -> value
-        UiLengthUnit.PERCENT -> percentageBase?.let { it * (value / 100f) }
-    }
-    require(resolved == null || resolved.isFinite()) {
-        "Resolved length must be finite: $resolved"
-    }
-    return resolved
-}
-
 /**
- * Visual and layout properties shared by every UI element.
+ * Specified declarations for an element or generated pseudo-element.
  *
- * Every nullable property uses null to mean that the property is unspecified. This allows a
- * declaration to distinguish an omitted property from an explicitly supplied default value such
- * as zero padding, a vertical direction, or static positioning. Unspecified properties first use
- * matching style-sheet declarations, then resolve to their CSS-like initial values during layout.
- *
- * [width] and [height] accept pixel and percentage [UiLength] values through [Float.px] and
- * [Float.percent]. Percentages use the corresponding resolved containing-block dimension, which is
- * normally the matching content dimension of the parent. [boxSizing] determines whether a non-null
- * [width] or [height] describes the content box or the complete padded box. Padding is painted
- * inside the background, while margin remains outside it, following the CSS box model.
- * [position] follows CSS static, relative, and absolute positioning. [left], [top], [right], and
- * [bottom] are nullable so that null represents CSS `auto`. Relative elements keep their normal
- * flow space, while absolute elements do not contribute to their container's size or gap. The
- * root's outer position is always controlled by [LayoutEngine.layout].
- * [gap] adds space between adjacent direct children and generated pseudo-element boxes without
- * adding space at the edges of the content box.
- * [noneDisplay] is evaluated during layout, rendering, and pointer queries.
- * When its value changes, geometry is recalculated. A true value removes the
- * element and its descendants from layout, rendering, and pointer input, like
- * CSS `display: none`.
- * [horizontalAlignment] and [verticalAlignment] position direct children in a
- * container and text inside a paragraph's content box.
- * A non-null [backgroundColor] paints only this element's bounds and is not inherited. The draw
- * uses [backgroundMaterial], or the renderer's current material when it is null. A
- * [backgroundMaterial] without a [backgroundColor] does not draw a background.
- * [boxShadow] paints behind this element and is not inherited or included in layout and hit bounds.
- * [dropShadow] filters the composited pixels of this element and its descendants. It is not
- * inherited or included in layout and hit bounds.
- * A null size shrinks to the element's text or children. [color], [font], and [textShadow] are
- * inherited by descendants when null. At the root, color defaults to opaque white and text shadow
- * defaults to none. Every text element must resolve a font from itself or an ancestor. Use
- * [UiTextShadow.NONE] to explicitly clear an inherited text shadow.
+ * `null` always means “not declared”, never CSS `auto`. CSS keywords such as `auto`, `none`, and
+ * `content` have explicit values in [UiSizeValue], [UiMarginValue], [UiInsetValue], and
+ * [UiFlexBasis]. This distinction allows a later declaration to reset a property to its initial
+ * CSS value during cascade.
  */
 data class UiStyle(
     val color: Int? = null,
     val backgroundColor: Int? = null,
     val backgroundMaterial: Mine2DMaterial? = null,
-    val margin: UiEdges? = null,
-    val padding: UiEdges? = null,
-    val direction: UiDirection? = null,
-    val horizontalAlignment: UiHorizontalAlignment? = null,
-    val verticalAlignment: UiVerticalAlignment? = null,
-    val width: UiLength? = null,
-    val height: UiLength? = null,
-    val position: UiPosition? = null,
-    val left: Float? = null,
-    val top: Float? = null,
-    val right: Float? = null,
-    val bottom: Float? = null,
-    val font: Mine2DFont? = null,
-    val gap: Float? = null,
+    val margin: UiMarginDeclaration? = null,
+    val padding: UiPaddingDeclaration? = null,
+    val display: UiDisplay? = null,
+    val width: UiSizeValue? = null,
+    val height: UiSizeValue? = null,
+    val minWidth: UiSizeValue? = null,
+    val minHeight: UiSizeValue? = null,
+    val maxWidth: UiSizeValue? = null,
+    val maxHeight: UiSizeValue? = null,
     val boxSizing: UiBoxSizing? = null,
-    val noneDisplay: (() -> Boolean)? = null,
+    val position: UiPosition? = null,
+    val left: UiInsetValue? = null,
+    val top: UiInsetValue? = null,
+    val right: UiInsetValue? = null,
+    val bottom: UiInsetValue? = null,
+    val flexDirection: UiFlexDirection? = null,
+    val flexWrap: UiFlexWrap? = null,
+    val flexGrow: Float? = null,
+    val flexShrink: Float? = null,
+    val flexBasis: UiFlexBasis? = null,
+    val order: Int? = null,
+    val justifyContent: UiJustifyContent? = null,
+    val alignItems: UiAlignItems? = null,
+    val alignSelf: UiAlignSelf? = null,
+    val alignContent: UiAlignContent? = null,
+    val gap: UiLength? = null,
+    val rowGap: UiLength? = null,
+    val columnGap: UiLength? = null,
+    val textAlign: UiTextAlign? = null,
+    val whiteSpace: UiWhiteSpace? = null,
+    val font: Mine2DFont? = null,
     val boxShadow: UiBoxShadow? = null,
     val textShadow: UiTextShadow? = null,
     val dropShadow: UiDropShadow? = null,
@@ -140,80 +82,145 @@ data class UiStyle(
     }
 
     init {
-        require(left == null || left.isFinite()) {
-            "Left must be null or finite: $left"
+        validateSize("width", width, allowAuto = true, allowNone = false)
+        validateSize("height", height, allowAuto = true, allowNone = false)
+        validateSize("minWidth", minWidth, allowAuto = true, allowNone = false)
+        validateSize("minHeight", minHeight, allowAuto = true, allowNone = false)
+        validateSize("maxWidth", maxWidth, allowAuto = false, allowNone = true)
+        validateSize("maxHeight", maxHeight, allowAuto = false, allowNone = true)
+        require(flexGrow == null || flexGrow.isFinite() && flexGrow >= 0f) {
+            "flexGrow must be finite and non-negative: $flexGrow"
         }
-        require(top == null || top.isFinite()) {
-            "Top must be null or finite: $top"
+        require(flexShrink == null || flexShrink.isFinite() && flexShrink >= 0f) {
+            "flexShrink must be finite and non-negative: $flexShrink"
         }
-        require(right == null || right.isFinite()) {
-            "Right must be null or finite: $right"
+        listOfNotNull(gap, rowGap, columnGap).forEach { value ->
+            require(value.value >= 0f) { "Gap values must be non-negative: $value" }
         }
-        require(bottom == null || bottom.isFinite()) {
-            "Bottom must be null or finite: $bottom"
-        }
-        require(gap == null || gap.isFinite() && gap >= 0f) {
-            "Gap must be finite and non-negative: $gap"
+        validatePadding(padding)
+    }
+}
+
+private fun validateSize(
+    name: String,
+    size: UiSizeValue?,
+    allowAuto: Boolean,
+    allowNone: Boolean,
+) {
+    require(allowAuto || size !is UiSizeValue.Auto) { "$name does not accept auto" }
+    require(allowNone || size !is UiSizeValue.None) { "$name does not accept none" }
+    require(size !is UiLength || size.value >= 0f) { "$name must be non-negative: $size" }
+}
+
+private fun validatePadding(padding: UiPaddingDeclaration?) {
+    if (padding is UiPaddings) {
+        listOf(padding.top, padding.right, padding.bottom, padding.left).forEach { value ->
+            require(value.value >= 0f) { "Padding values must be non-negative: $value" }
         }
     }
 }
 
-/** A cascaded [UiStyle] after all unspecified properties have received their initial values. */
+/** Cascaded declarations after CSS initial values have been applied. */
 internal data class ResolvedUiStyle(
     val color: Int?,
     val backgroundColor: Int?,
     val backgroundMaterial: Mine2DMaterial?,
-    val margin: UiEdges,
-    val padding: UiEdges,
-    val direction: UiDirection,
-    val horizontalAlignment: UiHorizontalAlignment,
-    val verticalAlignment: UiVerticalAlignment,
-    val width: UiLength?,
-    val height: UiLength?,
-    val position: UiPosition,
-    val left: Float?,
-    val top: Float?,
-    val right: Float?,
-    val bottom: Float?,
-    val font: Mine2DFont?,
-    val gap: Float,
+    val margin: UiMargins,
+    val padding: UiPaddings,
+    val display: UiDisplay,
+    val width: UiSizeValue,
+    val height: UiSizeValue,
+    val minWidth: UiSizeValue,
+    val minHeight: UiSizeValue,
+    val maxWidth: UiSizeValue,
+    val maxHeight: UiSizeValue,
     val boxSizing: UiBoxSizing,
-    val noneDisplay: () -> Boolean,
+    val position: UiPosition,
+    val left: UiInsetValue,
+    val top: UiInsetValue,
+    val right: UiInsetValue,
+    val bottom: UiInsetValue,
+    val flexDirection: UiFlexDirection,
+    val flexWrap: UiFlexWrap,
+    val flexGrow: Float,
+    val flexShrink: Float,
+    val flexBasis: UiFlexBasis,
+    val order: Int,
+    val justifyContent: UiJustifyContent,
+    val alignItems: UiAlignItems,
+    val alignSelf: UiAlignSelf,
+    val alignContent: UiAlignContent,
+    val rowGap: UiLength,
+    val columnGap: UiLength,
+    val textAlign: UiTextAlign?,
+    val whiteSpace: UiWhiteSpace?,
+    val font: Mine2DFont?,
     val boxShadow: UiBoxShadow?,
     val textShadow: UiTextShadow?,
     val dropShadow: UiDropShadow?,
 )
 
-internal fun UiStyle.resolveDefaults(): ResolvedUiStyle = ResolvedUiStyle(
-    color = color,
-    backgroundColor = backgroundColor,
-    backgroundMaterial = backgroundMaterial,
-    margin = margin ?: UiEdges(),
-    padding = padding ?: UiEdges(),
-    direction = direction ?: UiDirection.VERTICAL,
-    horizontalAlignment = horizontalAlignment ?: UiHorizontalAlignment.LEFT,
-    verticalAlignment = verticalAlignment ?: UiVerticalAlignment.TOP,
-    width = width,
-    height = height,
-    position = position ?: UiPosition.STATIC,
-    left = left,
-    top = top,
-    right = right,
-    bottom = bottom,
-    font = font,
-    gap = gap ?: 0f,
-    boxSizing = boxSizing ?: UiBoxSizing.CONTENT_BOX,
-    noneDisplay = noneDisplay ?: DEFAULT_NONE_DISPLAY,
-    boxShadow = boxShadow,
-    textShadow = textShadow,
-    dropShadow = dropShadow,
-)
+internal fun UiStyle.resolveDefaults(
+    initialDisplay: UiDisplay = UiDisplay.INLINE,
+): ResolvedUiStyle {
+    val commonGap = gap ?: 0f.px
+    return ResolvedUiStyle(
+        color = color,
+        backgroundColor = backgroundColor,
+        backgroundMaterial = backgroundMaterial,
+        margin = margin.toMargins(),
+        padding = padding.toPaddings(),
+        display = display ?: initialDisplay,
+        width = width ?: UiSizeValue.AUTO,
+        height = height ?: UiSizeValue.AUTO,
+        minWidth = minWidth ?: UiSizeValue.AUTO,
+        minHeight = minHeight ?: UiSizeValue.AUTO,
+        maxWidth = maxWidth ?: UiSizeValue.NONE,
+        maxHeight = maxHeight ?: UiSizeValue.NONE,
+        boxSizing = boxSizing ?: UiBoxSizing.CONTENT_BOX,
+        position = position ?: UiPosition.STATIC,
+        left = left ?: UiInsetValue.AUTO,
+        top = top ?: UiInsetValue.AUTO,
+        right = right ?: UiInsetValue.AUTO,
+        bottom = bottom ?: UiInsetValue.AUTO,
+        flexDirection = flexDirection ?: UiFlexDirection.ROW,
+        flexWrap = flexWrap ?: UiFlexWrap.NOWRAP,
+        flexGrow = flexGrow ?: 0f,
+        flexShrink = flexShrink ?: 1f,
+        flexBasis = flexBasis ?: UiFlexBasis.AUTO,
+        order = order ?: 0,
+        justifyContent = justifyContent ?: UiJustifyContent.NORMAL,
+        alignItems = alignItems ?: UiAlignItems.NORMAL,
+        alignSelf = alignSelf ?: UiAlignSelf.AUTO,
+        alignContent = alignContent ?: UiAlignContent.NORMAL,
+        rowGap = rowGap ?: commonGap,
+        columnGap = columnGap ?: commonGap,
+        textAlign = textAlign,
+        whiteSpace = whiteSpace,
+        font = font,
+        boxShadow = boxShadow,
+        textShadow = textShadow,
+        dropShadow = dropShadow,
+    )
+}
 
-/** Text properties after resolving inheritance from ancestor styles. */
+private fun UiMarginDeclaration?.toMargins(): UiMargins = when (this) {
+    null -> UiMargins()
+    is UiMargins -> this
+}
+
+private fun UiPaddingDeclaration?.toPaddings(): UiPaddings = when (this) {
+    null -> UiPaddings()
+    is UiPaddings -> this
+}
+
+/** Inherited text properties after cascade. */
 internal data class ResolvedUiTextStyle(
     val color: Int = UiStyle.DEFAULT_COLOR,
     val font: Mine2DFont? = null,
     val textShadow: UiTextShadow? = null,
+    val textAlign: UiTextAlign = UiTextAlign.START,
+    val whiteSpace: UiWhiteSpace = UiWhiteSpace.NORMAL,
 )
 
 internal fun ResolvedUiStyle.resolveTextStyle(parent: ResolvedUiTextStyle): ResolvedUiTextStyle =
@@ -221,35 +228,57 @@ internal fun ResolvedUiStyle.resolveTextStyle(parent: ResolvedUiTextStyle): Reso
         color = color ?: parent.color,
         font = font ?: parent.font,
         textShadow = textShadow ?: parent.textShadow,
+        textAlign = textAlign ?: parent.textAlign,
+        whiteSpace = whiteSpace ?: parent.whiteSpace,
     )
 
-/**
- * Applies every specified value in [overrides] to this style.
- *
- * Null uniformly means unspecified. Explicit initial values, including zero-valued lengths and
- * the first enum constant, therefore override values supplied by a lower-priority declaration.
- */
+/** Applies each declared value in [overrides], preserving omitted declarations. */
 internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
     color = overrides.color ?: color,
     backgroundColor = overrides.backgroundColor ?: backgroundColor,
     backgroundMaterial = overrides.backgroundMaterial ?: backgroundMaterial,
     margin = overrides.margin ?: margin,
     padding = overrides.padding ?: padding,
-    direction = overrides.direction ?: direction,
-    horizontalAlignment = overrides.horizontalAlignment ?: horizontalAlignment,
-    verticalAlignment = overrides.verticalAlignment ?: verticalAlignment,
+    display = overrides.display ?: display,
     width = overrides.width ?: width,
     height = overrides.height ?: height,
+    minWidth = overrides.minWidth ?: minWidth,
+    minHeight = overrides.minHeight ?: minHeight,
+    maxWidth = overrides.maxWidth ?: maxWidth,
+    maxHeight = overrides.maxHeight ?: maxHeight,
+    boxSizing = overrides.boxSizing ?: boxSizing,
     position = overrides.position ?: position,
     left = overrides.left ?: left,
     top = overrides.top ?: top,
     right = overrides.right ?: right,
     bottom = overrides.bottom ?: bottom,
-    font = overrides.font ?: font,
+    flexDirection = overrides.flexDirection ?: flexDirection,
+    flexWrap = overrides.flexWrap ?: flexWrap,
+    flexGrow = overrides.flexGrow ?: flexGrow,
+    flexShrink = overrides.flexShrink ?: flexShrink,
+    flexBasis = overrides.flexBasis ?: flexBasis,
+    order = overrides.order ?: order,
+    justifyContent = overrides.justifyContent ?: justifyContent,
+    alignItems = overrides.alignItems ?: alignItems,
+    alignSelf = overrides.alignSelf ?: alignSelf,
+    alignContent = overrides.alignContent ?: alignContent,
     gap = overrides.gap ?: gap,
-    boxSizing = overrides.boxSizing ?: boxSizing,
-    noneDisplay = overrides.noneDisplay ?: noneDisplay,
+    rowGap = overrides.rowGap ?: rowGap,
+    columnGap = overrides.columnGap ?: columnGap,
+    textAlign = overrides.textAlign ?: textAlign,
+    whiteSpace = overrides.whiteSpace ?: whiteSpace,
+    font = overrides.font ?: font,
     boxShadow = overrides.boxShadow ?: boxShadow,
     textShadow = overrides.textShadow ?: textShadow,
     dropShadow = overrides.dropShadow ?: dropShadow,
 )
+
+/** Lowest-priority UA declaration for the supported HTML-like element tags. */
+internal fun userAgentStyleFor(element: UiElement): UiStyle {
+    val blockTags = setOf(
+        "address", "article", "aside", "blockquote", "div", "footer", "form", "h1", "h2",
+        "h3", "h4", "h5", "h6", "header", "hr", "main", "nav", "ol", "p", "pre",
+        "section", "ul",
+    )
+    return UiStyle(display = if (element.tag.lowercase() in blockTags) UiDisplay.BLOCK else UiDisplay.INLINE)
+}
