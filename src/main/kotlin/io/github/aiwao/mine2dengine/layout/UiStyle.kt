@@ -275,7 +275,7 @@ internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
 
 /** Lowest-priority UA declaration for the supported HTML-like element tags. */
 internal fun userAgentStyleFor(element: UiElement): UiStyle {
-    if (element is TextInput) {
+    if (element is InputControl) {
         return UiStyle(
             display = UiDisplay.Box(UiDisplayOutside.INLINE, UiDisplayInside.FLOW_ROOT),
         )

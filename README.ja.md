@@ -190,7 +190,7 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 ## レイアウトエンジン
 
-レイアウトパッケージは `Div`、`Paragraph`、`TextInput` の要素ツリーへstyleをcascadeし、CSS box treeを生成してbox fragmentへ配置します。従来の独自stack layoutではなく、CSSのプロパティ名と初期値を使います。
+レイアウトパッケージはcontainer、paragraph、型付きinput controlの要素ツリーへstyleをcascadeし、CSS box treeを生成してbox fragmentへ配置します。従来の独自stack layoutではなく、CSSのプロパティ名と初期値を使います。
 
 ### 対応するCSS layout profile
 
@@ -200,11 +200,11 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - 物理margin / padding、横方向の`auto` margin、隣接block marginのcollapse
 - `position: static | relative | absolute`、length / percentage inset、両側inset間の自動stretch
 - Flexboxのrow / column、reverse、wrap、grow / shrink / basis、order、gap、auto margin、justify / align
-- replaced elementとしての単一行`TextInput`
+- replaced elementとしての単一行`TextInput`と不透明RGB `ColorInput`
 - `::before` / `::after` の生成box
 - `display: none`によるsubtree除外と、`display: contents`によるprincipal box除外
 
-Grid、table、float、ruby、縦書き、fragmentation、fixed / sticky positioning、border、および `TextInput` 以外のreplaced elementは対象外です。
+Grid、table、float、ruby、縦書き、fragmentation、fixed / sticky positioning、border、および組み込みinput control以外のreplaced elementは対象外です。
 
 ### Initial containing block
 
@@ -373,7 +373,7 @@ val root = div(UiStyle(font = uiFont)) {
 
 CSSの`width:auto`では`size`個の`0` glyph相当がintrinsic widthとなり、`height:auto`ではfontのline heightが使われます。`value`、placeholder、caret、選択の変更はgeometryを変えないため`relayout()`は不要です。`size`やlayout propertyを変更した場合は`relayout()`を呼んでください。
 
-`TextInput`を含むlayoutは、`Screen.init()`でそのままrenderable widgetとして登録できます。登録すると描画に加え、mouse、keyboard、character、Tab focus、IME preeditがMinecraftから自動配送されます。
+input controlを含むlayoutは、`Screen.init()`でそのままrenderable widgetとして登録できます。登録すると描画に加え、mouse、keyboard、character、Tab focus、IME preeditがMinecraftから自動配送されます。
 
 ```kotlin
 private lateinit var layout: UiLayout
@@ -392,6 +392,39 @@ override fun repositionElements() {
 ```
 
 widgetとして登録したlayoutを別途`layout.render(...)`で描画しないでください。手動配送もできますが、IMEを有効化してpreeditを正しく受け取るにはScreenへの登録が推奨です。focusは`layout.focus(playerName)`、`layout.clearFocus()`、`layout.focusedElement`から制御・確認できます。
+
+### Color input
+
+`colorInput()`はHTMLの`input type="color"`に対応する`ColorInput`を作ります。値はMine2DEngine共通の`0xAARRGGBB`整数ですが、常に不透明な`0xFFRRGGBB`へ正規化されるため、透明色を代入するとalphaは破棄されます。
+
+```kotlin
+lateinit var accent: ColorInput
+
+val root = div {
+    accent = colorInput(
+        value = 0xFF4CAF50.toInt(),
+        label = "Accent color",
+        style = { input ->
+            UiStyle(
+                width = 40f.px,
+                height = 24f.px,
+                padding = UiPaddings(2f),
+                backgroundColor = if (input.focused) {
+                    0xFF303840.toInt()
+                } else {
+                    0xFF202428.toInt()
+                },
+            )
+        },
+        onInput = { color -> previewAccent(color) },
+        onChange = { color -> saveAccent(color) },
+    )
+}
+```
+
+swatchをクリックするとHSV picker overlayが開きます。saturation/value領域またはhue stripのdrag中は`onInput`を呼び、編集したpickerの確定または外側clickによる終了時に`onChange`を一度呼びます。プログラムからの`value`代入ではどちらも呼びません。EnterまたはSpaceで開く／確定、Escapeでpickerを開いた時点の色へ復元、矢印keyでsaturation/value、Page Up/Downでhueを調整します。Shiftを押すとkeyboard操作のstepが大きくなります。
+
+デフォルトの`width:auto`と`height:auto`のcontent sizeはGUI座標で`36 × 20`で、このintrinsic metrics自体はfontに依存しません。ただしinline formatting contextのline boxには親のfontが必要になる場合があります。`ColorInput`は`TextInput`と同じfocus・Tab順へ参加しますが、platform text input / IMEは有効化しません。どちらもデフォルトtagは`input`なので、異なるstylesheet ruleが必要な場合はclassまたはIDを指定してください。
 
 ### 結果、描画、入力
 
