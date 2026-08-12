@@ -6,6 +6,8 @@ import com.mojang.blaze3d.textures.FilterMode
 import com.mojang.blaze3d.vertex.VertexConsumer
 import io.github.aiwao.mine2dengine.internal.LinearTextTextures
 import io.github.aiwao.mine2dengine.internal.render.Mine2DMaterialRenderState
+import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowContext
+import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowMemberRenderState
 import io.github.aiwao.mine2dengine.internal.render.Mine2DRenderBindings
 import net.minecraft.client.gui.font.TextRenderable
 import net.minecraft.client.gui.navigation.ScreenRectangle
@@ -23,7 +25,8 @@ internal class TextShadowGlyphRenderState private constructor(
     private val scissor: ScreenRectangle?,
     private val geometry: Mine2DTextShadowGlyphGeometry,
     private val bindings: Mine2DRenderBindings,
-) : GuiElementRenderState, Mine2DMaterialRenderState {
+    private val dropShadowGroups: List<Long>,
+) : GuiElementRenderState, Mine2DMaterialRenderState, Mine2DDropShadowMemberRenderState {
     override fun buildVertices(vertexConsumer: VertexConsumer) {
         val poseMatrix = Matrix4f().mul(pose)
         geometry.vertices.forEach { vertex ->
@@ -54,6 +57,8 @@ internal class TextShadowGlyphRenderState private constructor(
     override fun bounds(): ScreenRectangle? = null
 
     override fun mine2dengineBindings(): Mine2DRenderBindings = bindings
+
+    override fun mine2dengineDropShadowGroups(): List<Long> = dropShadowGroups
 
     companion object {
         private const val FULL_BRIGHT_LIGHT = 0x00F000F0
@@ -93,6 +98,7 @@ internal class TextShadowGlyphRenderState private constructor(
                 scissor = original.scissorArea(),
                 geometry = geometry,
                 bindings = material.resolveBindings(context),
+                dropShadowGroups = Mine2DDropShadowContext.currentGroups(),
             )
         }
     }

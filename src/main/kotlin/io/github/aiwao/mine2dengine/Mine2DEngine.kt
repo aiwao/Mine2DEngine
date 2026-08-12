@@ -2,6 +2,7 @@ package io.github.aiwao.mine2dengine
 
 import io.github.aiwao.mine2dengine.internal.render.Mine2DEffect
 import io.github.aiwao.mine2dengine.internal.render.Mine2DEffectContext
+import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowContext
 import io.github.aiwao.mine2dengine.internal.render.Mine2DTextShadowContext
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -495,6 +496,7 @@ class Mine2DEngine(
                     ),
                 ),
                 scissor = graphics.scissorStack.peek(),
+                dropShadowGroups = Mine2DDropShadowContext.currentGroups(),
             ),
         )
     }
@@ -561,7 +563,7 @@ class Mine2DEngine(
         val blurExtentX = kotlin.math.abs(blurAxisXx) + kotlin.math.abs(blurAxisYx)
         val blurExtentY = kotlin.math.abs(blurAxisXy) + kotlin.math.abs(blurAxisYy)
 
-        val effect = Mine2DEffectContext.nextEffect(Mine2DEffect.Kind.DROP_SHADOW)
+        val groupId = Mine2DDropShadowContext.nextGroupId()
         val material = Mine2DMaterials.dropShadow(
             color = color,
             offsetX = transformedOffsetX,
@@ -576,7 +578,8 @@ class Mine2DEngine(
         )
         graphics.guiRenderState.addGuiElement(
             DropShadowRenderState(
-                effect = effect,
+                groupId = groupId,
+                outerGroups = Mine2DDropShadowContext.currentGroups(),
                 bindings = material.resolveBindings(
                     uniformContext(
                         elementBounds = Mine2DUniformRect(x, y, width, height),
@@ -596,7 +599,7 @@ class Mine2DEngine(
             ),
         )
 
-        Mine2DEffectContext.beginEffect(effect).use {
+        Mine2DDropShadowContext.beginGroup(groupId).use {
             draw()
         }
     }
@@ -657,6 +660,7 @@ class Mine2DEngine(
                 pose = Matrix3x2f(graphics.pose()),
                 polygon = polygon,
                 scissor = graphics.scissorStack.peek(),
+                dropShadowGroups = Mine2DDropShadowContext.currentGroups(),
             ),
         )
     }

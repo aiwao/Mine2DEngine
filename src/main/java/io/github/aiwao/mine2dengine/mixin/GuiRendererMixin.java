@@ -15,6 +15,9 @@ import com.mojang.blaze3d.textures.FilterMode;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DEffect;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DEffectCompositeRenderState;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DEffectContext;
+import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowCompositeRenderState;
+import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowContext;
+import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowMemberRenderState;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DMaterialRenderState;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DRenderBindings;
 import io.github.aiwao.mine2dengine.internal.render.Mine2DTextureBinding;
@@ -73,6 +76,18 @@ abstract class GuiRendererMixin {
         new IdentityHashMap<>();
 
     @Unique
+    private final Map<StagedVertexBuffer.Draw, List<Long>> mine2dengine$dropShadowGroupsByDraw =
+        new IdentityHashMap<>();
+
+    @Unique
+    private final Map<StagedVertexBuffer.Draw, Long> mine2dengine$dropShadowCompositeByDraw =
+        new IdentityHashMap<>();
+
+    @Unique
+    private final Map<Long, EffectTarget> mine2dengine$dropShadowTargets =
+        new LinkedHashMap<>();
+
+    @Unique
     private final Map<StagedVertexBuffer.Draw, List<Mine2DEffect>> mine2dengine$effectsByDraw =
         new IdentityHashMap<>();
 
@@ -103,10 +118,15 @@ abstract class GuiRendererMixin {
         Operation<Void> original
     ) {
         List<Mine2DEffect> effects = Mine2DEffectContext.capturedEffects(textState);
+        List<Long> dropShadowGroups =
+            ((Mine2DDropShadowMemberRenderState) (Object) textState)
+                .mine2dengineDropShadowGroups();
         float blurRadius = ((Mine2DTextShadowRenderState) (Object) textState)
             .mine2dengineBlurRadius();
         try (
-            Mine2DEffectContext.Scope ignored = Mine2DEffectContext.useEffects(effects)
+            Mine2DEffectContext.Scope ignoredEffects = Mine2DEffectContext.useEffects(effects);
+            Mine2DDropShadowContext.Scope ignoredGroups =
+                Mine2DDropShadowContext.useGroups(dropShadowGroups)
         ) {
             if (Float.isNaN(blurRadius)) {
                 original.call(textState);
@@ -142,13 +162,24 @@ abstract class GuiRendererMixin {
         CallbackInfo callbackInfo
     ) {
         Mine2DRenderBindings bindings = mine2dengine$getBindings(renderState);
+        List<Long> dropShadowGroups = mine2dengine$getDropShadowGroups(renderState);
+        Long dropShadowComposite =
+            renderState instanceof Mine2DDropShadowCompositeRenderState composite
+            ? composite.mine2dengineDropShadowGroup()
+            : null;
         List<Mine2DEffect> effects = Mine2DEffectContext.capturedEffects(renderState);
         Mine2DEffect compositeEffect =
             renderState instanceof Mine2DEffectCompositeRenderState composite
             ? composite.mine2dengineEffect()
             : null;
         Mine2DEffectContext.release(renderState);
-        if (bindings.isEmpty() && effects.isEmpty() && compositeEffect == null) {
+        if (
+            bindings.isEmpty()
+                && dropShadowGroups.isEmpty()
+                && dropShadowComposite == null
+                && effects.isEmpty()
+                && compositeEffect == null
+        ) {
             return;
         }
 
@@ -159,6 +190,12 @@ abstract class GuiRendererMixin {
 
         if (!bindings.isEmpty()) {
             mine2dengine$bindingsByDraw.put(draw, mine2dengine$prepare(bindings));
+        }
+        if (!dropShadowGroups.isEmpty()) {
+            mine2dengine$dropShadowGroupsByDraw.put(draw, dropShadowGroups);
+        }
+        if (dropShadowComposite != null) {
+            mine2dengine$dropShadowCompositeByDraw.put(draw, dropShadowComposite);
         }
         if (!effects.isEmpty()) {
             mine2dengine$effectsByDraw.put(draw, effects);
@@ -184,6 +221,16 @@ abstract class GuiRendererMixin {
             return;
         }
         mine2dengine$effectsPrepared = true;
+
+        Set<Long> preparingDropShadows = new HashSet<>();
+        for (Long groupId : mine2dengine$dropShadowCompositeByDraw.values()) {
+            mine2dengine$prepareDropShadow(
+                groupId,
+                target,
+                dynamicTransforms,
+                preparingDropShadows
+            );
+        }
 
         Set<Mine2DEffect> preparing = new HashSet<>();
         for (Mine2DEffect effect : mine2dengine$compositeByDraw.values()) {
@@ -250,6 +297,9 @@ abstract class GuiRendererMixin {
     @Inject(method = "endFrame", at = @At("TAIL"))
     private void mine2dengine$endMaterialFrame(CallbackInfo callbackInfo) {
         mine2dengine$bindingsByDraw.clear();
+        mine2dengine$dropShadowGroupsByDraw.clear();
+        mine2dengine$dropShadowCompositeByDraw.clear();
+        mine2dengine$closeDropShadowTargets();
         mine2dengine$effectsByDraw.clear();
         mine2dengine$compositeByDraw.clear();
         mine2dengine$closeEffectTargets();
@@ -261,6 +311,9 @@ abstract class GuiRendererMixin {
     @Inject(method = "close", at = @At("TAIL"))
     private void mine2dengine$closeMaterialBuffers(CallbackInfo callbackInfo) {
         mine2dengine$bindingsByDraw.clear();
+        mine2dengine$dropShadowGroupsByDraw.clear();
+        mine2dengine$dropShadowCompositeByDraw.clear();
+        mine2dengine$closeDropShadowTargets();
         mine2dengine$effectsByDraw.clear();
         mine2dengine$compositeByDraw.clear();
         mine2dengine$closeEffectTargets();
@@ -279,8 +332,17 @@ abstract class GuiRendererMixin {
     }
 
     @Unique
+    private List<Long> mine2dengine$getDropShadowGroups(GuiElementRenderState renderState) {
+        return renderState instanceof Mine2DDropShadowMemberRenderState member
+            ? member.mine2dengineDropShadowGroups()
+            : List.of();
+    }
+
+    @Unique
     private boolean mine2dengine$requiresIsolatedDraw(GuiElementRenderState renderState) {
         return !mine2dengine$getBindings(renderState).isEmpty()
+            || !mine2dengine$getDropShadowGroups(renderState).isEmpty()
+            || renderState instanceof Mine2DDropShadowCompositeRenderState
             || !Mine2DEffectContext.capturedEffects(renderState).isEmpty()
             || renderState instanceof Mine2DEffectCompositeRenderState;
     }
@@ -345,6 +407,82 @@ abstract class GuiRendererMixin {
                     RenderSystem.getSamplerCache().getClampToEdge(texture.filterMode())
                 );
             }
+        }
+    }
+
+    @Unique
+    private void mine2dengine$prepareDropShadow(
+        long groupId,
+        RenderTarget target,
+        GpuBufferSlice dynamicTransforms,
+        Set<Long> preparing
+    ) {
+        if (mine2dengine$dropShadowTargets.containsKey(groupId)) {
+            return;
+        }
+        if (!preparing.add(groupId)) {
+            throw new IllegalStateException("Cyclic Mine2D drop-shadow group: " + groupId);
+        }
+
+        try {
+            for (Object drawObject : draws) {
+                GuiRendererDrawAccessor draw = (GuiRendererDrawAccessor) drawObject;
+                StagedVertexBuffer.Draw stagedDraw = draw.mine2dengine$draw();
+                List<Long> groups = mine2dengine$dropShadowGroupsByDraw.get(stagedDraw);
+                if (groups == null || !groups.contains(groupId)) {
+                    continue;
+                }
+                Long nestedGroup = mine2dengine$dropShadowCompositeByDraw.get(stagedDraw);
+                if (nestedGroup != null) {
+                    mine2dengine$prepareDropShadow(
+                        nestedGroup,
+                        target,
+                        dynamicTransforms,
+                        preparing
+                    );
+                }
+            }
+
+            GpuTexture source = target.getColorTexture();
+            GpuTexture texture = RenderSystem.getDevice().createTexture(
+                "Mine2D drop-shadow mask " + groupId,
+                GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_TEXTURE_BINDING,
+                source.getFormat(),
+                source.getWidth(0),
+                source.getHeight(0),
+                1,
+                1
+            );
+            GpuTextureView view = RenderSystem.getDevice().createTextureView(texture);
+            EffectTarget dropShadowTarget = new EffectTarget(texture, view);
+            mine2dengine$dropShadowTargets.put(groupId, dropShadowTarget);
+
+            try (
+                RenderPass renderPass = RenderSystem.getDevice()
+                    .createCommandEncoder()
+                    .createRenderPass(
+                        () -> "Mine2D drop-shadow mask " + groupId,
+                        view,
+                        Optional.of(new Vector4f(0.0F))
+                    )
+            ) {
+                RenderSystem.bindDefaultUniforms(renderPass);
+                renderPass.setUniform("DynamicTransforms", dynamicTransforms);
+                for (Object drawObject : draws) {
+                    GuiRendererDrawAccessor draw = (GuiRendererDrawAccessor) drawObject;
+                    StagedVertexBuffer.Draw stagedDraw = draw.mine2dengine$draw();
+                    List<Long> groups = mine2dengine$dropShadowGroupsByDraw.get(stagedDraw);
+                    if (groups != null && groups.contains(groupId)) {
+                        mine2dengine$executeEffectMember(draw, renderPass);
+                    }
+                }
+            } catch (RuntimeException | Error exception) {
+                mine2dengine$dropShadowTargets.remove(groupId);
+                dropShadowTarget.close();
+                throw exception;
+            }
+        } finally {
+            preparing.remove(groupId);
         }
     }
 
@@ -478,6 +616,21 @@ abstract class GuiRendererMixin {
             }
         }
 
+        Long groupId = mine2dengine$dropShadowCompositeByDraw.get(stagedDraw);
+        if (groupId != null) {
+            EffectTarget target = mine2dengine$dropShadowTargets.get(groupId);
+            if (target == null) {
+                throw new IllegalStateException(
+                    "Mine2D drop-shadow mask was not prepared: " + groupId
+                );
+            }
+            renderPass.bindTexture(
+                "DropShadowSampler",
+                target.view(),
+                RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR)
+            );
+        }
+
         Mine2DEffect effect = mine2dengine$compositeByDraw.get(stagedDraw);
         if (effect != null) {
             EffectTarget target = mine2dengine$effectTargets.get(effect);
@@ -512,6 +665,12 @@ abstract class GuiRendererMixin {
     private void mine2dengine$closeEffectTargets() {
         mine2dengine$effectTargets.values().forEach(EffectTarget::close);
         mine2dengine$effectTargets.clear();
+    }
+
+    @Unique
+    private void mine2dengine$closeDropShadowTargets() {
+        mine2dengine$dropShadowTargets.values().forEach(EffectTarget::close);
+        mine2dengine$dropShadowTargets.clear();
     }
 
     @Unique

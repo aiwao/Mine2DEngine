@@ -4,6 +4,7 @@ import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.vertex.VertexConsumer
 import io.github.aiwao.mine2dengine.internal.render.Mine2DEffect
 import io.github.aiwao.mine2dengine.internal.render.Mine2DEffectCompositeRenderState
+import io.github.aiwao.mine2dengine.internal.render.Mine2DDropShadowMemberRenderState
 import io.github.aiwao.mine2dengine.internal.render.Mine2DMaterialRenderState
 import io.github.aiwao.mine2dengine.internal.render.Mine2DRenderBindings
 import net.minecraft.client.gui.navigation.ScreenRectangle
@@ -21,9 +22,11 @@ internal class RoundedClipRenderState(
     corners: List<Vector2fc>,
     private val bindings: Mine2DRenderBindings,
     private val scissor: ScreenRectangle?,
+    private val dropShadowGroups: List<Long>,
 ) : GuiElementRenderState,
     Mine2DMaterialRenderState,
-    Mine2DEffectCompositeRenderState {
+    Mine2DEffectCompositeRenderState,
+    Mine2DDropShadowMemberRenderState {
     private val pose = Matrix3x2f()
     private val corners = corners.map(::Vector2f)
     private val bounds = calculateBounds(this.corners, scissor)
@@ -52,6 +55,8 @@ internal class RoundedClipRenderState(
     override fun mine2dengineBindings(): Mine2DRenderBindings = bindings
 
     override fun mine2dengineEffect(): Mine2DEffect = effect
+
+    override fun mine2dengineDropShadowGroups(): List<Long> = dropShadowGroups
 
     private fun addVertex(vertexConsumer: VertexConsumer, point: Vector2fc) {
         vertexConsumer.addVertexWith2DPose(pose, point.x(), point.y()).setColor(-1)
