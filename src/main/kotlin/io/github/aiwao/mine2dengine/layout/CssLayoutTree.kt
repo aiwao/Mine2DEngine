@@ -216,12 +216,20 @@ internal class CssBoxTreeBuilder(
             val ownText = (element as? Paragraph)?.text
                 ?.takeIf(String::isNotEmpty)
                 ?.let { text ->
-                    val anonymousStyle = style.copy(display = UiDisplay.INLINE)
+                    val anonymousStyle = style.copy(
+                        border = UiBorders.NONE,
+                        display = UiDisplay.INLINE,
+                    )
                     CssBox(
                         kind = CssBoxKind.ANONYMOUS,
                         element = element,
                         style = anonymousStyle,
-                        styleProvider = { styleProvider().copy(display = UiDisplay.INLINE) },
+                        styleProvider = {
+                            styleProvider().copy(
+                                border = UiBorders.NONE,
+                                display = UiDisplay.INLINE,
+                            )
+                        },
                         textStyle = textStyle,
                         text = text,
                         sourceIndex = sourceIndex,

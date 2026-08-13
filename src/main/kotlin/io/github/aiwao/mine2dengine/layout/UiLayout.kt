@@ -5,8 +5,10 @@ import io.github.aiwao.mine2dengine.Mine2DEngine
 import io.github.aiwao.mine2dengine.Mine2DFont
 import io.github.aiwao.mine2dengine.Mine2DMaterial
 import io.github.aiwao.mine2dengine.Mine2DMaterials
+import io.github.aiwao.mine2dengine.Mine2DRoundedRectRadii
 import io.github.aiwao.mine2dengine.Mine2DUniformRect
 import io.github.aiwao.mine2dengine.Mine2DVertex
+import io.github.aiwao.mine2dengine.inset
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.ComponentPath
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -46,6 +48,7 @@ private const val COLOR_PICKER_ANCHOR_GAP = 2f
 private const val COLOR_PICKER_SATURATION_VALUE_WIDTH = 96f
 private const val COLOR_PICKER_HUE_WIDTH = 12f
 private const val COLOR_PICKER_HEIGHT = 76f
+private const val SCROLL_WHEEL_STEP = 10f
 
 internal data class UiDisplayKey(
     val element: UiElement,
@@ -57,6 +60,88 @@ internal data class UiDisplayState(
     val predicate: () -> Boolean,
     val suppressed: Boolean,
 )
+
+private data class UiScrollKey(
+    val element: UiElement,
+    val pseudoElement: UiPseudoElement? = null,
+)
+
+private data class UiScrollTarget(
+    val key: UiScrollKey,
+    val overflow: ResolvedUiOverflow,
+    val maximumX: Float,
+    val maximumY: Float,
+)
+
+/** A rectangular clip whose axes may be constrained independently. */
+private data class UiAxisClip(
+    val left: Float? = null,
+    val right: Float? = null,
+    val top: Float? = null,
+    val bottom: Float? = null,
+) {
+    fun intersect(other: UiAxisClip): UiAxisClip? {
+        val result = UiAxisClip(
+            left = maxNullable(left, other.left),
+            right = minNullable(right, other.right),
+            top = maxNullable(top, other.top),
+            bottom = minNullable(bottom, other.bottom),
+        )
+        if (result.left != null && result.right != null && result.right <= result.left) return null
+        if (result.top != null && result.bottom != null && result.bottom <= result.top) return null
+        return result
+    }
+
+    fun clip(bounds: UiRect): UiRect? {
+        val clippedLeft = left?.let { maxOf(bounds.left, it) } ?: bounds.left
+        val clippedRight = right?.let { minOf(bounds.right, it) } ?: bounds.right
+        val clippedTop = top?.let { maxOf(bounds.top, it) } ?: bounds.top
+        val clippedBottom = bottom?.let { minOf(bounds.bottom, it) } ?: bounds.bottom
+        if (clippedRight <= clippedLeft || clippedBottom <= clippedTop) return null
+        return UiRect(
+            clippedLeft,
+            clippedTop,
+            clippedRight - clippedLeft,
+            clippedBottom - clippedTop,
+        )
+    }
+
+    fun contains(x: Float, y: Float): Boolean =
+        (left == null || x >= left) &&
+            (right == null || x < right) &&
+            (top == null || y >= top) &&
+            (bottom == null || y < bottom)
+
+    private fun maxNullable(first: Float?, second: Float?): Float? = when {
+        first == null -> second
+        second == null -> first
+        else -> maxOf(first, second)
+    }
+
+    private fun minNullable(first: Float?, second: Float?): Float? = when {
+        first == null -> second
+        second == null -> first
+        else -> minOf(first, second)
+    }
+}
+
+private data class UiClipStack(
+    val axisClip: UiAxisClip,
+    val roundedClips: List<UiRoundedBox> = emptyList(),
+) {
+    fun intersect(other: UiClipStack): UiClipStack? {
+        val intersection = axisClip.intersect(other.axisClip) ?: return null
+        return UiClipStack(
+            axisClip = intersection,
+            roundedClips = roundedClips + other.roundedClips,
+        )
+    }
+
+    fun clip(bounds: UiRect): UiRect? = axisClip.clip(bounds)
+
+    fun contains(x: Float, y: Float): Boolean =
+        axisClip.contains(x, y) && roundedClips.all { clip -> clip.contains(x, y) }
+}
 
 internal data class UiLayoutSnapshot(
     val root: UiLayoutNode,
@@ -75,12 +160,20 @@ data class UiBoxFragment(
     val children: List<UiBoxFragment>,
     /** False for an anonymous box or a root retained only as a `display: none` handle. */
     val generatesBox: Boolean = true,
+    /** Layout overflow before a mutable scroll offset is applied. */
+    val scrollableOverflow: UiRect = paddingBox,
 )
 
 /** One line fragment produced while laying out text. */
 data class UiTextLayoutFragment(
     val text: String,
     val bounds: UiRect,
+)
+
+/** The current physical scroll offset of one generated principal box. */
+data class UiScrollOffset(
+    val x: Float = 0f,
+    val y: Float = 0f,
 )
 
 internal data class UiStyledTextLayoutFragment(
@@ -113,9 +206,25 @@ data class UiLayoutNode(
     internal val afterPseudo: UiPseudoLayoutNode? = null,
     internal val textBounds: UiRect? = null,
     internal val textFragments: List<UiTextLayoutFragment> = emptyList(),
+    /** The box's padding edge, which is also its overflow clip edge. */
+    val paddingBounds: UiRect = bounds,
+    /** The complete layout overflow before scrolling and clipping. */
+    val scrollableOverflowBounds: UiRect = paddingBounds,
+    internal val overflow: ResolvedUiOverflow = ResolvedUiOverflow(
+        UiOverflowValue.VISIBLE,
+        UiOverflowValue.VISIBLE,
+    ),
 ) {
     internal var styleProvider: () -> ResolvedUiStyle = { element.style.resolveDefaults() }
     internal var styledTextFragments: List<UiStyledTextLayoutFragment> = emptyList()
+
+    /** Largest supported positive horizontal scroll offset for this layout snapshot. */
+    val maximumScrollX: Float
+        get() = (scrollableOverflowBounds.right - paddingBounds.right).coerceAtLeast(0f)
+
+    /** Largest supported positive vertical scroll offset for this layout snapshot. */
+    val maximumScrollY: Float
+        get() = (scrollableOverflowBounds.bottom - paddingBounds.bottom).coerceAtLeast(0f)
 }
 
 /** Calculated geometry and content for one generated pseudo-element box. */
@@ -135,8 +244,22 @@ data class UiPseudoLayoutNode(
     val font: Mine2DFont?,
     val displayed: Boolean = true,
     internal val textFragments: List<UiTextLayoutFragment> = emptyList(),
+    /** The generated box's overflow clip edge. */
+    val paddingBounds: UiRect = bounds,
+    /** The complete generated layout overflow before scrolling and clipping. */
+    val scrollableOverflowBounds: UiRect = paddingBounds,
+    internal val overflow: ResolvedUiOverflow = ResolvedUiOverflow(
+        UiOverflowValue.VISIBLE,
+        UiOverflowValue.VISIBLE,
+    ),
 ) {
     internal var pseudoStyleProvider: () -> UiPseudoStyle = { UiPseudoStyle(content) }
+
+    internal val maximumScrollX: Float
+        get() = (scrollableOverflowBounds.right - paddingBounds.right).coerceAtLeast(0f)
+
+    internal val maximumScrollY: Float
+        get() = (scrollableOverflowBounds.bottom - paddingBounds.bottom).coerceAtLeast(0f)
 }
 
 /**
@@ -165,6 +288,7 @@ class UiLayout internal constructor(
         private set
 
     private var displayStates: List<UiDisplayState> = snapshot.displayStates
+    private val scrollOffsets = mutableMapOf<UiScrollKey, UiScrollOffset>()
 
     private var dragButtonInfo: MouseButtonInfo? = null
     private var screenFocused: Boolean = false
@@ -363,7 +487,7 @@ class UiLayout internal constructor(
         val layoutX = x.toFloat()
         val layoutY = y.toFloat()
         return openColorPickerGeometry()?.bounds?.contains(layoutX, layoutY) == true ||
-            hitRegionsInPaintOrder().any { region -> region.bounds.contains(layoutX, layoutY) }
+            hitRegionsInPaintOrder().any { region -> region.contains(layoutX, layoutY) }
     }
 
     override fun getRectangle(): ScreenRectangle {
@@ -443,7 +567,7 @@ class UiLayout internal constructor(
         }
         return hitRegionsInPaintOrder()
             .asReversed()
-            .firstOrNull { region -> region.bounds.contains(x, y) }
+            .firstOrNull { region -> region.contains(x, y) }
             ?.element
     }
 
@@ -487,14 +611,14 @@ class UiLayout internal constructor(
             colorPickerDragTarget = null
         }
         val hitRegions = hitRegionsInPaintOrder()
-        val element = hitRegions.asReversed()
+        val hitRegion = hitRegions.asReversed()
             .firstOrNull { region ->
                 (region.element.onClick != null ||
                     region.element.onDrag != null ||
                     region.element is InputControl) &&
-                    region.bounds.contains(x, y)
+                    region.contains(x, y)
             }
-            ?.element
+        val element = hitRegion?.element
         val focusedInput = (element as? InputControl)?.takeUnless(UiElement::disabled)
         focusInternal(focusedInput)
         element ?: return false
@@ -507,11 +631,13 @@ class UiLayout internal constructor(
         dragButtonInfo = event.buttonInfo()
         if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             when (element) {
-                is TextInput -> nodes
-                    .asReversed()
-                    .firstOrNull { node -> node.element === element }
-                    ?.let { node ->
-                        val index = textInputIndexAt(node, event.x().toFloat())
+                is TextInput -> hitRegion
+                    .takeIf { region -> region.node.element === element }
+                    ?.let { region ->
+                        val index = textInputIndexAt(
+                            region.node,
+                            event.x().toFloat() - region.visualOffsetX,
+                        )
                         if (doubleClick) {
                             element.selectWordAt(index)
                         } else {
@@ -550,7 +676,7 @@ class UiLayout internal constructor(
         val nodes = nodesInPaintOrder()
         val hitRegions = hitRegionsInPaintOrder()
         fun contains(element: UiElement): Boolean = hitRegions.any { region ->
-            region.element === element && region.bounds.contains(layoutX, layoutY)
+            region.element === element && region.contains(layoutX, layoutY)
         }
         var handled = false
 
@@ -588,7 +714,7 @@ class UiLayout internal constructor(
             .asReversed()
             .firstOrNull { region ->
                 region.element.onMouseMove != null &&
-                    region.bounds.contains(layoutX, layoutY)
+                    region.contains(layoutX, layoutY)
             }
             ?.element
             ?.onMouseMove
@@ -607,7 +733,12 @@ class UiLayout internal constructor(
                 !element.disabled &&
                 dragButtonInfo?.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT
             ) {
-                val index = textInputIndexAt(node, layoutX, allowScroll = true)
+                val visualOffsetX = visualOffsetOf(node)?.first ?: 0f
+                val index = textInputIndexAt(
+                    node,
+                    layoutX - visualOffsetX,
+                    allowScroll = true,
+                )
                 element.moveTo(index, extendSelection = true)
                 handled = true
             }
@@ -632,6 +763,40 @@ class UiLayout internal constructor(
         dragX: Double,
         dragY: Double,
     ): Boolean = mouseMove(event.x(), event.y())
+
+    /** Scrolls the deepest eligible box under the pointer, then chains to its ancestors. */
+    override fun mouseScrolled(
+        x: Double,
+        y: Double,
+        horizontalAmount: Double,
+        verticalAmount: Double,
+    ): Boolean {
+        refreshDisplay()
+        if (!horizontalAmount.isFinite() || !verticalAmount.isFinite()) return false
+        val pointerX = x.toFloat()
+        val pointerY = y.toFloat()
+        if (openColorPickerGeometry()?.bounds?.contains(pointerX, pointerY) == true) return true
+        val hit = hitRegionsInPaintOrder()
+            .asReversed()
+            .firstOrNull { region -> region.contains(pointerX, pointerY) }
+            ?: return false
+        val deltaX = (-horizontalAmount * SCROLL_WHEEL_STEP).toFloat()
+        val deltaY = (-verticalAmount * SCROLL_WHEEL_STEP).toFloat()
+        hit.scrollChain.asReversed().distinctBy(UiScrollTarget::key).forEach { target ->
+            val current = scrollOffsets[target.key] ?: UiScrollOffset()
+            if (
+                setScrollOffset(
+                    target = target,
+                    x = current.x + deltaX,
+                    y = current.y + deltaY,
+                    directUserInput = true,
+                )
+            ) {
+                return true
+            }
+        }
+        return false
+    }
 
     /** Stops the current drag. Returns true when an element was dragging. */
     fun mouseRelease(): Boolean {
@@ -762,6 +927,39 @@ class UiLayout internal constructor(
         return nodesInPaintOrder().firstOrNull { it.element === element }
     }
 
+    /** Returns the current scroll offset of [element], or null when it has no principal box. */
+    fun scrollOffsetOf(element: UiElement): UiScrollOffset? {
+        refreshDisplay()
+        val node = nodesInPaintOrder().firstOrNull { node ->
+            node.displayed && node.element === element
+        } ?: return null
+        return scrollOffsets[node.scrollTarget().key] ?: UiScrollOffset()
+    }
+
+    /**
+     * Programmatically scrolls [element], clamped to its current scrollable overflow area.
+     *
+     * `hidden`, `auto`, and `scroll` axes can be changed. A `visible` or `clip` axis remains zero.
+     * Returns true when the offset changed.
+     */
+    fun scrollTo(element: UiElement, x: Float, y: Float): Boolean {
+        require(x.isFinite() && y.isFinite()) { "Scroll offsets must be finite: ($x, $y)" }
+        refreshDisplay()
+        val node = nodesInPaintOrder().firstOrNull { node ->
+            node.displayed && node.element === element
+        } ?: return false
+        return setScrollOffset(node.scrollTarget(), x, y, directUserInput = false)
+    }
+
+    /** Programmatically scrolls [element] relative to its current offset. */
+    fun scrollBy(element: UiElement, deltaX: Float, deltaY: Float): Boolean {
+        require(deltaX.isFinite() && deltaY.isFinite()) {
+            "Scroll deltas must be finite: ($deltaX, $deltaY)"
+        }
+        val current = scrollOffsetOf(element) ?: return false
+        return scrollTo(element, current.x + deltaX, current.y + deltaY)
+    }
+
     /** Returns every generated CSS box fragment associated with [element]. */
     fun fragmentsOf(element: UiElement): List<UiBoxFragment> {
         refreshDisplay()
@@ -802,18 +1000,20 @@ class UiLayout internal constructor(
         val node = nodesInPaintOrder().firstOrNull { node ->
             node.displayed && node.element === input
         } ?: return null
+        val (visualOffsetX, visualOffsetY) = visualOffsetOf(node) ?: (0f to 0f)
+        val inputBounds = node.bounds.translated(visualOffsetX, visualOffsetY)
         val width = COLOR_PICKER_PADDING * 2f +
             COLOR_PICKER_SATURATION_VALUE_WIDTH +
             COLOR_PICKER_GAP +
             COLOR_PICKER_HUE_WIDTH
         val height = COLOR_PICKER_PADDING * 2f + COLOR_PICKER_HEIGHT
         val maximumLeft = max(viewport.left, viewport.right - width)
-        val left = node.bounds.left.coerceIn(viewport.left, maximumLeft)
-        val below = node.bounds.bottom + COLOR_PICKER_ANCHOR_GAP
+        val left = inputBounds.left.coerceIn(viewport.left, maximumLeft)
+        val below = inputBounds.bottom + COLOR_PICKER_ANCHOR_GAP
         val top = if (below + height <= viewport.bottom) {
             below
         } else {
-            max(viewport.top, node.bounds.top - COLOR_PICKER_ANCHOR_GAP - height)
+            max(viewport.top, inputBounds.top - COLOR_PICKER_ANCHOR_GAP - height)
         }
         val saturationValueBounds = UiRect(
             left = left + COLOR_PICKER_PADDING,
@@ -952,7 +1152,15 @@ class UiLayout internal constructor(
     private data class UiHitRegion(
         val element: UiElement,
         val bounds: UiRect,
-    )
+        val node: UiLayoutNode,
+        val visualOffsetX: Float,
+        val visualOffsetY: Float,
+        val scrollChain: List<UiScrollTarget>,
+        val clip: UiClipStack?,
+    ) {
+        fun contains(x: Float, y: Float): Boolean =
+            bounds.contains(x, y) && (clip == null || clip.contains(x, y))
+    }
 
     private sealed interface UiPaintContent {
         val order: Int
@@ -1023,20 +1231,99 @@ class UiLayout internal constructor(
     }
 
     private fun hitRegionsInPaintOrder(): List<UiHitRegion> = buildList {
-        fun addTree(node: UiLayoutNode) {
-            add(UiHitRegion(node.element, node.bounds))
+        fun addTree(
+            node: UiLayoutNode,
+            visualOffsetX: Float,
+            visualOffsetY: Float,
+            inheritedClip: UiClipStack?,
+            ancestorScrollChain: List<UiScrollTarget>,
+        ) {
+            if (!node.displayed) return
+            val rawBounds = node.bounds.translated(visualOffsetX, visualOffsetY)
+            val visibleBounds = if (inheritedClip == null) rawBounds else inheritedClip.clip(rawBounds)
+            val nodeScrollChain = ancestorScrollChain + node.scrollTarget()
+            if (visibleBounds != null && visibleBounds.width > 0f && visibleBounds.height > 0f) {
+                add(
+                    UiHitRegion(
+                        element = node.element,
+                        bounds = visibleBounds,
+                        node = node,
+                        visualOffsetX = visualOffsetX,
+                        visualOffsetY = visualOffsetY,
+                        scrollChain = nodeScrollChain,
+                        clip = inheritedClip,
+                    ),
+                )
+            }
+
+            val ownClip = node.overflowClip(visualOffsetX, visualOffsetY)
+            val contentClip = when {
+                ownClip == null -> inheritedClip
+                inheritedClip == null -> ownClip
+                else -> inheritedClip.intersect(ownClip) ?: return
+            }
+            val offset = scrollOffsets[node.scrollTarget().key] ?: UiScrollOffset()
+            val contentOffsetX = visualOffsetX - offset.x
+            val contentOffsetY = visualOffsetY - offset.y
             paintContents(node).forEach { content ->
                 when (content) {
                     is UiPaintContent.Pseudo -> content.node
                         .takeIf(UiPseudoLayoutNode::displayed)
-                        ?.let { pseudo -> add(UiHitRegion(pseudo.element, pseudo.bounds)) }
+                        ?.let { pseudo ->
+                            val pseudoRawBounds = pseudo.bounds.translated(
+                                contentOffsetX,
+                                contentOffsetY,
+                            )
+                            val pseudoVisibleBounds = if (contentClip == null) {
+                                pseudoRawBounds
+                            } else {
+                                contentClip.clip(pseudoRawBounds)
+                            }
+                            if (
+                                pseudoVisibleBounds != null &&
+                                pseudoVisibleBounds.width > 0f &&
+                                pseudoVisibleBounds.height > 0f
+                            ) {
+                                add(
+                                    UiHitRegion(
+                                        element = pseudo.element,
+                                        bounds = pseudoVisibleBounds,
+                                        node = node,
+                                        visualOffsetX = contentOffsetX,
+                                        visualOffsetY = contentOffsetY,
+                                        scrollChain = nodeScrollChain + pseudo.scrollTarget(),
+                                        clip = contentClip,
+                                    ),
+                                )
+                            }
+                        }
 
                     UiPaintContent.Text -> Unit
-                    is UiPaintContent.Child -> addTree(content.node)
+                    is UiPaintContent.Child -> addTree(
+                        node = content.node,
+                        visualOffsetX = contentOffsetX,
+                        visualOffsetY = contentOffsetY,
+                        inheritedClip = contentClip,
+                        ancestorScrollChain = nodeScrollChain,
+                    )
                 }
             }
         }
-        addTree(root)
+        addTree(root, 0f, 0f, null, emptyList())
+    }
+
+    private fun visualOffsetOf(target: UiLayoutNode): Pair<Float, Float>? {
+        fun find(node: UiLayoutNode, offsetX: Float, offsetY: Float): Pair<Float, Float>? {
+            if (node === target) return offsetX to offsetY
+            val scroll = scrollOffsets[node.scrollTarget().key] ?: UiScrollOffset()
+            val contentOffsetX = offsetX - scroll.x
+            val contentOffsetY = offsetY - scroll.y
+            node.children.forEach { child ->
+                find(child, contentOffsetX, contentOffsetY)?.let { return it }
+            }
+            return null
+        }
+        return find(root, 0f, 0f)
     }
 
     private fun refreshDisplay() {
@@ -1058,6 +1345,7 @@ class UiLayout internal constructor(
         root = snapshot.root
         rootFragment = snapshot.rootFragment
         displayStates = snapshot.displayStates
+        clampScrollOffsets()
         pointerGeometryDirty = true
 
         val displayedElements = java.util.Collections.newSetFromMap(
@@ -1083,11 +1371,145 @@ class UiLayout internal constructor(
         }
     }
 
+    private fun setScrollOffset(
+        target: UiScrollTarget,
+        x: Float,
+        y: Float,
+        directUserInput: Boolean,
+    ): Boolean {
+        val previous = scrollOffsets[target.key] ?: UiScrollOffset()
+        val mayScrollX = if (directUserInput) {
+            target.overflow.x.acceptsUserScroll
+        } else {
+            target.overflow.x.isScrollable
+        }
+        val mayScrollY = if (directUserInput) {
+            target.overflow.y.acceptsUserScroll
+        } else {
+            target.overflow.y.isScrollable
+        }
+        val next = UiScrollOffset(
+            x = if (mayScrollX) x.coerceIn(0f, target.maximumX) else previous.x,
+            y = if (mayScrollY) y.coerceIn(0f, target.maximumY) else previous.y,
+        )
+        if (next == previous) return false
+        if (next == UiScrollOffset()) {
+            scrollOffsets.remove(target.key)
+        } else {
+            scrollOffsets[target.key] = next
+        }
+        pointerGeometryDirty = true
+        return true
+    }
+
+    private fun clampScrollOffsets() {
+        fun clamp(target: UiScrollTarget) {
+            val previous = scrollOffsets[target.key] ?: return
+            val next = UiScrollOffset(
+                x = if (target.overflow.x.isScrollable) {
+                    previous.x.coerceIn(0f, target.maximumX)
+                } else {
+                    0f
+                },
+                y = if (target.overflow.y.isScrollable) {
+                    previous.y.coerceIn(0f, target.maximumY)
+                } else {
+                    0f
+                },
+            )
+            if (next == UiScrollOffset()) scrollOffsets.remove(target.key)
+            else scrollOffsets[target.key] = next
+        }
+
+        fun visit(node: UiLayoutNode) {
+            clamp(node.scrollTarget())
+            node.beforePseudo?.let { pseudo -> clamp(pseudo.scrollTarget()) }
+            node.afterPseudo?.let { pseudo -> clamp(pseudo.scrollTarget()) }
+            node.children.forEach(::visit)
+        }
+        visit(root)
+    }
+
+    private fun drawOverflowContents(
+        target: UiScrollTarget,
+        paddingBounds: UiRect,
+        clipRadii: Mine2DRoundedRectRadii,
+        renderer: Mine2DEngine,
+        visualOffsetX: Float,
+        visualOffsetY: Float,
+        draw: (contentOffsetX: Float, contentOffsetY: Float) -> Unit,
+    ) {
+        val clip = target.overflow.overflowClip(
+            paddingBounds.translated(visualOffsetX, visualOffsetY),
+            clipRadii,
+        )
+        withAxisClip(renderer, clip?.axisClip) {
+            fun drawScrolledContents() {
+                val scroll = scrollOffsets[target.key] ?: UiScrollOffset()
+                val pose = renderer.graphics.pose()
+                if (scroll == UiScrollOffset()) {
+                    draw(visualOffsetX, visualOffsetY)
+                    return
+                }
+                pose.pushMatrix()
+                try {
+                    pose.translate(-scroll.x, -scroll.y)
+                    draw(visualOffsetX - scroll.x, visualOffsetY - scroll.y)
+                } finally {
+                    pose.popMatrix()
+                }
+            }
+
+            if (clip?.roundedClips?.isNotEmpty() == true) {
+                renderer.withRoundedClip(
+                    x = paddingBounds.left,
+                    y = paddingBounds.top,
+                    width = paddingBounds.width,
+                    height = paddingBounds.height,
+                    radii = clipRadii,
+                    draw = { drawScrolledContents() },
+                )
+            } else {
+                drawScrolledContents()
+            }
+        }
+    }
+
+    private fun withAxisClip(
+        renderer: Mine2DEngine,
+        clip: UiAxisClip?,
+        draw: () -> Unit,
+    ) {
+        if (clip == null) {
+            draw()
+            return
+        }
+        val graphics = renderer.graphics
+        val left = floor((clip.left ?: 0f).toDouble()).toInt().coerceIn(0, graphics.guiWidth())
+        val right = ceil((clip.right ?: graphics.guiWidth().toFloat()).toDouble())
+            .toInt()
+            .coerceIn(0, graphics.guiWidth())
+        val top = floor((clip.top ?: 0f).toDouble()).toInt().coerceIn(0, graphics.guiHeight())
+        val bottom = ceil((clip.bottom ?: graphics.guiHeight().toFloat()).toDouble())
+            .toInt()
+            .coerceIn(0, graphics.guiHeight())
+        if (right <= left || bottom <= top) return
+
+        graphics.enableScissor(left, top, right, bottom)
+        try {
+            draw()
+        } finally {
+            graphics.disableScissor()
+        }
+    }
+
     private fun draw(
         node: UiLayoutNode,
         renderer: Mine2DEngine,
         inheritedTextStyle: ResolvedUiTextStyle,
         timeSeconds: Float,
+        visualOffsetX: Float = 0f,
+        visualOffsetY: Float = 0f,
     ) {
         if (!node.displayed) return
 
@@ -1104,10 +1526,26 @@ class UiLayout internal constructor(
                 offsetY = dropShadow.offsetY,
                 blurRadius = dropShadow.blurRadius,
             ) {
-                drawContents(node, style, renderer, inheritedTextStyle, timeSeconds)
+                drawContents(
+                    node,
+                    style,
+                    renderer,
+                    inheritedTextStyle,
+                    timeSeconds,
+                    visualOffsetX,
+                    visualOffsetY,
+                )
             }
         } else {
-            drawContents(node, style, renderer, inheritedTextStyle, timeSeconds)
+            drawContents(
+                node,
+                style,
+                renderer,
+                inheritedTextStyle,
+                timeSeconds,
+                visualOffsetX,
+                visualOffsetY,
+            )
         }
     }
 
@@ -1117,8 +1555,11 @@ class UiLayout internal constructor(
         renderer: Mine2DEngine,
         inheritedTextStyle: ResolvedUiTextStyle,
         timeSeconds: Float,
+        visualOffsetX: Float,
+        visualOffsetY: Float,
     ) {
         val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
+        val roundedBox = style.borderRadius.resolve(node.bounds)
         style.boxShadow?.let { shadow ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
                 renderer.boxShadow(
@@ -1131,17 +1572,22 @@ class UiLayout internal constructor(
                     offsetY = shadow.offsetY,
                     blurRadius = shadow.blurRadius,
                     spreadRadius = shadow.spreadRadius,
-                    cornerRadius = shadow.cornerRadius,
+                    cornerRadii = if (shadow.followBorderRadius) {
+                        roundedBox.radii
+                    } else {
+                        Mine2DRoundedRectRadii(shadow.cornerRadius)
+                    },
                 )
             }
         }
         style.drawBackground(renderer.material) { color, material ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
-                renderer.quad(
+                renderer.roundedRect(
                     node.bounds.left,
                     node.bounds.top,
                     node.bounds.width,
                     node.bounds.height,
+                    roundedBox.radii,
                     color,
                     material,
                     renderer.uniformContext(
@@ -1153,45 +1599,80 @@ class UiLayout internal constructor(
             }
         }
 
-        when (val element = node.element) {
-            is TextInput -> drawTextInput(
-                node,
-                element,
-                resolvedTextStyle,
-                requireFont(node),
-                renderer,
-            )
+        drawBorder(
+            renderer = renderer,
+            border = style.border,
+            currentColor = resolvedTextStyle.color,
+            borderBounds = node.bounds,
+            paddingBounds = node.paddingBounds,
+            outerRadii = roundedBox.radii,
+            contentBounds = node.contentBounds,
+            timeSeconds = timeSeconds,
+        )
 
-            is ColorInput -> drawColorInput(node, element, renderer)
-            else -> Unit
-        }
+        drawOverflowContents(
+            target = node.scrollTarget(),
+            paddingBounds = node.paddingBounds,
+            clipRadii = roundedBox.radii.inset(node.bounds, node.paddingBounds),
+            renderer = renderer,
+            visualOffsetX = visualOffsetX,
+            visualOffsetY = visualOffsetY,
+        ) { contentOffsetX, contentOffsetY ->
+            when (val element = node.element) {
+                is TextInput -> drawTextInput(
+                    node,
+                    element,
+                    resolvedTextStyle,
+                    requireFont(node),
+                    renderer,
+                    visualOffsetX,
+                    visualOffsetY,
+                )
 
-        paintContents(node, style).forEach { content ->
-            when (content) {
-                is UiPaintContent.Pseudo ->
-                    drawPseudo(content.node, renderer, resolvedTextStyle, timeSeconds)
+                is ColorInput -> drawColorInput(node, element, renderer)
+                else -> Unit
+            }
 
-                UiPaintContent.Text -> {
-                    if (node.textFragments.isNotEmpty()) {
-                        drawStyledTextFragments(
-                            node = node,
-                            fallbackTextStyle = resolvedTextStyle,
-                            renderer = renderer,
-                        )
-                    } else if (node.element is Paragraph && node.element.text.isNotEmpty()) {
-                        drawText(
-                            node.element.text,
-                            style,
-                            resolvedTextStyle,
-                            node.textBounds ?: node.contentBounds,
-                            requireFont(node),
+            paintContents(node, style).forEach { content ->
+                when (content) {
+                    is UiPaintContent.Pseudo ->
+                        drawPseudo(
+                            content.node,
                             renderer,
+                            resolvedTextStyle,
+                            timeSeconds,
+                            contentOffsetX,
+                            contentOffsetY,
                         )
-                    }
-                }
 
-                is UiPaintContent.Child ->
-                    draw(content.node, renderer, resolvedTextStyle, timeSeconds)
+                    UiPaintContent.Text -> {
+                        if (node.textFragments.isNotEmpty()) {
+                            drawStyledTextFragments(
+                                node = node,
+                                fallbackTextStyle = resolvedTextStyle,
+                                renderer = renderer,
+                            )
+                        } else if (node.element is Paragraph && node.element.text.isNotEmpty()) {
+                            drawText(
+                                node.element.text,
+                                style,
+                                resolvedTextStyle,
+                                node.textBounds ?: node.contentBounds,
+                                requireFont(node),
+                                renderer,
+                            )
+                        }
+                    }
+
+                    is UiPaintContent.Child -> draw(
+                        content.node,
+                        renderer,
+                        resolvedTextStyle,
+                        timeSeconds,
+                        contentOffsetX,
+                        contentOffsetY,
+                    )
+                }
             }
         }
     }
@@ -1383,6 +1864,8 @@ class UiLayout internal constructor(
         textStyle: ResolvedUiTextStyle,
         font: Mine2DFont,
         renderer: Mine2DEngine,
+        visualOffsetX: Float,
+        visualOffsetY: Float,
     ) {
         if (input.hovering) {
             renderer.graphics.requestCursor(
@@ -1437,10 +1920,10 @@ class UiLayout internal constructor(
             rendererOffsetFromLineTop = font.rendererOffsetFromLineTop,
         )
 
-        val scissorLeft = floor(content.left.toDouble()).toInt()
-        val scissorTop = floor(content.top.toDouble()).toInt()
-        val scissorRight = ceil(content.right.toDouble()).toInt()
-        val scissorBottom = ceil(content.bottom.toDouble()).toInt()
+        val scissorLeft = floor((content.left + visualOffsetX).toDouble()).toInt()
+        val scissorTop = floor((content.top + visualOffsetY).toDouble()).toInt()
+        val scissorRight = ceil((content.right + visualOffsetX).toDouble()).toInt()
+        val scissorBottom = ceil((content.bottom + visualOffsetY).toDouble()).toInt()
         if (scissorRight <= scissorLeft || scissorBottom <= scissorTop) return
 
         renderer.graphics.enableScissor(scissorLeft, scissorTop, scissorRight, scissorBottom)
@@ -1531,13 +2014,18 @@ class UiLayout internal constructor(
         }
 
         if (screenFocused && focusedElement === input) {
-            val caretX = floor((textX + caretAdvance).toDouble()).toInt()
-            val caretTop = floor(lineTop.toDouble()).toInt()
+            val cssScroll = scrollOffsets[node.scrollTarget().key] ?: UiScrollOffset()
+            val caretX = floor(
+                (textX + caretAdvance + visualOffsetX - cssScroll.x).toDouble(),
+            ).toInt()
+            val caretTop = floor((lineTop + visualOffsetY - cssScroll.y).toDouble()).toInt()
             Minecraft.getInstance().textInputManager().setTextInputArea(
                 caretX,
                 caretTop,
                 caretX + 1,
-                ceil((lineTop + font.lineHeight).toDouble()).toInt(),
+                ceil(
+                    (lineTop + font.lineHeight + visualOffsetY - cssScroll.y).toDouble(),
+                ).toInt(),
             )
         }
     }
@@ -1547,6 +2035,8 @@ class UiLayout internal constructor(
         renderer: Mine2DEngine,
         inheritedTextStyle: ResolvedUiTextStyle,
         timeSeconds: Float,
+        visualOffsetX: Float,
+        visualOffsetY: Float,
     ) {
         if (!node.displayed) return
 
@@ -1571,6 +2061,8 @@ class UiLayout internal constructor(
                     renderer,
                     inheritedTextStyle,
                     timeSeconds,
+                    visualOffsetX,
+                    visualOffsetY,
                 )
             }
         } else {
@@ -1581,6 +2073,8 @@ class UiLayout internal constructor(
                 renderer,
                 inheritedTextStyle,
                 timeSeconds,
+                visualOffsetX,
+                visualOffsetY,
             )
         }
     }
@@ -1592,8 +2086,11 @@ class UiLayout internal constructor(
         renderer: Mine2DEngine,
         inheritedTextStyle: ResolvedUiTextStyle,
         timeSeconds: Float,
+        visualOffsetX: Float,
+        visualOffsetY: Float,
     ) {
         val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
+        val roundedBox = style.borderRadius.resolve(node.bounds)
         style.boxShadow?.let { shadow ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
                 renderer.boxShadow(
@@ -1606,17 +2103,22 @@ class UiLayout internal constructor(
                     offsetY = shadow.offsetY,
                     blurRadius = shadow.blurRadius,
                     spreadRadius = shadow.spreadRadius,
-                    cornerRadius = shadow.cornerRadius,
+                    cornerRadii = if (shadow.followBorderRadius) {
+                        roundedBox.radii
+                    } else {
+                        Mine2DRoundedRectRadii(shadow.cornerRadius)
+                    },
                 )
             }
         }
         style.drawBackground(renderer.material) { color, material ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
-                renderer.quad(
+                renderer.roundedRect(
                     node.bounds.left,
                     node.bounds.top,
                     node.bounds.width,
                     node.bounds.height,
+                    roundedBox.radii,
                     color,
                     material,
                     renderer.uniformContext(
@@ -1627,22 +2129,41 @@ class UiLayout internal constructor(
                 )
             }
         }
-        if (content is UiGeneratedContent.Text) {
-            val font = requireNotNull(node.font) {
-                "${node.pseudoElement.cssName} on ${node.element.javaClass.simpleName} " +
-                    "requires a font in its style or originating element"
-            }
-            if (node.textFragments.isNotEmpty()) {
-                drawTextFragments(node.textFragments, resolvedTextStyle, font, renderer)
-            } else {
-                drawText(
-                    content.value,
-                    style,
-                    resolvedTextStyle,
-                    node.contentBounds,
-                    font,
-                    renderer,
-                )
+        drawBorder(
+            renderer = renderer,
+            border = style.border,
+            currentColor = resolvedTextStyle.color,
+            borderBounds = node.bounds,
+            paddingBounds = node.paddingBounds,
+            outerRadii = roundedBox.radii,
+            contentBounds = node.contentBounds,
+            timeSeconds = timeSeconds,
+        )
+        drawOverflowContents(
+            target = node.scrollTarget(),
+            paddingBounds = node.paddingBounds,
+            clipRadii = roundedBox.radii.inset(node.bounds, node.paddingBounds),
+            renderer = renderer,
+            visualOffsetX = visualOffsetX,
+            visualOffsetY = visualOffsetY,
+        ) { _, _ ->
+            if (content is UiGeneratedContent.Text) {
+                val font = requireNotNull(node.font) {
+                    "${node.pseudoElement.cssName} on ${node.element.javaClass.simpleName} " +
+                        "requires a font in its style or originating element"
+                }
+                if (node.textFragments.isNotEmpty()) {
+                    drawTextFragments(node.textFragments, resolvedTextStyle, font, renderer)
+                } else {
+                    drawText(
+                        content.value,
+                        style,
+                        resolvedTextStyle,
+                        node.contentBounds,
+                        font,
+                        renderer,
+                    )
+                }
             }
         }
     }
@@ -1800,6 +2321,42 @@ internal fun UiStyle.drawBackground(
     }
 }
 
+private fun drawBorder(
+    renderer: Mine2DEngine,
+    border: UiBorders,
+    currentColor: Int,
+    borderBounds: UiRect,
+    paddingBounds: UiRect,
+    outerRadii: Mine2DRoundedRectRadii,
+    contentBounds: UiRect,
+    timeSeconds: Float,
+) {
+    fun UiBorderSide.paintColor(): Int =
+        if (style == UiBorderStyle.SOLID) color ?: currentColor else 0
+
+    renderer.roundedBorder(
+        x = borderBounds.left,
+        y = borderBounds.top,
+        width = borderBounds.width,
+        height = borderBounds.height,
+        radii = outerRadii,
+        topWidth = (paddingBounds.top - borderBounds.top).coerceAtLeast(0f),
+        rightWidth = (borderBounds.right - paddingBounds.right).coerceAtLeast(0f),
+        bottomWidth = (borderBounds.bottom - paddingBounds.bottom).coerceAtLeast(0f),
+        leftWidth = (paddingBounds.left - borderBounds.left).coerceAtLeast(0f),
+        topColor = border.top.paintColor(),
+        rightColor = border.right.paintColor(),
+        bottomColor = border.bottom.paintColor(),
+        leftColor = border.left.paintColor(),
+        material = renderer.material,
+        uniformContext = renderer.uniformContext(
+            elementBounds = borderBounds.toUniformRect(),
+            contentBounds = contentBounds.toUniformRect(),
+            timeSeconds = timeSeconds,
+        ),
+    )
+}
+
 internal fun ResolvedUiStyle.drawBackground(
     rendererMaterial: Mine2DMaterial,
     draw: (color: Int, material: Mine2DMaterial) -> Unit,
@@ -1812,7 +2369,9 @@ internal fun ResolvedUiStyle.drawBackground(
 private fun UiLayoutNode.translated(deltaX: Float, deltaY: Float): UiLayoutNode = copy(
     outerBounds = outerBounds.translated(deltaX, deltaY),
     bounds = bounds.translated(deltaX, deltaY),
+    paddingBounds = paddingBounds.translated(deltaX, deltaY),
     contentBounds = contentBounds.translated(deltaX, deltaY),
+    scrollableOverflowBounds = scrollableOverflowBounds.translated(deltaX, deltaY),
     children = children.map { child -> child.translated(deltaX, deltaY) },
     beforePseudo = beforePseudo?.translated(deltaX, deltaY),
     afterPseudo = afterPseudo?.translated(deltaX, deltaY),
@@ -1837,7 +2396,9 @@ private fun UiPseudoLayoutNode.translated(
 ): UiPseudoLayoutNode = copy(
     outerBounds = outerBounds.translated(deltaX, deltaY),
     bounds = bounds.translated(deltaX, deltaY),
+    paddingBounds = paddingBounds.translated(deltaX, deltaY),
     contentBounds = contentBounds.translated(deltaX, deltaY),
+    scrollableOverflowBounds = scrollableOverflowBounds.translated(deltaX, deltaY),
     textFragments = textFragments.map { fragment ->
         fragment.copy(bounds = fragment.bounds.translated(deltaX, deltaY))
     },
@@ -1855,8 +2416,73 @@ private fun UiBoxFragment.translated(deltaX: Float, deltaY: Float): UiBoxFragmen
     borderBox = borderBox.translated(deltaX, deltaY),
     paddingBox = paddingBox.translated(deltaX, deltaY),
     contentBox = contentBox.translated(deltaX, deltaY),
+    scrollableOverflow = scrollableOverflow.translated(deltaX, deltaY),
     children = children.map { child -> child.translated(deltaX, deltaY) },
 )
+
+private fun UiLayoutNode.scrollTarget(): UiScrollTarget = UiScrollTarget(
+    key = UiScrollKey(element),
+    overflow = overflow,
+    maximumX = maximumScrollX,
+    maximumY = maximumScrollY,
+)
+
+private fun UiPseudoLayoutNode.scrollTarget(): UiScrollTarget = UiScrollTarget(
+    key = UiScrollKey(element, pseudoElement),
+    overflow = overflow,
+    maximumX = maximumScrollX,
+    maximumY = maximumScrollY,
+)
+
+private fun UiLayoutNode.overflowClip(
+    visualOffsetX: Float,
+    visualOffsetY: Float,
+): UiClipStack? {
+    val radii = styleProvider().borderRadius.resolve(bounds).radii
+        .inset(bounds, paddingBounds)
+    return overflow.overflowClip(
+        paddingBounds.translated(visualOffsetX, visualOffsetY),
+        radii,
+    )
+}
+
+private fun Mine2DRoundedRectRadii.inset(
+    borderBounds: UiRect,
+    paddingBounds: UiRect,
+): Mine2DRoundedRectRadii = inset(
+    top = (paddingBounds.top - borderBounds.top).coerceAtLeast(0f),
+    right = (borderBounds.right - paddingBounds.right).coerceAtLeast(0f),
+    bottom = (borderBounds.bottom - paddingBounds.bottom).coerceAtLeast(0f),
+    left = (paddingBounds.left - borderBounds.left).coerceAtLeast(0f),
+    innerWidth = paddingBounds.width,
+    innerHeight = paddingBounds.height,
+)
+
+private fun ResolvedUiOverflow.overflowClip(
+    paddingBounds: UiRect,
+    radii: Mine2DRoundedRectRadii,
+): UiClipStack? {
+    if (!x.clips && !y.clips) return null
+    val roundedClip = if (x.clips && y.clips && !radii.isZero) {
+        listOf(
+            UiRoundedBox(
+                paddingBounds,
+                radii.normalized(paddingBounds.width, paddingBounds.height),
+            ),
+        )
+    } else {
+        emptyList()
+    }
+    return UiClipStack(
+        axisClip = UiAxisClip(
+            left = paddingBounds.left.takeIf { x.clips },
+            right = paddingBounds.right.takeIf { x.clips },
+            top = paddingBounds.top.takeIf { y.clips },
+            bottom = paddingBounds.bottom.takeIf { y.clips },
+        ),
+        roundedClips = roundedClip,
+    )
+}
 
 private fun UiRect.toUniformRect(): Mine2DUniformRect = Mine2DUniformRect(
     left = left,

@@ -233,6 +233,122 @@ data class UiPaddings(
     }
 }
 
+/** A border line style supported by the CSS layout renderer. */
+enum class UiBorderStyle {
+    NONE,
+    SOLID,
+}
+
+/** The width, style, and color of one physical CSS border side. */
+data class UiBorderSide(
+    val width: UiLength,
+    val style: UiBorderStyle = UiBorderStyle.SOLID,
+    /** Null uses the element's computed `color`, matching CSS `currentColor`. */
+    val color: Int? = null,
+) {
+    /** Creates one border side with a width in CSS pixels. */
+    constructor(
+        width: Float,
+        style: UiBorderStyle = UiBorderStyle.SOLID,
+        color: Int? = null,
+    ) : this(width.px, style, color)
+
+    init {
+        require(width.unit == UiLengthUnit.PX) {
+            "Border width does not accept percentages: $width"
+        }
+        require(width.value >= 0f) { "Border width must be non-negative: $width" }
+    }
+
+    /** The layout width after `border-style: none` has been applied. */
+    internal val usedWidth: Float
+        get() = if (style == UiBorderStyle.NONE) 0f else width.value
+
+    companion object {
+        @JvmField
+        val NONE = UiBorderSide(0f.px, UiBorderStyle.NONE)
+    }
+}
+
+/** Physical CSS borders in top, right, bottom, left order. */
+data class UiBorders(
+    val top: UiBorderSide = UiBorderSide.NONE,
+    val right: UiBorderSide = UiBorderSide.NONE,
+    val bottom: UiBorderSide = UiBorderSide.NONE,
+    val left: UiBorderSide = UiBorderSide.NONE,
+) {
+    constructor(all: UiBorderSide) : this(all, all, all, all)
+
+    /** Creates four equal solid borders. A null [color] means CSS `currentColor`. */
+    constructor(width: UiLength, color: Int? = null) : this(
+        UiBorderSide(width = width, color = color),
+    )
+
+    /** Creates four equal solid borders in CSS pixels. */
+    constructor(width: Float, color: Int? = null) : this(width.px, color)
+
+    companion object {
+        @JvmField
+        val NONE = UiBorders()
+    }
+}
+
+/** Horizontal and vertical CSS length-percentage radii of one physical corner. */
+data class UiCornerRadius(
+    val horizontal: UiLength,
+    val vertical: UiLength = horizontal,
+) {
+    /** Creates a circular radius in CSS pixels. */
+    constructor(all: Float) : this(all.px)
+
+    /** Creates an elliptical radius in CSS pixels. */
+    constructor(horizontal: Float, vertical: Float) : this(horizontal.px, vertical.px)
+
+    init {
+        require(horizontal.value >= 0f) {
+            "A horizontal border radius must be non-negative: $horizontal"
+        }
+        require(vertical.value >= 0f) {
+            "A vertical border radius must be non-negative: $vertical"
+        }
+    }
+
+    companion object {
+        @JvmField
+        val ZERO = UiCornerRadius(0f.px)
+    }
+}
+
+/** Physical `border-radius` values in top-left, top-right, bottom-right, bottom-left order. */
+data class UiBorderRadii(
+    val topLeft: UiCornerRadius = UiCornerRadius.ZERO,
+    val topRight: UiCornerRadius = UiCornerRadius.ZERO,
+    val bottomRight: UiCornerRadius = UiCornerRadius.ZERO,
+    val bottomLeft: UiCornerRadius = UiCornerRadius.ZERO,
+) {
+    /** Creates four equal circular radii. */
+    constructor(all: UiLength) : this(UiCornerRadius(all))
+
+    /** Creates four equal circular radii in CSS pixels. */
+    constructor(all: Float) : this(all.px)
+
+    /** Creates four equal elliptical radii. */
+    constructor(horizontal: UiLength, vertical: UiLength) : this(
+        UiCornerRadius(horizontal, vertical),
+    )
+
+    /** Creates four equal elliptical radii in CSS pixels. */
+    constructor(horizontal: Float, vertical: Float) : this(horizontal.px, vertical.px)
+
+    /** Creates four equal corner radii. */
+    constructor(all: UiCornerRadius) : this(all, all, all, all)
+
+    companion object {
+        @JvmField
+        val ZERO = UiBorderRadii()
+    }
+}
+
 enum class UiFlexDirection {
     ROW,
     ROW_REVERSE,
@@ -310,6 +426,35 @@ enum class UiWhiteSpace {
     PRE,
 }
 
+/** A value accepted by the CSS overflow shorthand and its physical-axis longhands. */
+enum class UiOverflowValue {
+    VISIBLE,
+    HIDDEN,
+    CLIP,
+    SCROLL,
+    AUTO;
+
+    /** Whether this value creates a programmatically scrollable axis. */
+    internal val isScrollable: Boolean
+        get() = this == HIDDEN || this == SCROLL || this == AUTO
+
+    /** Whether content outside this axis of the overflow clip edge is clipped. */
+    internal val clips: Boolean
+        get() = this != VISIBLE
+
+    /** Whether direct user input, such as a mouse wheel, may scroll this axis. */
+    internal val acceptsUserScroll: Boolean
+        get() = this == SCROLL || this == AUTO
+}
+
+/** One- or two-value declaration for the CSS `overflow` shorthand. */
+data class UiOverflow(
+    val x: UiOverflowValue,
+    val y: UiOverflowValue,
+) {
+    constructor(all: UiOverflowValue) : this(all, all)
+}
+
 /** A resolved physical edge set used by layout geometry. */
 internal data class UsedEdges(
     val top: Float = 0f,
@@ -322,4 +467,11 @@ internal data class UsedEdges(
 
     val vertical: Float
         get() = top + bottom
+
+    operator fun plus(other: UsedEdges): UsedEdges = UsedEdges(
+        top = top + other.top,
+        right = right + other.right,
+        bottom = bottom + other.bottom,
+        left = left + other.left,
+    )
 }

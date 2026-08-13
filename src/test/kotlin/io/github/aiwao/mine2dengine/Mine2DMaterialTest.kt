@@ -188,7 +188,12 @@ class Mine2DMaterialTest {
             width = 104f,
             height = 44f,
             blurRadius = 6f,
-            cornerRadius = 10f,
+            cornerRadii = Mine2DRoundedRectRadii(
+                topLeft = Mine2DCornerRadius(10f, 11f),
+                topRight = Mine2DCornerRadius(12f, 13f),
+                bottomRight = Mine2DCornerRadius(14f, 15f),
+                bottomLeft = Mine2DCornerRadius(16f, 17f),
+            ),
         )
         val data = material.resolveBindings(defaultContext()).uniforms().single().dataUnsafe()
         val buffer = ByteBuffer.wrap(data).order(ByteOrder.nativeOrder())
@@ -196,7 +201,8 @@ class Mine2DMaterialTest {
         assertFloatSequence(buffer, 0, 64f / 255f, 32f / 255f, 16f / 255f, 128f / 255f)
         assertFloatSequence(buffer, 16, 104f, 44f)
         assertEquals(6f, buffer.getFloat(24))
-        assertEquals(10f, buffer.getFloat(28))
+        assertFloatSequence(buffer, 32, 10f, 12f, 14f, 16f)
+        assertFloatSequence(buffer, 48, 11f, 13f, 15f, 17f)
     }
 
     @Test
@@ -220,6 +226,35 @@ class Mine2DMaterialTest {
         assertFloatSequence(buffer, 16, 3f, -2f, 320f, 180f)
         assertFloatSequence(buffer, 32, 6f, 1f, 2f, 7f)
         assertFloatSequence(buffer, 48, 6f, 0f, 0f, 0f)
+    }
+
+    @Test
+    fun `rounded clip material packs bounds radii transform and viewport`() {
+        val material = Mine2DMaterials.roundedClip(
+            left = 10f,
+            top = 20f,
+            width = 80f,
+            height = 40f,
+            radii = Mine2DRoundedRectRadii(
+                topLeft = Mine2DCornerRadius(1f, 2f),
+                topRight = Mine2DCornerRadius(3f, 4f),
+                bottomRight = Mine2DCornerRadius(5f, 6f),
+                bottomLeft = Mine2DCornerRadius(7f, 8f),
+            ),
+            screenToLocalX = Vector4f(1f, 2f, 3f, 0f),
+            screenToLocalY = Vector4f(4f, 5f, 6f, 0f),
+            viewportWidth = 320f,
+            viewportHeight = 180f,
+        )
+        val data = material.resolveBindings(defaultContext()).uniforms().single().dataUnsafe()
+        val buffer = ByteBuffer.wrap(data).order(ByteOrder.nativeOrder())
+
+        assertFloatSequence(buffer, 0, 10f, 20f, 80f, 40f)
+        assertFloatSequence(buffer, 16, 1f, 3f, 5f, 7f)
+        assertFloatSequence(buffer, 32, 2f, 4f, 6f, 8f)
+        assertFloatSequence(buffer, 48, 1f, 2f, 3f, 0f)
+        assertFloatSequence(buffer, 64, 4f, 5f, 6f, 0f)
+        assertFloatSequence(buffer, 80, 320f, 180f, 0f, 0f)
     }
 
     @Test

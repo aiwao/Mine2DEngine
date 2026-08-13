@@ -100,14 +100,16 @@ object ExampleModClient : ClientModInitializer {
 | --- |------------------------------------------------------------------------------------------------------------------------|
 | `polygon(...)` | 単純な凸・凹ポリゴンを描画します。頂点ごとの色には `Mine2DVertex`、単色には色と JOML の `Vector2fc` の各点を渡します。 |
 | `quad(x, y, width, height, color)` | 塗りつぶした矩形を描画します。                                                                                         |
+| `roundedRect(x, y, width, height, ..., color)` | 単一の円形半径、または四隅ごとの楕円半径を持つ塗りつぶした角丸矩形を描画します。                                      |
 | `line(startX, startY, endX, endY, width, color)` | 端が平らな塗りつぶし線を描画します。                                                                                   |
 | `circle(centerX, centerY, radius, color, segments)` | 正多角形で近似した塗りつぶし円を描画します。segmentsを増やすほど輪郭が滑らかになります。                               |
 | `boxShadow(x, y, width, height, ...)` | 前景のbox自体を描かず、柔らかい角丸box shadowを描画します。                                                           |
 | `textShadow(font, text, x, y, ...)` | 前景文字を描かず、設定可能なglyph shadowを描画します。                                                                |
 | `text(font, text, x, y, color)` | 読み込み済みの `Mine2DFont` で文字列を描画します。                                                                                 |
 | `withMaterial(material) { ... }` | ブロック内だけ既定のポリゴンMaterialを変更し、終了後に元へ戻します。                                                |
+| `withRoundedClip(x, y, width, height, ...) { ... }` | textを含むブロック内のすべてのdeferred GUI描画を、座標変換された角丸矩形でclipします。 |
 
-ポリゴンの各点は時計回り、反時計回りのどちらでも指定できます。3 個以上の異なる点と 0 ではない面積が必要で、自己交差はできません。連続する重複点と不要な同一直線上の点は自動的に取り除かれます。線には異なる始点・終点と正の幅、円には正の半径と 3 以上の分割数が必要です。
+ポリゴンの各点は時計回り、反時計回りのどちらでも指定できます。3 個以上の異なる点と 0 ではない面積が必要で、自己交差はできません。連続する重複点と不要な同一直線上の点は自動的に取り除かれます。線には異なる始点・終点と正の幅、円には正の半径と 3 以上の分割数が必要です。角丸矩形は曲率に応じて自動的に分割され、重なり合う半径はCSSと同じ共通係数で縮小されます。四隅を個別指定する場合は `Mine2DRoundedRectRadii` と `Mine2DCornerRadius` を使用します。
 
 エンジンは呼び出しごとに `graphics.pose()` と有効なシザー矩形を取得します。そのため、Minecraft の GUI 座標変換とクリッピングを通常どおり利用できます。
 
@@ -250,6 +252,9 @@ layout.updateViewport(
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
+import io.github.aiwao.mine2dengine.layout.UiBorderRadii
+import io.github.aiwao.mine2dengine.layout.UiBorders
+import io.github.aiwao.mine2dengine.layout.UiCornerRadius
 import io.github.aiwao.mine2dengine.layout.UiMarginValue
 import io.github.aiwao.mine2dengine.layout.UiMargins
 import io.github.aiwao.mine2dengine.layout.UiPaddings
@@ -267,13 +272,55 @@ val style = UiStyle(
         left = UiMarginValue.AUTO,
     ),
     padding = UiPaddings(vertical = 6f, horizontal = 10f),
+    border = UiBorders(1f.px, 0xFF808080.toInt()),
+    borderRadius = UiBorderRadii(
+        topLeft = UiCornerRadius(16f.px),
+        bottomRight = UiCornerRadius(50f.percent, 25f.percent),
+    ),
     boxSizing = UiBoxSizing.BORDER_BOX,
 )
 ```
 
 `Float.px`と`Float.percent`でlength-percentageを作ります。負のlengthはmarginとinsetでは利用できますが、size、padding、gapでは拒否されます。CSSと同様に、padding percentageと物理margin percentageは包含blockの幅を基準にします。
 
+`border`には物理top/right/bottom/leftを持つ`UiBorders`を指定します。各`UiBorderSide`で
+`NONE`と`SOLID`を利用でき、幅は0以上のpixel lengthです。色がnullなら要素のcomputed
+`color`（`currentColor`）を使い、`NONE`のused widthは0になります。cascadeでは1つの
+`UiBorders`値をatomicな宣言として扱い、`UiBorders.NONE`で明示的にリセットできます。
+borderはintrinsic size、flex、positioned layout、`box-sizing`の計算に含まれます。
+
+`borderRadius`はレイアウト寸法には影響しません。角半径の水平方向percentageはborder boxの幅、垂直方向percentageは高さを基準にします。overflowの両軸がclipする場合は、外側の半径から隣接するborder幅を引いたpadding-edge半径がclipに適用されます。box shadowは既定で外側のborder radiusを使用します。従来の単一半径を使う場合は `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)` を指定します。0より大きい `cornerRadius` では `followBorderRadius` の既定値がfalseになります。
+
 preferred / minimum / maximum sizeでは`AUTO`、`MIN_CONTENT`、`MAX_CONTENT`、`FitContent(...)`、length-percentageを利用できます。maximum sizeでは`NONE`も利用できます。
+
+### Overflow
+
+`overflow`、`overflowX`、`overflowY`では`VISIBLE`、`HIDDEN`、`CLIP`、`SCROLL`、`AUTO`を利用できます。
+
+```kotlin
+import io.github.aiwao.mine2dengine.layout.UiOverflow
+import io.github.aiwao.mine2dengine.layout.UiOverflowValue
+
+val scrollerStyle = UiStyle(
+    width = 160f.px,
+    height = 80f.px,
+    overflow = UiOverflow(UiOverflowValue.AUTO),
+)
+
+// 2値のshorthandは物理x軸、y軸の順です。
+val verticalScrollerStyle = UiStyle(
+    overflow = UiOverflow(
+        x = UiOverflowValue.CLIP,
+        y = UiOverflowValue.AUTO,
+    ),
+)
+```
+
+同じ`UiStyle`内では`overflowX`と`overflowY`がshorthandの対応軸を上書きします。cascadeで後からshorthandが指定された場合は、それ以前のlonghandをリセットします。CSSと同様に、もう一方の軸が`hidden`、`scroll`、`auto`なら`visible`のcomputed valueは`auto`になり、`clip`は非スクロールのままです。
+
+`hidden`はwheel入力を受け付けませんが、`UiLayout.scrollTo`と`scrollBy`からスクロールできます。`clip`はユーザー操作とプログラム操作の両方を禁止します。`auto`と`scroll`はwheel入力を受け付け、内側が端へ到達すると外側のscroll containerへ連鎖します。scroll offsetはrelayout後も維持され、新しいoverflow geometryへclampされます。現在値は`scrollOffsetOf`から取得でき、`UiLayoutNode`では`paddingBounds`、`scrollableOverflowBounds`、`maximumScrollX`、`maximumScrollY`を参照できます。
+
+overflowはpadding boxでclipし、scrollbarは現在描画しません。両軸がclipする場合は`borderRadius`がclipとpointer hit testの形状にも適用されます。片軸だけがclipする場合は矩形のままです。
 
 ### Flexbox
 
@@ -312,7 +359,7 @@ val toolbar = div(
 
 container propertyは`flexDirection`、`flexWrap`、`justifyContent`、`alignItems`、`alignContent`、`rowGap`、`columnGap`です。item propertyは`flexGrow`、`flexShrink`、`flexBasis`、`order`、`alignSelf`です。
 
-flexible lengthは各itemのflex base sizeから、scaled shrink factorとmin/max clampの反復処理で解決します。CSSのautomatic minimum sizeはcontent-basedです。contentより小さく縮めたいitemには`minWidth = 0f.px`を指定してください。columnの場合は`minHeight`です。
+flexible lengthは各itemのflex base sizeから、scaled shrink factorとmin/max clampの反復処理で解決します。CSSのautomatic minimum sizeはnon-scrollable overflowではcontent-based、main axisがscrollableなら0です。non-scrollable itemをcontentより小さく縮めたい場合は`minWidth = 0f.px`を指定してください。columnの場合は`minHeight`です。
 
 absolute childはflex itemになりません。生成された疑似要素はflex itemになります。flex container直下のtextはanonymous flex itemで囲まれます。
 
@@ -502,6 +549,8 @@ val panel = div(
         height = 40f.px,
         backgroundColor = 0xFFFFFFFF.toInt(),
         backgroundMaterial = roundedPanel,
+        border = UiBorders(1f.px, 0xFF808080.toInt()),
+        borderRadius = UiBorderRadii(8f.px),
     ),
 )
 ```

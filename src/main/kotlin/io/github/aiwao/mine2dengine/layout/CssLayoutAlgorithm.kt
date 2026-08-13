@@ -24,6 +24,7 @@ internal data class CssFragment(
     val borderBox: UiRect,
     val paddingBox: UiRect,
     val contentBox: UiRect,
+    val scrollableOverflow: UiRect = paddingBox,
     val usedMargin: UsedEdges,
     val children: List<CssFragment>,
     val textFragments: List<CssTextFragment>,
@@ -53,8 +54,12 @@ private data class ResolvedMargins(
 
 private data class BoxMetrics(
     val margin: ResolvedMargins,
+    val border: UsedEdges,
     val padding: UsedEdges,
-)
+) {
+    val insets: UsedEdges
+        get() = border + padding
+}
 
 private data class IntrinsicWidths(
     val min: Float,
@@ -118,7 +123,7 @@ internal class CssLayoutAlgorithm(
             staticMarginTop = viewport.top,
             isRoot = true,
         ).fragment
-        return resolveAbsoluteDescendants(normal, viewport)
+        return resolveAbsoluteDescendants(normal, viewport).withScrollableOverflow()
     }
 
     private fun layoutBox(
@@ -141,7 +146,7 @@ internal class CssLayoutAlgorithm(
             percentageBase = percentageWidth,
             intrinsic = intrinsic,
             available = availableWidth,
-            padding = metrics.padding.horizontal,
+            padding = metrics.insets.horizontal,
             boxSizing = style.boxSizing,
         )
         val fillsAvailableWidth = display.outside == UiDisplayOutside.BLOCK &&
@@ -150,18 +155,18 @@ internal class CssLayoutAlgorithm(
             constraints.forcedContentWidth != null -> constraints.forcedContentWidth
             specifiedContentWidth != null -> specifiedContentWidth
             fillsAvailableWidth -> (
-                availableWidth - metrics.padding.horizontal -
+                availableWidth - metrics.insets.horizontal -
                     (metrics.margin.left ?: 0f) - (metrics.margin.right ?: 0f)
                 ).coerceAtLeast(0f)
 
-            else -> fitContentWidth(intrinsic, availableWidth, metrics.padding.horizontal)
+            else -> fitContentWidth(intrinsic, availableWidth, metrics.insets.horizontal)
         }
         val contentWidth = clampWidth(
             box,
             preferredContentWidth,
             percentageWidth,
             intrinsic,
-            metrics.padding,
+            metrics.insets,
         )
 
         if (!constraints.isFlexItem && (
@@ -172,7 +177,7 @@ internal class CssLayoutAlgorithm(
             usedMargin = resolveHorizontalAutoMargins(
                 margins = metrics.margin,
                 availableWidth = availableWidth,
-                borderBoxWidth = contentWidth + metrics.padding.horizontal,
+                borderBoxWidth = contentWidth + metrics.insets.horizontal,
                 fillAutoWidth = specifiedContentWidth == null &&
                     contentWidth == preferredContentWidth,
             )
@@ -183,14 +188,14 @@ internal class CssLayoutAlgorithm(
             percentageBase = constraints.percentageHeight,
             intrinsic = IntrinsicWidths(0f, 0f),
             available = (constraints.availableHeight as? AvailableSize.Definite)?.value,
-            padding = metrics.padding.vertical,
+            padding = metrics.insets.vertical,
             boxSizing = style.boxSizing,
         )
 
         val borderLeft = staticMarginLeft + usedMargin.left
         val borderTop = staticMarginTop + usedMargin.top
-        val contentLeft = borderLeft + metrics.padding.left
-        val contentTop = borderTop + metrics.padding.top
+        val contentLeft = borderLeft + metrics.insets.left
+        val contentTop = borderTop + metrics.insets.top
         val contentConstraints = ConstraintSpace(
             availableWidth = AvailableSize.Definite(contentWidth),
             availableHeight = specifiedContentHeight?.let(AvailableSize::Definite)
@@ -233,7 +238,7 @@ internal class CssLayoutAlgorithm(
             box = box,
             contentHeight = contentHeight,
             percentageBase = constraints.percentageHeight,
-            padding = metrics.padding,
+            padding = metrics.insets,
             naturalHeight = contentLayout.naturalHeight,
         )
 
@@ -259,18 +264,26 @@ internal class CssLayoutAlgorithm(
             contentLayout
         }
 
-        val borderWidth = contentWidth + metrics.padding.horizontal
-        val borderHeight = contentHeight + metrics.padding.vertical
+        val paddingWidth = contentWidth + metrics.padding.horizontal
+        val paddingHeight = contentHeight + metrics.padding.vertical
+        val borderWidth = paddingWidth + metrics.border.horizontal
+        val borderHeight = paddingHeight + metrics.border.vertical
         val borderBox = UiRect(borderLeft, borderTop, borderWidth, borderHeight)
+        val paddingBox = UiRect(
+            left = borderLeft + metrics.border.left,
+            top = borderTop + metrics.border.top,
+            width = paddingWidth,
+            height = paddingHeight,
+        )
         val contentBox = UiRect(contentLeft, contentTop, contentWidth, contentHeight)
         val baselineFromTop = if (box.element is InputControl && box.kind == CssBoxKind.PRINCIPAL) {
             val inputMetrics = box.element.intrinsicMetrics { measurer(box) }
-            metrics.padding.top +
+            metrics.insets.top +
                 (contentHeight - inputMetrics.height) / 2f +
                 inputMetrics.baselineFromTop
         } else {
             finalContentLayout.baselineFromTop?.let { baseline ->
-                metrics.padding.top + baseline
+                metrics.insets.top + baseline
             }
         }
         var fragment = CssFragment(
@@ -282,7 +295,7 @@ internal class CssLayoutAlgorithm(
                 borderHeight + usedMargin.vertical,
             ),
             borderBox = borderBox,
-            paddingBox = borderBox,
+            paddingBox = paddingBox,
             contentBox = contentBox,
             usedMargin = usedMargin,
             children = finalContentLayout.children,
@@ -308,6 +321,12 @@ internal class CssLayoutAlgorithm(
                 right = resolveMargin(style.margin.right, percentageWidth),
                 bottom = resolveMargin(style.margin.bottom, percentageWidth),
                 left = resolveMargin(style.margin.left, percentageWidth),
+            ),
+            border = UsedEdges(
+                top = style.border.top.usedWidth,
+                right = style.border.right.usedWidth,
+                bottom = style.border.bottom.usedWidth,
+                left = style.border.left.usedWidth,
             ),
             padding = UsedEdges(
                 top = style.padding.top.resolve(percentageWidth) ?: 0f,
@@ -921,7 +940,7 @@ internal class CssLayoutAlgorithm(
             percentageBase = null,
             intrinsic = natural,
             available = null,
-            padding = metrics.padding.horizontal,
+            padding = metrics.insets.horizontal,
             boxSizing = box.style.boxSizing,
         )
         var usedMin = specified ?: natural.min
@@ -931,7 +950,7 @@ internal class CssLayoutAlgorithm(
             percentageBase = null,
             intrinsic = natural,
             available = null,
-            padding = metrics.padding.horizontal,
+            padding = metrics.insets.horizontal,
             boxSizing = box.style.boxSizing,
         )
         val maximum = resolvePreferredSize(
@@ -939,7 +958,7 @@ internal class CssLayoutAlgorithm(
             percentageBase = null,
             intrinsic = natural,
             available = null,
-            padding = metrics.padding.horizontal,
+            padding = metrics.insets.horizontal,
             boxSizing = box.style.boxSizing,
         )
         if (maximum != null) {
@@ -957,7 +976,7 @@ internal class CssLayoutAlgorithm(
         val content = intrinsicWidths(box)
         val metrics = resolveMetrics(box.style, percentageWidth = null)
         val fixedMargins = metrics.margin.withAutoAsZero().horizontal
-        val extras = metrics.padding.horizontal + fixedMargins
+        val extras = metrics.insets.horizontal + fixedMargins
         return IntrinsicWidths(
             min = (content.min + extras).coerceAtLeast(0f),
             max = max(content.min + extras, content.max + extras).coerceAtLeast(0f),
@@ -1005,6 +1024,8 @@ internal class CssLayoutAlgorithm(
             color = null,
             backgroundColor = null,
             backgroundMaterial = null,
+            border = UiBorders.NONE,
+            borderRadius = UiBorderRadii.ZERO,
             margin = UiMargins(),
             padding = UiPaddings(),
             display = UiDisplay.BLOCK,
@@ -1193,9 +1214,9 @@ internal class CssLayoutAlgorithm(
                 val crossAutoMargins = crossAutoMarginCount(item.metrics.margin, axis)
                 if (alignment == UiAlignItems.STRETCH && crossAuto && crossAutoMargins == 0) {
                     val paddingCross = if (axis.isRow) {
-                        item.metrics.padding.vertical
+                        item.metrics.insets.vertical
                     } else {
-                        item.metrics.padding.horizontal
+                        item.metrics.insets.horizontal
                     }
                     val marginCross = fixedCrossMargins(item.metrics.margin, axis)
                     val forcedCross = (line.crossSize - paddingCross - marginCross).coerceAtLeast(0f)
@@ -1272,7 +1293,7 @@ internal class CssLayoutAlgorithm(
                     !axis.isRow && resolvedItemAlignment(box.style.alignSelf, containerAlignItems) ==
                     UiAlignItems.STRETCH && box.style.width == UiSizeValue.AUTO
                 ) {
-                    (containerWidth - metrics.padding.horizontal -
+                    (containerWidth - metrics.insets.horizontal -
                         fixedCrossMargins(metrics.margin, axis)).coerceAtLeast(0f)
                 } else {
                     null
@@ -1288,7 +1309,7 @@ internal class CssLayoutAlgorithm(
         } else {
             IntrinsicWidths(provisional.fragment.contentBox.height, provisional.fragment.contentBox.height)
         }
-        val mainPadding = if (axis.isRow) metrics.padding.horizontal else metrics.padding.vertical
+        val mainPadding = if (axis.isRow) metrics.insets.horizontal else metrics.insets.vertical
         val mainProperty = if (axis.isRow) box.style.width else box.style.height
         val percentageBase = availableMain
         val propertyMain = resolvePreferredSize(
@@ -1316,8 +1337,9 @@ internal class CssLayoutAlgorithm(
         val automaticMinimum = propertyMain?.let { specified ->
             min(intrinsicMain.min, specified)
         } ?: intrinsicMain.min
+        val mainOverflow = if (axis.isRow) box.style.overflow.x else box.style.overflow.y
         val minimum = if (minProperty == UiSizeValue.AUTO) {
-            automaticMinimum
+            if (mainOverflow.isScrollable) 0f else automaticMinimum
         } else {
             resolvePreferredSize(
                 minProperty,
@@ -1488,7 +1510,7 @@ internal class CssLayoutAlgorithm(
     )
 
     private fun itemOuterMain(item: FlexItemPlan, axis: FlexAxis, contentMain: Float): Float {
-        val padding = if (axis.isRow) item.metrics.padding.horizontal else item.metrics.padding.vertical
+        val padding = if (axis.isRow) item.metrics.insets.horizontal else item.metrics.insets.vertical
         val margin = fixedMainMargins(item.metrics.margin, axis)
         return (contentMain + padding + margin).coerceAtLeast(0f)
     }
@@ -1852,13 +1874,13 @@ internal class CssLayoutAlgorithm(
         val widthIsAuto = style.width == UiSizeValue.AUTO
         val heightIsAuto = style.height == UiSizeValue.AUTO
         val forcedWidth = if (widthIsAuto && left != null && right != null) {
-            (containingBlock.width - left - right - metrics.padding.horizontal -
+            (containingBlock.width - left - right - metrics.insets.horizontal -
                 fixedHorizontalMargins(metrics.margin)).coerceAtLeast(0f)
         } else {
             null
         }
         val forcedHeight = if (heightIsAuto && top != null && bottom != null) {
-            (containingBlock.height - top - bottom - metrics.padding.vertical -
+            (containingBlock.height - top - bottom - metrics.insets.vertical -
                 fixedVerticalMargins(metrics.margin)).coerceAtLeast(0f)
         } else {
             null
@@ -1933,6 +1955,7 @@ private fun CssFragment.translated(deltaX: Float, deltaY: Float): CssFragment {
         borderBox = borderBox.translated(deltaX, deltaY),
         paddingBox = paddingBox.translated(deltaX, deltaY),
         contentBox = contentBox.translated(deltaX, deltaY),
+        scrollableOverflow = scrollableOverflow.translated(deltaX, deltaY),
         children = children.map { it.translated(deltaX, deltaY) },
         textFragments = textFragments.map { fragment ->
             fragment.copy(bounds = fragment.bounds.translated(deltaX, deltaY))
@@ -1944,6 +1967,47 @@ private fun CssFragment.translated(deltaX: Float, deltaY: Float): CssFragment {
             )
         },
     )
+}
+
+/**
+ * Resolves scrollable overflow after normal and absolutely-positioned descendants have reached
+ * their final coordinates. Paint-only effects such as shadows deliberately do not participate.
+ */
+private fun CssFragment.withScrollableOverflow(): CssFragment {
+    val resolvedChildren = children.map(CssFragment::withScrollableOverflow)
+    var left = paddingBox.left
+    var top = paddingBox.top
+    var right = paddingBox.right
+    var bottom = paddingBox.bottom
+
+    fun include(bounds: UiRect) {
+        left = min(left, bounds.left)
+        top = min(top, bounds.top)
+        right = max(right, bounds.right)
+        bottom = max(bottom, bounds.bottom)
+    }
+
+    textFragments.forEach { fragment -> include(fragment.bounds) }
+    resolvedChildren.forEach { child -> include(child.propagatedScrollableOverflow()) }
+
+    // Preserve the trailing padding after content that reaches beyond the padding box.
+    if (right > paddingBox.right) right += (paddingBox.right - contentBox.right).coerceAtLeast(0f)
+    if (bottom > paddingBox.bottom) bottom += (paddingBox.bottom - contentBox.bottom).coerceAtLeast(0f)
+
+    return copy(
+        children = resolvedChildren,
+        scrollableOverflow = UiRect(left, top, right - left, bottom - top),
+    )
+}
+
+/** Overflow propagated to an ancestor is clipped independently in each non-visible axis. */
+private fun CssFragment.propagatedScrollableOverflow(): UiRect {
+    val overflow = box.style.overflow
+    val left = if (overflow.x.clips) paddingBox.left else scrollableOverflow.left
+    val right = if (overflow.x.clips) paddingBox.right else scrollableOverflow.right
+    val top = if (overflow.y.clips) paddingBox.top else scrollableOverflow.top
+    val bottom = if (overflow.y.clips) paddingBox.bottom else scrollableOverflow.bottom
+    return UiRect(left, top, (right - left).coerceAtLeast(0f), (bottom - top).coerceAtLeast(0f))
 }
 
 private fun UiRect.translated(deltaX: Float, deltaY: Float): UiRect = copy(

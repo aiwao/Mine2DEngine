@@ -162,12 +162,29 @@ object Mine2DMaterials {
         width: Float,
         height: Float,
         blurRadius: Float,
-        cornerRadius: Float,
+        cornerRadii: Mine2DRoundedRectRadii,
     ): Mine2DMaterial = Mine2DShaders.BOX_SHADOW.material {
         set(Mine2DShaders.BOX_SHADOW_COLOR, color.toRgbaVector())
         set(Mine2DShaders.BOX_SHADOW_SIZE, Vector2f(width, height))
         set(Mine2DShaders.SHADOW_BLUR_RADIUS, blurRadius)
-        set(Mine2DShaders.BOX_SHADOW_CORNER_RADIUS, cornerRadius)
+        set(
+            Mine2DShaders.BOX_SHADOW_CORNER_RADII_HORIZONTAL,
+            Vector4f(
+                cornerRadii.topLeft.horizontal,
+                cornerRadii.topRight.horizontal,
+                cornerRadii.bottomRight.horizontal,
+                cornerRadii.bottomLeft.horizontal,
+            ),
+        )
+        set(
+            Mine2DShaders.BOX_SHADOW_CORNER_RADII_VERTICAL,
+            Vector4f(
+                cornerRadii.topLeft.vertical,
+                cornerRadii.topRight.vertical,
+                cornerRadii.bottomRight.vertical,
+                cornerRadii.bottomLeft.vertical,
+            ),
+        )
     }
 
     internal fun dropShadow(
@@ -192,6 +209,44 @@ object Mine2DMaterials {
             Vector4f(blurAxisXx, blurAxisXy, blurAxisYx, blurAxisYy),
         )
         set(Mine2DShaders.DROP_SHADOW_PARAMETERS, Vector4f(blurRadius, 0f, 0f, 0f))
+    }
+
+    internal fun roundedClip(
+        left: Float,
+        top: Float,
+        width: Float,
+        height: Float,
+        radii: Mine2DRoundedRectRadii,
+        screenToLocalX: Vector4f,
+        screenToLocalY: Vector4f,
+        viewportWidth: Float,
+        viewportHeight: Float,
+    ): Mine2DMaterial = Mine2DShaders.ROUNDED_CLIP.material {
+        set(Mine2DShaders.ROUNDED_CLIP_BOUNDS, Vector4f(left, top, width, height))
+        set(
+            Mine2DShaders.ROUNDED_CLIP_RADII_HORIZONTAL,
+            Vector4f(
+                radii.topLeft.horizontal,
+                radii.topRight.horizontal,
+                radii.bottomRight.horizontal,
+                radii.bottomLeft.horizontal,
+            ),
+        )
+        set(
+            Mine2DShaders.ROUNDED_CLIP_RADII_VERTICAL,
+            Vector4f(
+                radii.topLeft.vertical,
+                radii.topRight.vertical,
+                radii.bottomRight.vertical,
+                radii.bottomLeft.vertical,
+            ),
+        )
+        set(Mine2DShaders.ROUNDED_CLIP_SCREEN_TO_LOCAL_X, screenToLocalX)
+        set(Mine2DShaders.ROUNDED_CLIP_SCREEN_TO_LOCAL_Y, screenToLocalY)
+        set(
+            Mine2DShaders.ROUNDED_CLIP_VIEWPORT,
+            Vector4f(viewportWidth, viewportHeight, 0f, 0f),
+        )
     }
 
     internal fun textShadow(

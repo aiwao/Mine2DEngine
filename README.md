@@ -100,14 +100,16 @@ Coordinates are GUI coordinates, and colors are Minecraft ARGB integers (`0xAARR
 | --- | --- |
 | `polygon(...)` | Draws a simple convex or concave polygon. Use `Mine2DVertex` for per-vertex colors, or pass one color and JOML `Vector2fc` points. |
 | `quad(x, y, width, height, color)` | Draws a filled rectangle. |
+| `roundedRect(x, y, width, height, ..., color)` | Draws a filled rounded rectangle with one circular radius or independently elliptical corners. |
 | `line(startX, startY, endX, endY, width, color)` | Draws a filled line with butt caps. |
 | `circle(centerX, centerY, radius, color, segments)` | Draws a filled regular-polygon approximation of a circle. More segments produce a smoother edge. |
 | `boxShadow(x, y, width, height, ...)` | Draws a soft rounded-box shadow without drawing the box itself. |
 | `textShadow(font, text, x, y, ...)` | Draws a configurable glyph shadow without drawing the foreground text. |
 | `text(font, text, x, y, color)` | Draws text using a loaded `Mine2DFont`. |
 | `withMaterial(material) { ... }` | Temporarily changes the default polygon material and restores it after the block. |
+| `withRoundedClip(x, y, width, height, ...) { ... }` | Clips every deferred GUI draw in the block, including text, to a transformed rounded rectangle. |
 
-Polygon points may use clockwise or counterclockwise order. A polygon must have at least three distinct points, a non-zero area, and no self-intersections. Consecutive duplicate points and redundant collinear points are removed automatically. Lines require different endpoints and a positive width; circles require a positive radius and at least three segments.
+Polygon points may use clockwise or counterclockwise order. A polygon must have at least three distinct points, a non-zero area, and no self-intersections. Consecutive duplicate points and redundant collinear points are removed automatically. Lines require different endpoints and a positive width; circles require a positive radius and at least three segments. Rounded rectangles are tessellated automatically according to their curvature, and overlapping radii are reduced with the common scale factor defined by CSS. Use `Mine2DRoundedRectRadii` and `Mine2DCornerRadius` to specify corners independently.
 
 The engine captures `graphics.pose()` and the active scissor rectangle for every call. You can therefore use Minecraft's GUI transforms and clipping normally:
 
@@ -255,6 +257,9 @@ A null property in `UiStyle` means “not declared.” CSS keywords are explicit
 
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
+import io.github.aiwao.mine2dengine.layout.UiBorderRadii
+import io.github.aiwao.mine2dengine.layout.UiBorders
+import io.github.aiwao.mine2dengine.layout.UiCornerRadius
 import io.github.aiwao.mine2dengine.layout.UiMarginValue
 import io.github.aiwao.mine2dengine.layout.UiMargins
 import io.github.aiwao.mine2dengine.layout.UiPaddings
@@ -272,13 +277,63 @@ val style = UiStyle(
         left = UiMarginValue.AUTO,
     ),
     padding = UiPaddings(vertical = 6f, horizontal = 10f),
+    border = UiBorders(1f.px, 0xFF808080.toInt()),
+    borderRadius = UiBorderRadii(
+        topLeft = UiCornerRadius(16f.px),
+        bottomRight = UiCornerRadius(50f.percent, 25f.percent),
+    ),
     boxSizing = UiBoxSizing.BORDER_BOX,
 )
 ```
 
 `Float.px` and `Float.percent` create length-percentage values. Negative lengths are accepted by margins and insets; sizes, padding, and gaps reject them. Padding percentages and physical margin percentages use the containing block's width, as in CSS.
 
+`border` accepts `UiBorders` with physical top/right/bottom/left sides. Each `UiBorderSide`
+supports `NONE` and `SOLID`; widths are non-negative pixel lengths and a null color means the
+element's computed `color` (`currentColor`). `NONE` has zero used width. A `UiBorders` value is one
+atomic declaration during cascade, and `UiBorders.NONE` explicitly resets it. Borders participate
+in intrinsic, flex, positioned, and `box-sizing` layout.
+
+`borderRadius` does not affect layout dimensions. Horizontal corner percentages use the border-box width and vertical percentages use its height. When both overflow axes clip, the outer radius is inset by the adjacent border widths to shape the padding-box clip. A box shadow follows the resolved outer border radius by default. To use the legacy equal radius, specify `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)`; a positive `cornerRadius` makes `followBorderRadius` default to false.
+
 Supported preferred/minimum/maximum size values are `AUTO`, `MIN_CONTENT`, `MAX_CONTENT`, `FitContent(...)`, and a length-percentage. Maximum sizes additionally accept `NONE`.
+
+### Overflow
+
+`overflow`, `overflowX`, and `overflowY` accept `VISIBLE`, `HIDDEN`, `CLIP`, `SCROLL`, and `AUTO`:
+
+```kotlin
+import io.github.aiwao.mine2dengine.layout.UiOverflow
+import io.github.aiwao.mine2dengine.layout.UiOverflowValue
+
+val scrollerStyle = UiStyle(
+    width = 160f.px,
+    height = 80f.px,
+    overflow = UiOverflow(UiOverflowValue.AUTO),
+)
+
+// A two-value shorthand maps to the physical x and y axes.
+val verticalScrollerStyle = UiStyle(
+    overflow = UiOverflow(
+        x = UiOverflowValue.CLIP,
+        y = UiOverflowValue.AUTO,
+    ),
+)
+```
+
+An `overflowX` or `overflowY` value overrides the corresponding shorthand axis in the same
+`UiStyle`. A later shorthand declaration resets earlier longhands during cascade. Cross-axis
+computed-value interaction follows CSS: `visible` becomes `auto` when the other axis is
+`hidden`, `scroll`, or `auto`; `clip` remains non-scrollable.
+
+`hidden` clips wheel input but remains scrollable through `UiLayout.scrollTo` and `scrollBy`.
+`clip` forbids both user and programmatic scrolling. `auto` and `scroll` accept wheel input, with
+nested scroll containers chaining at their limits. Scroll offsets survive relayout and are clamped
+to the new overflow geometry. Use `scrollOffsetOf` to query an offset; `UiLayoutNode` exposes
+`paddingBounds`, `scrollableOverflowBounds`, `maximumScrollX`, and `maximumScrollY`.
+
+Overflow clips at the padding box and does not currently paint scrollbars. When both axes clip,
+`borderRadius` shapes the clip and pointer hit testing; a single clipped axis remains rectangular.
 
 ### Flexbox
 
@@ -317,7 +372,7 @@ val toolbar = div(
 
 The supported container properties are `flexDirection`, `flexWrap`, `justifyContent`, `alignItems`, `alignContent`, `rowGap`, and `columnGap`. Item properties are `flexGrow`, `flexShrink`, `flexBasis`, `order`, and `alignSelf`.
 
-Flexible lengths are resolved from each item's flex base size with scaled shrink factors and repeated min/max clamping. The CSS automatic minimum size is content-based; specify `minWidth = 0f.px` (or `minHeight` for a column) when an item must be allowed to shrink below its content.
+Flexible lengths are resolved from each item's flex base size with scaled shrink factors and repeated min/max clamping. The CSS automatic minimum size is content-based for non-scrollable overflow and zero for a scrollable main axis. Specify `minWidth = 0f.px` (or `minHeight` for a column) when a non-scrollable item must be allowed to shrink below its content.
 
 Absolutely positioned children do not become flex items. Generated pseudo-elements do become flex items. Text directly inside a flex container is wrapped in an anonymous flex item.
 
@@ -512,6 +567,8 @@ val panel = div(
         height = 40f.px,
         backgroundColor = 0xFFFFFFFF.toInt(),
         backgroundMaterial = roundedPanel,
+        border = UiBorders(1f.px, 0xFF808080.toInt()),
+        borderRadius = UiBorderRadii(8f.px),
     ),
 )
 ```

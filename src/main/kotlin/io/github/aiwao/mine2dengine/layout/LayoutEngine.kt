@@ -139,13 +139,16 @@ private fun CssFragment.toLayoutNode(): UiLayoutNode {
         element = box.element,
         outerBounds = marginBox,
         bounds = borderBox,
+        paddingBounds = paddingBox,
         contentBounds = contentBox,
+        scrollableOverflowBounds = scrollableOverflow,
         children = childNodes,
         font = box.textStyle.font,
         color = box.textStyle.color,
         textShadow = box.textStyle.textShadow,
         textAlign = box.textStyle.textAlign,
         displayed = !box.suppressed,
+        overflow = box.style.overflow,
         beforePseudo = directPseudo
             .firstOrNull { child -> child.box.pseudoElement == UiPseudoElement.BEFORE }
             ?.toPseudoLayoutNode(),
@@ -190,10 +193,13 @@ private fun CssFragment.toPseudoLayoutNode(): UiPseudoLayoutNode {
         pseudoElement = pseudo,
         outerBounds = marginBox,
         bounds = borderBox,
+        paddingBounds = paddingBox,
         contentBounds = contentBox,
+        scrollableOverflowBounds = scrollableOverflow,
         content = content,
         font = box.textStyle.font,
         displayed = !box.suppressed,
+        overflow = box.style.overflow,
         textFragments = textFragments.map { fragment ->
             UiTextLayoutFragment(fragment.text, fragment.bounds)
         },
@@ -209,6 +215,7 @@ private fun CssFragment.toPublicFragment(): UiBoxFragment = UiBoxFragment(
     borderBox = borderBox,
     paddingBox = paddingBox,
     contentBox = contentBox,
+    scrollableOverflow = scrollableOverflow,
     children = children.map(CssFragment::toPublicFragment),
     generatesBox = box.kind != CssBoxKind.ANONYMOUS && !box.suppressed,
 )

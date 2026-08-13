@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Retains Mine2D shadow metadata on Minecraft's deferred text render state. */
+/** Retains Mine2D text-shadow metadata on Minecraft's deferred text render state. */
 @Mixin(GuiTextRenderState.class)
 abstract class GuiTextRenderStateMixin implements
     Mine2DTextShadowRenderState,
