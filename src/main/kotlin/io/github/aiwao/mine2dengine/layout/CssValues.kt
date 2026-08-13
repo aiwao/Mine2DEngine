@@ -233,6 +233,66 @@ data class UiPaddings(
     }
 }
 
+/** A border line style supported by the CSS layout renderer. */
+enum class UiBorderStyle {
+    NONE,
+    SOLID,
+}
+
+/** The width, style, and color of one physical CSS border side. */
+data class UiBorderSide(
+    val width: UiLength,
+    val style: UiBorderStyle = UiBorderStyle.SOLID,
+    /** Null uses the element's computed `color`, matching CSS `currentColor`. */
+    val color: Int? = null,
+) {
+    /** Creates one border side with a width in CSS pixels. */
+    constructor(
+        width: Float,
+        style: UiBorderStyle = UiBorderStyle.SOLID,
+        color: Int? = null,
+    ) : this(width.px, style, color)
+
+    init {
+        require(width.unit == UiLengthUnit.PX) {
+            "Border width does not accept percentages: $width"
+        }
+        require(width.value >= 0f) { "Border width must be non-negative: $width" }
+    }
+
+    /** The layout width after `border-style: none` has been applied. */
+    internal val usedWidth: Float
+        get() = if (style == UiBorderStyle.NONE) 0f else width.value
+
+    companion object {
+        @JvmField
+        val NONE = UiBorderSide(0f.px, UiBorderStyle.NONE)
+    }
+}
+
+/** Physical CSS borders in top, right, bottom, left order. */
+data class UiBorders(
+    val top: UiBorderSide = UiBorderSide.NONE,
+    val right: UiBorderSide = UiBorderSide.NONE,
+    val bottom: UiBorderSide = UiBorderSide.NONE,
+    val left: UiBorderSide = UiBorderSide.NONE,
+) {
+    constructor(all: UiBorderSide) : this(all, all, all, all)
+
+    /** Creates four equal solid borders. A null [color] means CSS `currentColor`. */
+    constructor(width: UiLength, color: Int? = null) : this(
+        UiBorderSide(width = width, color = color),
+    )
+
+    /** Creates four equal solid borders in CSS pixels. */
+    constructor(width: Float, color: Int? = null) : this(width.px, color)
+
+    companion object {
+        @JvmField
+        val NONE = UiBorders()
+    }
+}
+
 /** Horizontal and vertical CSS length-percentage radii of one physical corner. */
 data class UiCornerRadius(
     val horizontal: UiLength,
@@ -407,4 +467,11 @@ internal data class UsedEdges(
 
     val vertical: Float
         get() = top + bottom
+
+    operator fun plus(other: UsedEdges): UsedEdges = UsedEdges(
+        top = top + other.top,
+        right = right + other.right,
+        bottom = bottom + other.bottom,
+        left = left + other.left,
+    )
 }

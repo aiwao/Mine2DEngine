@@ -17,7 +17,7 @@ enum class UiVerticalAlignment {
     BOTTOM,
 }
 
-/** Determines which CSS box an explicit size describes. Borders are not currently implemented. */
+/** Determines which CSS box an explicit size describes. */
 enum class UiBoxSizing {
     CONTENT_BOX,
     BORDER_BOX,
@@ -80,6 +80,7 @@ data class UiStyle(
     val textShadow: UiTextShadow? = null,
     val dropShadow: UiDropShadow? = null,
     val borderRadius: UiBorderRadii? = null,
+    val border: UiBorders? = null,
 ) {
     companion object {
         const val DEFAULT_COLOR: Int = -1
@@ -132,6 +133,7 @@ internal data class ResolvedUiStyle(
     val borderRadius: UiBorderRadii,
     val margin: UiMargins,
     val padding: UiPaddings,
+    val border: UiBorders,
     val display: UiDisplay,
     val width: UiSizeValue,
     val height: UiSizeValue,
@@ -181,6 +183,7 @@ internal fun UiStyle.resolveDefaults(
         borderRadius = borderRadius ?: UiBorderRadii.ZERO,
         margin = margin.toMargins(),
         padding = padding.toPaddings(),
+        border = border ?: UiBorders.NONE,
         display = display ?: initialDisplay,
         width = width ?: UiSizeValue.AUTO,
         height = height ?: UiSizeValue.AUTO,
@@ -252,6 +255,7 @@ internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
     borderRadius = overrides.borderRadius ?: borderRadius,
     margin = overrides.margin ?: margin,
     padding = overrides.padding ?: padding,
+    border = overrides.border ?: border,
     display = overrides.display ?: display,
     width = overrides.width ?: width,
     height = overrides.height ?: height,

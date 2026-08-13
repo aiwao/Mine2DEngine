@@ -258,6 +258,7 @@ A null property in `UiStyle` means “not declared.” CSS keywords are explicit
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiBorderRadii
+import io.github.aiwao.mine2dengine.layout.UiBorders
 import io.github.aiwao.mine2dengine.layout.UiCornerRadius
 import io.github.aiwao.mine2dengine.layout.UiMarginValue
 import io.github.aiwao.mine2dengine.layout.UiMargins
@@ -276,6 +277,7 @@ val style = UiStyle(
         left = UiMarginValue.AUTO,
     ),
     padding = UiPaddings(vertical = 6f, horizontal = 10f),
+    border = UiBorders(1f.px, 0xFF808080.toInt()),
     borderRadius = UiBorderRadii(
         topLeft = UiCornerRadius(16f.px),
         bottomRight = UiCornerRadius(50f.percent, 25f.percent),
@@ -286,7 +288,13 @@ val style = UiStyle(
 
 `Float.px` and `Float.percent` create length-percentage values. Negative lengths are accepted by margins and insets; sizes, padding, and gaps reject them. Padding percentages and physical margin percentages use the containing block's width, as in CSS.
 
-`borderRadius` does not affect layout dimensions. Horizontal corner percentages use the border-box width and vertical percentages use its height. When both overflow axes clip, the resolved radius also shapes the descendant padding-box clip. A box shadow follows the resolved border radius by default. To use the legacy equal radius, specify `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)`; a positive `cornerRadius` makes `followBorderRadius` default to false.
+`border` accepts `UiBorders` with physical top/right/bottom/left sides. Each `UiBorderSide`
+supports `NONE` and `SOLID`; widths are non-negative pixel lengths and a null color means the
+element's computed `color` (`currentColor`). `NONE` has zero used width. A `UiBorders` value is one
+atomic declaration during cascade, and `UiBorders.NONE` explicitly resets it. Borders participate
+in intrinsic, flex, positioned, and `box-sizing` layout.
+
+`borderRadius` does not affect layout dimensions. Horizontal corner percentages use the border-box width and vertical percentages use its height. When both overflow axes clip, the outer radius is inset by the adjacent border widths to shape the padding-box clip. A box shadow follows the resolved outer border radius by default. To use the legacy equal radius, specify `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)`; a positive `cornerRadius` makes `followBorderRadius` default to false.
 
 Supported preferred/minimum/maximum size values are `AUTO`, `MIN_CONTENT`, `MAX_CONTENT`, `FitContent(...)`, and a length-percentage. Maximum sizes additionally accept `NONE`.
 
@@ -559,6 +567,7 @@ val panel = div(
         height = 40f.px,
         backgroundColor = 0xFFFFFFFF.toInt(),
         backgroundMaterial = roundedPanel,
+        border = UiBorders(1f.px, 0xFF808080.toInt()),
         borderRadius = UiBorderRadii(8f.px),
     ),
 )

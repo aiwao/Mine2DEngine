@@ -253,6 +253,7 @@ layout.updateViewport(
 ```kotlin
 import io.github.aiwao.mine2dengine.layout.UiBoxSizing
 import io.github.aiwao.mine2dengine.layout.UiBorderRadii
+import io.github.aiwao.mine2dengine.layout.UiBorders
 import io.github.aiwao.mine2dengine.layout.UiCornerRadius
 import io.github.aiwao.mine2dengine.layout.UiMarginValue
 import io.github.aiwao.mine2dengine.layout.UiMargins
@@ -271,6 +272,7 @@ val style = UiStyle(
         left = UiMarginValue.AUTO,
     ),
     padding = UiPaddings(vertical = 6f, horizontal = 10f),
+    border = UiBorders(1f.px, 0xFF808080.toInt()),
     borderRadius = UiBorderRadii(
         topLeft = UiCornerRadius(16f.px),
         bottomRight = UiCornerRadius(50f.percent, 25f.percent),
@@ -281,7 +283,13 @@ val style = UiStyle(
 
 `Float.px`と`Float.percent`でlength-percentageを作ります。負のlengthはmarginとinsetでは利用できますが、size、padding、gapでは拒否されます。CSSと同様に、padding percentageと物理margin percentageは包含blockの幅を基準にします。
 
-`borderRadius`はレイアウト寸法には影響しません。角半径の水平方向percentageはborder boxの幅、垂直方向percentageは高さを基準にします。overflowの両軸がclipする場合は、解決済みの半径が子孫のpadding-box clipにも適用されます。box shadowも既定では解決済みのborder radiusを使用します。従来の単一半径を使う場合は `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)` を指定します。0より大きい `cornerRadius` では `followBorderRadius` の既定値がfalseになります。
+`border`には物理top/right/bottom/leftを持つ`UiBorders`を指定します。各`UiBorderSide`で
+`NONE`と`SOLID`を利用でき、幅は0以上のpixel lengthです。色がnullなら要素のcomputed
+`color`（`currentColor`）を使い、`NONE`のused widthは0になります。cascadeでは1つの
+`UiBorders`値をatomicな宣言として扱い、`UiBorders.NONE`で明示的にリセットできます。
+borderはintrinsic size、flex、positioned layout、`box-sizing`の計算に含まれます。
+
+`borderRadius`はレイアウト寸法には影響しません。角半径の水平方向percentageはborder boxの幅、垂直方向percentageは高さを基準にします。overflowの両軸がclipする場合は、外側の半径から隣接するborder幅を引いたpadding-edge半径がclipに適用されます。box shadowは既定で外側のborder radiusを使用します。従来の単一半径を使う場合は `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)` を指定します。0より大きい `cornerRadius` では `followBorderRadius` の既定値がfalseになります。
 
 preferred / minimum / maximum sizeでは`AUTO`、`MIN_CONTENT`、`MAX_CONTENT`、`FitContent(...)`、length-percentageを利用できます。maximum sizeでは`NONE`も利用できます。
 
@@ -541,6 +549,7 @@ val panel = div(
         height = 40f.px,
         backgroundColor = 0xFFFFFFFF.toInt(),
         backgroundMaterial = roundedPanel,
+        border = UiBorders(1f.px, 0xFF808080.toInt()),
         borderRadius = UiBorderRadii(8f.px),
     ),
 )

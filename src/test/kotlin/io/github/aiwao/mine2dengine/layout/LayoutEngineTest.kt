@@ -162,6 +162,147 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `content box sizing adds asymmetric borders outside padding`() {
+        val root = div(
+            UiStyle(
+                width = 100f.px,
+                height = 50f.px,
+                padding = UiPaddings(top = 1f.px, right = 2f.px, bottom = 3f.px, left = 4f.px),
+                border = UiBorders(
+                    top = UiBorderSide(5f, color = -1),
+                    right = UiBorderSide(6f, color = -1),
+                    bottom = UiBorderSide(7f, color = -1),
+                    left = UiBorderSide(8f, color = -1),
+                ),
+            ),
+        )
+
+        val result = layout(root, width = 200f, height = 100f)
+
+        assertEquals(UiRect(0f, 0f, 120f, 66f), result.root.bounds)
+        assertEquals(UiRect(8f, 5f, 106f, 54f), result.root.paddingBounds)
+        assertEquals(UiRect(12f, 6f, 100f, 50f), result.root.contentBounds)
+        assertEquals(result.root.bounds, result.rootFragment.borderBox)
+        assertEquals(result.root.paddingBounds, result.rootFragment.paddingBox)
+    }
+
+    @Test
+    fun `border box sizing includes border and padding in the declared size`() {
+        val root = div(
+            UiStyle(
+                width = 100f.px,
+                height = 50f.px,
+                padding = UiPaddings(top = 1f.px, right = 2f.px, bottom = 3f.px, left = 4f.px),
+                border = UiBorders(
+                    top = UiBorderSide(5f),
+                    right = UiBorderSide(6f),
+                    bottom = UiBorderSide(7f),
+                    left = UiBorderSide(8f),
+                ),
+                boxSizing = UiBoxSizing.BORDER_BOX,
+            ),
+        )
+
+        val result = layout(root, width = 200f, height = 100f)
+
+        assertEquals(UiRect(0f, 0f, 100f, 50f), result.root.bounds)
+        assertEquals(UiRect(8f, 5f, 86f, 38f), result.root.paddingBounds)
+        assertEquals(UiRect(12f, 6f, 80f, 34f), result.root.contentBounds)
+    }
+
+    @Test
+    fun `none border style has zero used width`() {
+        val root = div(
+            UiStyle(
+                width = 20f.px,
+                height = 10f.px,
+                border = UiBorders(
+                    UiBorderSide(100f, style = UiBorderStyle.NONE, color = -1),
+                ),
+            ),
+        )
+
+        val result = layout(root)
+
+        assertEquals(UiRect(0f, 0f, 20f, 10f), result.root.bounds)
+        assertEquals(result.root.bounds, result.root.paddingBounds)
+    }
+
+    @Test
+    fun `auto block width subtracts borders from its content area`() {
+        val root = div(
+            UiStyle(
+                height = 10f.px,
+                border = UiBorders(5f),
+            ),
+        )
+
+        val result = layout(root, width = 100f)
+
+        assertEquals(UiRect(0f, 0f, 100f, 20f), result.root.bounds)
+        assertEquals(UiRect(5f, 5f, 90f, 10f), result.root.contentBounds)
+    }
+
+    @Test
+    fun `flex wrapping counts border widths in item outer size`() {
+        lateinit var second: Div
+        lateinit var third: Div
+        val itemStyle = UiStyle(
+            width = 20f.px,
+            height = 10f.px,
+            border = UiBorders(5f),
+        )
+        val root = div(
+            UiStyle(
+                display = UiDisplay.FLEX,
+                flexWrap = UiFlexWrap.WRAP,
+                width = 60f.px,
+            ),
+        ) {
+            div(itemStyle)
+            second = div(itemStyle)
+            third = div(itemStyle)
+        }
+
+        val result = layout(root, width = 100f)
+
+        assertEquals(UiRect(30f, 0f, 30f, 20f), result.nodeOf(second)!!.bounds)
+        assertEquals(UiRect(0f, 20f, 30f, 20f), result.nodeOf(third)!!.bounds)
+    }
+
+    @Test
+    fun `absolute inset sizing uses the containing padding box and child borders`() {
+        lateinit var child: Div
+        val root = div(
+            UiStyle(
+                width = 100f.px,
+                height = 50f.px,
+                boxSizing = UiBoxSizing.BORDER_BOX,
+                position = UiPosition.RELATIVE,
+                padding = UiPaddings(5f),
+                border = UiBorders(10f),
+            ),
+        ) {
+            child = div(
+                UiStyle(
+                    height = 10f.px,
+                    position = UiPosition.ABSOLUTE,
+                    left = 0f.px,
+                    top = 0f.px,
+                    right = 0f.px,
+                    border = UiBorders(2f),
+                ),
+            )
+        }
+
+        val result = layout(root, width = 200f, height = 100f)
+
+        assertEquals(UiRect(10f, 10f, 80f, 30f), result.root.paddingBounds)
+        assertEquals(UiRect(10f, 10f, 80f, 14f), result.nodeOf(child)!!.bounds)
+        assertEquals(UiRect(12f, 12f, 76f, 10f), result.nodeOf(child)!!.contentBounds)
+    }
+
+    @Test
     fun `min and max sizes clamp the preferred size`() {
         val minimum = layout(
             div(UiStyle(width = 10f.px, minWidth = 30f.px, height = 1f.px)),
@@ -993,6 +1134,27 @@ class LayoutEngineTest {
 
         assertSame(root, result.elementAt(1f, 1f))
         assertSame(child, result.elementAt(20f, 20f))
+    }
+
+    @Test
+    fun `rounded overflow uses the padding edge radius inside a border`() {
+        lateinit var child: Div
+        val root = div(
+            UiStyle(
+                width = 40f.px,
+                height = 40f.px,
+                boxSizing = UiBoxSizing.BORDER_BOX,
+                border = UiBorders(5f, -1),
+                overflow = UiOverflow(UiOverflowValue.HIDDEN),
+                borderRadius = UiBorderRadii(20f),
+            ),
+        ) {
+            child = div(UiStyle(width = 30f.px, height = 30f.px))
+        }
+        val result = layout(root)
+
+        assertSame(root, result.elementAt(6f, 6f))
+        assertSame(child, result.elementAt(20f, 6f))
     }
 
     @Test

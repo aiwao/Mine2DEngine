@@ -167,6 +167,42 @@ class Mine2DEngine(
         enqueueRoundedRect(x, y, width, height, radii, color, material, uniformContext)
     }
 
+    /** Draws a four-sided rounded border ring without filling its inner box. */
+    internal fun roundedBorder(
+        x: Float,
+        y: Float,
+        width: Float,
+        height: Float,
+        radii: Mine2DRoundedRectRadii,
+        topWidth: Float,
+        rightWidth: Float,
+        bottomWidth: Float,
+        leftWidth: Float,
+        topColor: Int,
+        rightColor: Int,
+        bottomColor: Int,
+        leftColor: Int,
+        material: Mine2DMaterial,
+        uniformContext: Mine2DUniformContext,
+    ) {
+        val polygon = triangulateRoundedBorder(
+            x = x,
+            y = y,
+            width = width,
+            height = height,
+            outerRadii = radii,
+            topWidth = topWidth,
+            rightWidth = rightWidth,
+            bottomWidth = bottomWidth,
+            leftWidth = leftWidth,
+            topColor = topColor,
+            rightColor = rightColor,
+            bottomColor = bottomColor,
+            leftColor = leftColor,
+        ) ?: return
+        enqueuePolygon(polygon, material, uniformContext)
+    }
+
     /** Draws a line segment of [width] as a filled quadrilateral with butt caps. */
     fun line(
         startX: Float,

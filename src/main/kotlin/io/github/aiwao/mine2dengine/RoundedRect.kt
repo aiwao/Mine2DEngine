@@ -8,6 +8,21 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
+private enum class RoundedBorderSide {
+    TOP,
+    RIGHT,
+    BOTTOM,
+    LEFT,
+}
+
+private data class RoundedBorderSample(
+    val outerX: Float,
+    val outerY: Float,
+    val innerX: Float,
+    val innerY: Float,
+    val sideToNext: RoundedBorderSide,
+)
+
 /** Horizontal and vertical radii of one rounded-rectangle corner. */
 data class Mine2DCornerRadius(
     val horizontal: Float,
@@ -187,6 +202,204 @@ internal fun triangulateRoundedRect(
         indices[output++] = index
     }
     return TriangulatedPolygon(vertices.toList(), indices)
+}
+
+/** Derives the padding-edge radii from normalized border-edge radii. */
+internal fun Mine2DRoundedRectRadii.inset(
+    top: Float,
+    right: Float,
+    bottom: Float,
+    left: Float,
+    innerWidth: Float,
+    innerHeight: Float,
+): Mine2DRoundedRectRadii {
+    require(listOf(top, right, bottom, left).all { it.isFinite() && it >= 0f }) {
+        "Rounded rectangle insets must be finite and non-negative"
+    }
+    return Mine2DRoundedRectRadii(
+        topLeft = Mine2DCornerRadius(
+            horizontal = max(0f, topLeft.horizontal - left),
+            vertical = max(0f, topLeft.vertical - top),
+        ).withoutDegenerateAxis(),
+        topRight = Mine2DCornerRadius(
+            horizontal = max(0f, topRight.horizontal - right),
+            vertical = max(0f, topRight.vertical - top),
+        ).withoutDegenerateAxis(),
+        bottomRight = Mine2DCornerRadius(
+            horizontal = max(0f, bottomRight.horizontal - right),
+            vertical = max(0f, bottomRight.vertical - bottom),
+        ).withoutDegenerateAxis(),
+        bottomLeft = Mine2DCornerRadius(
+            horizontal = max(0f, bottomLeft.horizontal - left),
+            vertical = max(0f, bottomLeft.vertical - bottom),
+        ).withoutDegenerateAxis(),
+    ).normalized(innerWidth, innerHeight)
+}
+
+/** Builds a rounded border ring without filling its inner padding box. */
+internal fun triangulateRoundedBorder(
+    x: Float,
+    y: Float,
+    width: Float,
+    height: Float,
+    outerRadii: Mine2DRoundedRectRadii,
+    topWidth: Float,
+    rightWidth: Float,
+    bottomWidth: Float,
+    leftWidth: Float,
+    topColor: Int,
+    rightColor: Int,
+    bottomColor: Int,
+    leftColor: Int,
+): TriangulatedPolygon? {
+    require(x.isFinite() && y.isFinite()) { "Rounded border coordinates must be finite" }
+    require(width.isFinite() && width >= 0f && height.isFinite() && height >= 0f) {
+        "Rounded border dimensions must be finite and non-negative"
+    }
+    require(listOf(topWidth, rightWidth, bottomWidth, leftWidth).all {
+        it.isFinite() && it >= 0f
+    }) { "Rounded border widths must be finite and non-negative" }
+    if (width == 0f || height == 0f) return null
+
+    val top = topWidth.coerceAtMost(height)
+    val bottom = bottomWidth.coerceAtMost((height - top).coerceAtLeast(0f))
+    val left = leftWidth.coerceAtMost(width)
+    val right = rightWidth.coerceAtMost((width - left).coerceAtLeast(0f))
+    if (top == 0f && right == 0f && bottom == 0f && left == 0f) return null
+
+    val usedOuter = outerRadii.normalized(width, height)
+    val innerX = x + left
+    val innerY = y + top
+    val innerWidth = (width - left - right).coerceAtLeast(0f)
+    val innerHeight = (height - top - bottom).coerceAtLeast(0f)
+    val innerRadii = usedOuter.inset(
+        top = top,
+        right = right,
+        bottom = bottom,
+        left = left,
+        innerWidth = innerWidth,
+        innerHeight = innerHeight,
+    )
+
+    val widths = mapOf(
+        RoundedBorderSide.TOP to top,
+        RoundedBorderSide.RIGHT to right,
+        RoundedBorderSide.BOTTOM to bottom,
+        RoundedBorderSide.LEFT to left,
+    )
+    val colors = mapOf(
+        RoundedBorderSide.TOP to topColor,
+        RoundedBorderSide.RIGHT to rightColor,
+        RoundedBorderSide.BOTTOM to bottomColor,
+        RoundedBorderSide.LEFT to leftColor,
+    )
+    val samples = mutableListOf<RoundedBorderSample>()
+
+    fun appendCorner(
+        outerCenterX: Float,
+        outerCenterY: Float,
+        outerRadius: Mine2DCornerRadius,
+        innerCenterX: Float,
+        innerCenterY: Float,
+        innerRadius: Mine2DCornerRadius,
+        startAngle: Double,
+        firstSide: RoundedBorderSide,
+        secondSide: RoundedBorderSide,
+    ) {
+        val minimumSegments = max(2, cornerSegmentCount(outerRadius))
+        val segments = if (minimumSegments % 2 == 0) minimumSegments else minimumSegments + 1
+        for (step in 0..segments) {
+            val angle = startAngle + (PI / 2.0) * step / segments
+            val defaultSide = if (step * 2 < segments) firstSide else secondSide
+            val adjacentSide = if (defaultSide == firstSide) secondSide else firstSide
+            val side = if (widths.getValue(defaultSide) > 0f) defaultSide else adjacentSide
+            samples += RoundedBorderSample(
+                outerX = outerCenterX + cos(angle).toFloat() * outerRadius.horizontal,
+                outerY = outerCenterY + sin(angle).toFloat() * outerRadius.vertical,
+                innerX = innerCenterX + cos(angle).toFloat() * innerRadius.horizontal,
+                innerY = innerCenterY + sin(angle).toFloat() * innerRadius.vertical,
+                sideToNext = if (step == segments) secondSide else side,
+            )
+        }
+    }
+
+    appendCorner(
+        x + width - usedOuter.topRight.horizontal,
+        y + usedOuter.topRight.vertical,
+        usedOuter.topRight,
+        innerX + innerWidth - innerRadii.topRight.horizontal,
+        innerY + innerRadii.topRight.vertical,
+        innerRadii.topRight,
+        -PI / 2.0,
+        RoundedBorderSide.TOP,
+        RoundedBorderSide.RIGHT,
+    )
+    appendCorner(
+        x + width - usedOuter.bottomRight.horizontal,
+        y + height - usedOuter.bottomRight.vertical,
+        usedOuter.bottomRight,
+        innerX + innerWidth - innerRadii.bottomRight.horizontal,
+        innerY + innerHeight - innerRadii.bottomRight.vertical,
+        innerRadii.bottomRight,
+        0.0,
+        RoundedBorderSide.RIGHT,
+        RoundedBorderSide.BOTTOM,
+    )
+    appendCorner(
+        x + usedOuter.bottomLeft.horizontal,
+        y + height - usedOuter.bottomLeft.vertical,
+        usedOuter.bottomLeft,
+        innerX + innerRadii.bottomLeft.horizontal,
+        innerY + innerHeight - innerRadii.bottomLeft.vertical,
+        innerRadii.bottomLeft,
+        PI / 2.0,
+        RoundedBorderSide.BOTTOM,
+        RoundedBorderSide.LEFT,
+    )
+    appendCorner(
+        x + usedOuter.topLeft.horizontal,
+        y + usedOuter.topLeft.vertical,
+        usedOuter.topLeft,
+        innerX + innerRadii.topLeft.horizontal,
+        innerY + innerRadii.topLeft.vertical,
+        innerRadii.topLeft,
+        PI,
+        RoundedBorderSide.LEFT,
+        RoundedBorderSide.TOP,
+    )
+
+    val vertices = ArrayList<Mine2DVertex>(samples.size * 4)
+    val indices = ArrayList<Int>(samples.size * 6)
+    fun addTriangle(first: Int, second: Int, third: Int) {
+        val a = vertices[first]
+        val b = vertices[second]
+        val c = vertices[third]
+        val cross = (b.x - a.x).toDouble() * (c.y - a.y) -
+            (b.y - a.y).toDouble() * (c.x - a.x)
+        if (kotlin.math.abs(cross) <= 1.0e-6) return
+        indices += first
+        if (cross < 0.0) {
+            indices += second
+            indices += third
+        } else {
+            indices += third
+            indices += second
+        }
+    }
+    samples.indices.forEach { index ->
+        val current = samples[index]
+        val next = samples[(index + 1) % samples.size]
+        val color = colors.getValue(current.sideToNext)
+        if (color ushr 24 == 0) return@forEach
+        val base = vertices.size
+        vertices += Mine2DVertex(current.outerX, current.outerY, color)
+        vertices += Mine2DVertex(next.outerX, next.outerY, color)
+        vertices += Mine2DVertex(next.innerX, next.innerY, color)
+        vertices += Mine2DVertex(current.innerX, current.innerY, color)
+        addTriangle(base, base + 2, base + 1)
+        addTriangle(base, base + 3, base + 2)
+    }
+    return if (indices.isEmpty()) null else TriangulatedPolygon(vertices, indices.toIntArray())
 }
 
 private fun appendCorner(

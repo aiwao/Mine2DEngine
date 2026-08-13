@@ -8,6 +8,7 @@ import io.github.aiwao.mine2dengine.Mine2DMaterials
 import io.github.aiwao.mine2dengine.Mine2DRoundedRectRadii
 import io.github.aiwao.mine2dengine.Mine2DUniformRect
 import io.github.aiwao.mine2dengine.Mine2DVertex
+import io.github.aiwao.mine2dengine.inset
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.ComponentPath
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -205,7 +206,7 @@ data class UiLayoutNode(
     internal val afterPseudo: UiPseudoLayoutNode? = null,
     internal val textBounds: UiRect? = null,
     internal val textFragments: List<UiTextLayoutFragment> = emptyList(),
-    /** The box's overflow clip edge. Borders are not currently implemented. */
+    /** The box's padding edge, which is also its overflow clip edge. */
     val paddingBounds: UiRect = bounds,
     /** The complete layout overflow before scrolling and clipping. */
     val scrollableOverflowBounds: UiRect = paddingBounds,
@@ -1598,10 +1599,21 @@ class UiLayout internal constructor(
             }
         }
 
+        drawBorder(
+            renderer = renderer,
+            border = style.border,
+            currentColor = resolvedTextStyle.color,
+            borderBounds = node.bounds,
+            paddingBounds = node.paddingBounds,
+            outerRadii = roundedBox.radii,
+            contentBounds = node.contentBounds,
+            timeSeconds = timeSeconds,
+        )
+
         drawOverflowContents(
             target = node.scrollTarget(),
             paddingBounds = node.paddingBounds,
-            clipRadii = roundedBox.radii,
+            clipRadii = roundedBox.radii.inset(node.bounds, node.paddingBounds),
             renderer = renderer,
             visualOffsetX = visualOffsetX,
             visualOffsetY = visualOffsetY,
@@ -2117,10 +2129,20 @@ class UiLayout internal constructor(
                 )
             }
         }
+        drawBorder(
+            renderer = renderer,
+            border = style.border,
+            currentColor = resolvedTextStyle.color,
+            borderBounds = node.bounds,
+            paddingBounds = node.paddingBounds,
+            outerRadii = roundedBox.radii,
+            contentBounds = node.contentBounds,
+            timeSeconds = timeSeconds,
+        )
         drawOverflowContents(
             target = node.scrollTarget(),
             paddingBounds = node.paddingBounds,
-            clipRadii = roundedBox.radii,
+            clipRadii = roundedBox.radii.inset(node.bounds, node.paddingBounds),
             renderer = renderer,
             visualOffsetX = visualOffsetX,
             visualOffsetY = visualOffsetY,
@@ -2299,6 +2321,42 @@ internal fun UiStyle.drawBackground(
     }
 }
 
+private fun drawBorder(
+    renderer: Mine2DEngine,
+    border: UiBorders,
+    currentColor: Int,
+    borderBounds: UiRect,
+    paddingBounds: UiRect,
+    outerRadii: Mine2DRoundedRectRadii,
+    contentBounds: UiRect,
+    timeSeconds: Float,
+) {
+    fun UiBorderSide.paintColor(): Int =
+        if (style == UiBorderStyle.SOLID) color ?: currentColor else 0
+
+    renderer.roundedBorder(
+        x = borderBounds.left,
+        y = borderBounds.top,
+        width = borderBounds.width,
+        height = borderBounds.height,
+        radii = outerRadii,
+        topWidth = (paddingBounds.top - borderBounds.top).coerceAtLeast(0f),
+        rightWidth = (borderBounds.right - paddingBounds.right).coerceAtLeast(0f),
+        bottomWidth = (borderBounds.bottom - paddingBounds.bottom).coerceAtLeast(0f),
+        leftWidth = (paddingBounds.left - borderBounds.left).coerceAtLeast(0f),
+        topColor = border.top.paintColor(),
+        rightColor = border.right.paintColor(),
+        bottomColor = border.bottom.paintColor(),
+        leftColor = border.left.paintColor(),
+        material = renderer.material,
+        uniformContext = renderer.uniformContext(
+            elementBounds = borderBounds.toUniformRect(),
+            contentBounds = contentBounds.toUniformRect(),
+            timeSeconds = timeSeconds,
+        ),
+    )
+}
+
 internal fun ResolvedUiStyle.drawBackground(
     rendererMaterial: Mine2DMaterial,
     draw: (color: Int, material: Mine2DMaterial) -> Unit,
@@ -2381,11 +2439,24 @@ private fun UiLayoutNode.overflowClip(
     visualOffsetY: Float,
 ): UiClipStack? {
     val radii = styleProvider().borderRadius.resolve(bounds).radii
+        .inset(bounds, paddingBounds)
     return overflow.overflowClip(
         paddingBounds.translated(visualOffsetX, visualOffsetY),
         radii,
     )
 }
+
+private fun Mine2DRoundedRectRadii.inset(
+    borderBounds: UiRect,
+    paddingBounds: UiRect,
+): Mine2DRoundedRectRadii = inset(
+    top = (paddingBounds.top - borderBounds.top).coerceAtLeast(0f),
+    right = (borderBounds.right - paddingBounds.right).coerceAtLeast(0f),
+    bottom = (borderBounds.bottom - paddingBounds.bottom).coerceAtLeast(0f),
+    left = (paddingBounds.left - borderBounds.left).coerceAtLeast(0f),
+    innerWidth = paddingBounds.width,
+    innerHeight = paddingBounds.height,
+)
 
 private fun ResolvedUiOverflow.overflowClip(
     paddingBounds: UiRect,

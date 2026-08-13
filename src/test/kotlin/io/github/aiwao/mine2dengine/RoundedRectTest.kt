@@ -72,6 +72,59 @@ class RoundedRectTest {
         }
     }
 
+    @Test
+    fun `rectangular border geometry is a hollow clockwise ring`() {
+        val polygon = borderGeometry(radii = Mine2DRoundedRectRadii.ZERO)!!
+
+        assertEquals(1300.0, triangleArea(polygon), 1.0e-6)
+        assertClockwise(polygon)
+        assertTrue(polygon.indices.asList().chunked(3).none { triangle ->
+            pointInTriangle(50f, 20f, triangle.map(polygon.vertices::get))
+        })
+    }
+
+    @Test
+    fun `rounded border subtracts its inner padding edge and retains side colors`() {
+        val colors = listOf(
+            0xFFFF0000.toInt(),
+            0xFF00FF00.toInt(),
+            0xFF0000FF.toInt(),
+            0xFFFFFFFF.toInt(),
+        )
+        val polygon = borderGeometry(
+            radii = Mine2DRoundedRectRadii(10f),
+            colors = colors,
+        )!!
+        val outerArea = 100.0 * 40.0 - 4.0 * 10.0 * 10.0 + PI * 10.0 * 10.0
+        val innerArea = 90.0 * 30.0 - 4.0 * 5.0 * 5.0 + PI * 5.0 * 5.0
+
+        assertEquals(outerArea - innerArea, triangleArea(polygon), 10.0)
+        assertEquals(colors.toSet(), polygon.vertices.map(Mine2DVertex::color).toSet())
+        assertClockwise(polygon)
+    }
+
+    @Test
+    fun `padding edge radii subtract their adjacent asymmetric borders`() {
+        val inner = Mine2DRoundedRectRadii(
+            topLeft = Mine2DCornerRadius(20f, 18f),
+            topRight = Mine2DCornerRadius(16f, 14f),
+            bottomRight = Mine2DCornerRadius(12f, 10f),
+            bottomLeft = Mine2DCornerRadius(8f, 6f),
+        ).inset(
+            top = 2f,
+            right = 3f,
+            bottom = 4f,
+            left = 5f,
+            innerWidth = 92f,
+            innerHeight = 34f,
+        )
+
+        assertEquals(Mine2DCornerRadius(15f, 16f), inner.topLeft)
+        assertEquals(Mine2DCornerRadius(13f, 12f), inner.topRight)
+        assertEquals(Mine2DCornerRadius(9f, 6f), inner.bottomRight)
+        assertEquals(Mine2DCornerRadius(3f, 2f), inner.bottomLeft)
+    }
+
     private fun geometry(
         width: Float = 100f,
         radii: Mine2DRoundedRectRadii,
@@ -82,6 +135,25 @@ class RoundedRectTest {
         height = 40f,
         radii = radii,
         color = -1,
+    )
+
+    private fun borderGeometry(
+        radii: Mine2DRoundedRectRadii,
+        colors: List<Int> = List(4) { -1 },
+    ): TriangulatedPolygon? = triangulateRoundedBorder(
+        x = 0f,
+        y = 0f,
+        width = 100f,
+        height = 40f,
+        outerRadii = radii,
+        topWidth = 5f,
+        rightWidth = 5f,
+        bottomWidth = 5f,
+        leftWidth = 5f,
+        topColor = colors[0],
+        rightColor = colors[1],
+        bottomColor = colors[2],
+        leftColor = colors[3],
     )
 
     private fun assertClockwise(polygon: TriangulatedPolygon) {
@@ -109,4 +181,18 @@ class RoundedRectTest {
     private fun cross(a: Mine2DVertex, b: Mine2DVertex, c: Mine2DVertex): Double =
         (b.x - a.x).toDouble() * (c.y - a.y) -
             (b.y - a.y).toDouble() * (c.x - a.x)
+
+    private fun pointInTriangle(
+        x: Float,
+        y: Float,
+        triangle: List<Mine2DVertex>,
+    ): Boolean {
+        val point = Mine2DVertex(x, y, -1)
+        val crosses = listOf(
+            cross(triangle[0], triangle[1], point),
+            cross(triangle[1], triangle[2], point),
+            cross(triangle[2], triangle[0], point),
+        )
+        return crosses.all { it <= 0.0 } || crosses.all { it >= 0.0 }
+    }
 }
