@@ -30,12 +30,89 @@ import java.util.IdentityHashMap
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
+import kotlin.math.min
 
 internal data class ColorPickerGeometry(
     val bounds: UiRect,
     val saturationValueBounds: UiRect,
     val hueBounds: UiRect,
 )
+
+internal data class RangeInputGeometry(
+    val trackBounds: UiRect,
+    val activeTrackBounds: UiRect,
+    val thumbCenterX: Float,
+    val thumbCenterY: Float,
+    val thumbRadius: Float,
+)
+
+internal fun rangeInputGeometry(
+    input: RangeInput,
+    bounds: UiRect,
+): RangeInputGeometry {
+    val thumbRadius = min(
+        RangeInput.THUMB_RADIUS,
+        min(bounds.width, bounds.height) / 2f,
+    ).coerceAtLeast(0f)
+    val fraction = input.fraction().toFloat()
+    return when (input.orientation) {
+        RangeOrientation.HORIZONTAL -> {
+            val start = bounds.left + thumbRadius
+            val travel = (bounds.width - thumbRadius * 2f).coerceAtLeast(0f)
+            val centerX = start + travel * fraction
+            val centerY = bounds.top + bounds.height / 2f
+            val trackThickness = min(RangeInput.TRACK_THICKNESS, bounds.height)
+            val trackTop = centerY - trackThickness / 2f
+            RangeInputGeometry(
+                trackBounds = UiRect(start, trackTop, travel, trackThickness),
+                activeTrackBounds = UiRect(start, trackTop, centerX - start, trackThickness),
+                thumbCenterX = centerX,
+                thumbCenterY = centerY,
+                thumbRadius = thumbRadius,
+            )
+        }
+
+        RangeOrientation.VERTICAL -> {
+            val start = bounds.top + thumbRadius
+            val travel = (bounds.height - thumbRadius * 2f).coerceAtLeast(0f)
+            val centerX = bounds.left + bounds.width / 2f
+            val end = start + travel
+            val centerY = end - travel * fraction
+            val trackThickness = min(RangeInput.TRACK_THICKNESS, bounds.width)
+            val trackLeft = centerX - trackThickness / 2f
+            RangeInputGeometry(
+                trackBounds = UiRect(trackLeft, start, trackThickness, travel),
+                activeTrackBounds = UiRect(trackLeft, centerY, trackThickness, end - centerY),
+                thumbCenterX = centerX,
+                thumbCenterY = centerY,
+                thumbRadius = thumbRadius,
+            )
+        }
+    }
+}
+
+internal fun rangeInputValueAt(
+    input: RangeInput,
+    bounds: UiRect,
+    pointerX: Float,
+    pointerY: Float,
+): Double {
+    val geometry = rangeInputGeometry(input, bounds)
+    val fraction = when (input.orientation) {
+        RangeOrientation.HORIZONTAL -> {
+            val travel = geometry.trackBounds.width
+            if (travel == 0f) return input.value
+            ((pointerX - geometry.trackBounds.left) / travel).coerceIn(0f, 1f)
+        }
+
+        RangeOrientation.VERTICAL -> {
+            val travel = geometry.trackBounds.height
+            if (travel == 0f) return input.value
+            ((geometry.trackBounds.bottom - pointerY) / travel).coerceIn(0f, 1f)
+        }
+    }.toDouble()
+    return input.min * (1.0 - fraction) + input.max * fraction
+}
 
 private enum class ColorPickerDragTarget {
     SATURATION_VALUE,
@@ -646,6 +723,18 @@ class UiLayout internal constructor(
                     }
 
                 is ColorInput -> element.openPicker()
+                is RangeInput -> hitRegion
+                    .takeIf { region -> region.node.element === element }
+                    ?.let { region ->
+                        element.beginUserEdit()
+                        updateRangeInputFromPointer(
+                            input = element,
+                            node = region.node,
+                            pointerX = x - region.visualOffsetX,
+                            pointerY = y - region.visualOffsetY,
+                        )
+                    }
+
                 else -> Unit
             }
         }
@@ -742,6 +831,20 @@ class UiLayout internal constructor(
                 element.moveTo(index, extendSelection = true)
                 handled = true
             }
+            if (
+                element is RangeInput &&
+                !element.disabled &&
+                dragButtonInfo?.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT
+            ) {
+                val (visualOffsetX, visualOffsetY) = visualOffsetOf(node) ?: (0f to 0f)
+                updateRangeInputFromPointer(
+                    input = element,
+                    node = node,
+                    pointerX = layoutX - visualOffsetX,
+                    pointerY = layoutY - visualOffsetY,
+                )
+                handled = true
+            }
             element.onDrag?.let { onDrag ->
                 val buttonInfo = checkNotNull(dragButtonInfo) {
                     "A dragging element must have mouse button information"
@@ -812,7 +915,10 @@ class UiLayout internal constructor(
             return wasDraggingPicker
         }
 
-        draggingElements.forEach { element -> element.dragging = false }
+        draggingElements.forEach { element ->
+            if (element is RangeInput) element.commitUserEdit()
+            element.dragging = false
+        }
         dragButtonInfo = null
         return true
     }
@@ -837,10 +943,14 @@ class UiLayout internal constructor(
             return focusInternal(inputs[nextIndex])
         }
 
-        val focused = focusedElement as? InputControl ?: return false
-        if (focused is ColorInput) return colorInputKeyPressed(focused, event)
+        return when (val focused = focusedElement as? InputControl ?: return false) {
+            is ColorInput -> colorInputKeyPressed(focused, event)
+            is RangeInput -> rangeInputKeyPressed(focused, event)
+            is TextInput -> textInputKeyPressed(focused, event)
+        }
+    }
 
-        val input = focused as TextInput
+    private fun textInputKeyPressed(input: TextInput, event: KeyEvent): Boolean {
         if (event.isSelectAll()) {
             input.selectAll()
             return true
@@ -897,6 +1007,41 @@ class UiLayout internal constructor(
             else -> false
         }
     }
+
+    private fun rangeInputKeyPressed(input: RangeInput, event: KeyEvent): Boolean =
+        when (event.key()) {
+            GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_DOWN -> {
+                input.adjustFromKeyboard(-1)
+                true
+            }
+
+            GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP -> {
+                input.adjustFromKeyboard(1)
+                true
+            }
+
+            GLFW.GLFW_KEY_HOME -> {
+                input.setToMinimumFromKeyboard()
+                true
+            }
+
+            GLFW.GLFW_KEY_END -> {
+                input.setToMaximumFromKeyboard()
+                true
+            }
+
+            GLFW.GLFW_KEY_PAGE_DOWN -> {
+                input.adjustFromKeyboard(-10)
+                true
+            }
+
+            GLFW.GLFW_KEY_PAGE_UP -> {
+                input.adjustFromKeyboard(10)
+                true
+            }
+
+            else -> false
+        }
 
     /** Inserts a committed Unicode code point into the focused text input. */
     override fun charTyped(event: CharacterEvent): Boolean {
@@ -1065,6 +1210,22 @@ class UiLayout internal constructor(
 
             null -> Unit
         }
+    }
+
+    private fun updateRangeInputFromPointer(
+        input: RangeInput,
+        node: UiLayoutNode,
+        pointerX: Float,
+        pointerY: Float,
+    ) {
+        input.setFromUser(
+            rangeInputValueAt(
+                input = input,
+                bounds = node.contentBounds,
+                pointerX = pointerX,
+                pointerY = pointerY,
+            ),
+        )
     }
 
     private fun colorInputKeyPressed(input: ColorInput, event: KeyEvent): Boolean {
@@ -1630,6 +1791,7 @@ class UiLayout internal constructor(
                 )
 
                 is ColorInput -> drawColorInput(node, element, renderer)
+                is RangeInput -> drawRangeInput(node, element, renderer)
                 else -> Unit
             }
 
@@ -1725,6 +1887,59 @@ class UiLayout internal constructor(
                     Mine2DMaterials.COLOR,
                 )
             }
+        }
+    }
+
+    private fun drawRangeInput(
+        node: UiLayoutNode,
+        input: RangeInput,
+        renderer: Mine2DEngine,
+    ) {
+        if (input.hovering) {
+            renderer.graphics.requestCursor(
+                if (input.disabled) CursorTypes.NOT_ALLOWED else CursorTypes.POINTING_HAND,
+            )
+        }
+        val content = node.contentBounds
+        if (content.width <= 0f || content.height <= 0f) return
+        val geometry = rangeInputGeometry(input, content)
+
+        geometry.trackBounds.drawRangePart(renderer, input.trackColor)
+        geometry.activeTrackBounds.drawRangePart(renderer, input.activeTrackColor)
+
+        if (geometry.thumbRadius > 0f) {
+            val thumbRadius = if (input.focused && geometry.thumbRadius > 1f) {
+                renderer.circle(
+                    geometry.thumbCenterX,
+                    geometry.thumbCenterY,
+                    geometry.thumbRadius,
+                    input.focusColor,
+                    RangeInput.THUMB_SEGMENTS,
+                    Mine2DMaterials.COLOR,
+                )
+                geometry.thumbRadius - 1f
+            } else {
+                geometry.thumbRadius
+            }
+            renderer.circle(
+                geometry.thumbCenterX,
+                geometry.thumbCenterY,
+                thumbRadius,
+                input.thumbColor,
+                RangeInput.THUMB_SEGMENTS,
+                Mine2DMaterials.COLOR,
+            )
+        }
+
+        if (input.disabled) {
+            renderer.quad(
+                content.left,
+                content.top,
+                content.width,
+                content.height,
+                0x66000000,
+                Mine2DMaterials.COLOR,
+            )
         }
     }
 
@@ -2296,6 +2511,19 @@ internal fun textIndexAtHorizontalPosition(
         previousWidth = nextWidth
     }
     return text.length
+}
+
+private fun UiRect.drawRangePart(renderer: Mine2DEngine, color: Int) {
+    if (width <= 0f || height <= 0f) return
+    renderer.roundedRect(
+        left,
+        top,
+        width,
+        height,
+        min(width, height) / 2f,
+        color,
+        Mine2DMaterials.COLOR,
+    )
 }
 
 internal fun textInputAlignmentOffset(
