@@ -1,8 +1,6 @@
 package io.github.aiwao.mine2dengine.layout
 
 import net.minecraft.client.input.MouseButtonEvent
-import java.math.BigDecimal
-import java.math.RoundingMode
 
 /** The physical direction in which a [RangeInput] lays out its track. */
 enum class RangeOrientation {
@@ -11,22 +9,24 @@ enum class RangeOrientation {
 }
 
 /**
- * A stateful numeric slider corresponding to HTML `input type="range"`.
+ * A stateful typed numeric slider corresponding to HTML `input type="range"`.
  *
  * A null constructor [value] selects the sanitized midpoint of [min] and [max]. A null [step]
- * corresponds to HTML `step="any"`; keyboard input then uses one hundredth of the range.
+ * corresponds to HTML `step="any"`; keyboard input then uses one hundredth of the range, or at
+ * least one for an [Int] range.
  */
-class RangeInput(
-    value: Double? = null,
-    min: Double = 0.0,
-    max: Double = 100.0,
-    step: Double? = 1.0,
+class RangeInput<T : Number>(
+    val numberType: RangeNumberType<T>,
+    value: T? = null,
+    min: T = numberType.defaultMin,
+    max: T = numberType.defaultMax,
+    step: T? = numberType.defaultStep,
     var orientation: RangeOrientation = RangeOrientation.HORIZONTAL,
     var label: String = "Range input",
-    var valueText: (Double) -> String = ::defaultRangeValueText,
+    var valueText: (T) -> String = numberType::format,
     style: UiStyle = UiStyle(),
-    onInput: ((Double) -> Unit)? = null,
-    onChange: ((Double) -> Unit)? = null,
+    onInput: ((T) -> Unit)? = null,
+    onChange: ((T) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
@@ -50,13 +50,13 @@ class RangeInput(
     className = className,
     id = id,
 ) {
-    private val model = RangeInputModel(value, min, max, step)
-    private var valueAtCommit: Double = model.value
+    private val model = RangeInputModel(numberType, value, min, max, step)
+    private var valueAtCommit: T = model.value
     private var changedByUserSinceCommit: Boolean = false
     private var userEditActive: Boolean = false
 
     /** Current finite, clamped, and step-aligned value. Programmatic assignment is silent. */
-    var value: Double
+    var value: T
         get() = model.value
         set(value) {
             model.setValue(value)
@@ -64,7 +64,7 @@ class RangeInput(
         }
 
     /** Inclusive lower bound. It must be finite and no greater than [max]. */
-    var min: Double
+    var min: T
         get() = model.min
         set(value) {
             model.setMinimum(value)
@@ -72,23 +72,23 @@ class RangeInput(
         }
 
     /** Inclusive upper bound. It must be finite and no less than [min]. */
-    var max: Double
+    var max: T
         get() = model.max
         set(value) {
             model.setMaximum(value)
             resetUserEdit()
         }
 
-    /** Positive allowed-value interval, or null for continuous pointer input. */
-    var step: Double?
+    /** Positive allowed-value interval, or null to disable step alignment. */
+    var step: T?
         get() = model.step
         set(value) {
             model.setStep(value)
             resetUserEdit()
         }
 
-    var onInput: ((Double) -> Unit)? = onInput
-    var onChange: ((Double) -> Unit)? = onChange
+    var onInput: ((T) -> Unit)? = onInput
+    var onChange: ((T) -> Unit)? = onChange
 
     /** Color of the unfilled track. */
     var trackColor: Int = 0xFF555555.toInt()
@@ -138,25 +138,22 @@ class RangeInput(
         userEditActive = true
     }
 
-    internal fun setFromUser(value: Double): Boolean {
+    internal fun setFromUser(value: T): Boolean {
         if (disabled) return false
         beginUserEdit()
-        val changed = model.setValue(value)
-        if (changed) {
-            changedByUserSinceCommit = true
-            onInput?.invoke(this.value)
-        }
-        return changed
+        return dispatchUserMutation { model.setValue(value) }
+    }
+
+    internal fun setFromUserFraction(fraction: Double): Boolean {
+        if (disabled) return false
+        beginUserEdit()
+        return dispatchUserMutation { model.setFromFraction(fraction) }
     }
 
     internal fun adjustFromKeyboard(steps: Int): Boolean {
         if (disabled) return false
         beginUserEdit()
-        val changed = model.increment(steps)
-        if (changed) {
-            changedByUserSinceCommit = true
-            onInput?.invoke(value)
-        }
+        val changed = dispatchUserMutation { model.increment(steps) }
         commitUserEdit()
         return changed
     }
@@ -175,7 +172,16 @@ class RangeInput(
         userEditActive = false
     }
 
-    private fun setAndCommitFromKeyboard(value: Double): Boolean {
+    private inline fun dispatchUserMutation(mutation: () -> Boolean): Boolean {
+        val changed = mutation()
+        if (changed) {
+            changedByUserSinceCommit = true
+            onInput?.invoke(value)
+        }
+        return changed
+    }
+
+    private fun setAndCommitFromKeyboard(value: T): Boolean {
         beginUserEdit()
         val changed = setFromUser(value)
         commitUserEdit()
@@ -197,122 +203,81 @@ class RangeInput(
     }
 }
 
-/** Numeric state and HTML-like range sanitization independent of layout and Minecraft events. */
-internal class RangeInputModel(
-    value: Double?,
-    min: Double,
-    max: Double,
-    step: Double?,
+/** Numeric state and range sanitization independent of layout and Minecraft events. */
+internal class RangeInputModel<T : Number>(
+    private val numberType: RangeNumberType<T>,
+    value: T?,
+    min: T,
+    max: T,
+    step: T?,
 ) {
-    var min: Double = min
+    var min: T = min
         private set
-    var max: Double = max
+    var max: T = max
         private set
-    var step: Double? = step
+    var step: T? = step
         private set
-    var value: Double
+    var value: T
         private set
 
     init {
-        validateBounds(min, max)
-        validateStep(step)
-        val initialValue = value ?: min / 2.0 + max / 2.0
-        require(initialValue.isFinite()) { "Range value must be finite: $initialValue" }
-        this.value = sanitize(initialValue)
+        numberType.validateConfiguration(min, max, step)
+        this.value = value?.let { numberType.sanitize(it, min, max, step) }
+            ?: numberType.midpoint(min, max, step)
     }
 
-    fun setValue(value: Double): Boolean {
-        require(value.isFinite()) { "Range value must be finite: $value" }
-        val sanitized = sanitize(value)
-        if (sanitized == this.value) return false
-        this.value = sanitized
-        return true
-    }
+    fun setValue(value: T): Boolean = setSanitized(
+        numberType.sanitize(value, min, max, step),
+    )
 
-    fun setMinimum(min: Double) {
-        validateBounds(min, max)
+    fun setMinimum(min: T) {
+        numberType.validateConfiguration(min, max, step)
         this.min = min
-        value = sanitize(value)
+        value = numberType.sanitize(value, min, max, step)
     }
 
-    fun setMaximum(max: Double) {
-        validateBounds(min, max)
+    fun setMaximum(max: T) {
+        numberType.validateConfiguration(min, max, step)
         this.max = max
-        value = sanitize(value)
+        value = numberType.sanitize(value, min, max, step)
     }
 
-    fun setStep(step: Double?) {
-        validateStep(step)
+    fun setStep(step: T?) {
+        numberType.validateConfiguration(min, max, step)
         this.step = step
-        value = sanitize(value)
+        value = numberType.sanitize(value, min, max, step)
     }
 
-    fun increment(steps: Int): Boolean {
-        if (steps == 0 || min == max) return false
-        val amount = step ?: (max - min) / 100.0
-        val candidate = value + amount * steps
-        return setValue(
-            when {
-                candidate.isFinite() -> candidate
-                steps > 0 -> max
-                else -> min
-            },
-        )
-    }
+    fun increment(steps: Int): Boolean = setSanitized(
+        numberType.increment(value, steps, min, max, step),
+    )
 
-    fun fraction(): Double = if (min == max) {
-        0.0
-    } else {
-        ((value - min) / (max - min)).coerceIn(0.0, 1.0)
-    }
+    fun setFromFraction(fraction: Double): Boolean = setSanitized(
+        numberType.interpolate(fraction, min, max, step),
+    )
 
-    private fun sanitize(candidate: Double): Double {
-        val clamped = candidate.coerceIn(min, max)
-        val fixedStep = step ?: return clamped.normalizeNegativeZero()
-        if (min == max) return min.normalizeNegativeZero()
+    fun fraction(): Double = numberType.fraction(value, min, max)
 
-        val minimum = BigDecimal.valueOf(min)
-        val maximum = BigDecimal.valueOf(max)
-        val interval = BigDecimal.valueOf(fixedStep)
-        val offset = BigDecimal.valueOf(clamped).subtract(minimum)
-        val stepIndex = offset.divide(interval, 0, RoundingMode.HALF_UP)
-        var snapped = minimum.add(interval.multiply(stepIndex))
-        if (snapped > maximum) {
-            val maximumIndex = maximum.subtract(minimum).divide(interval, 0, RoundingMode.FLOOR)
-            snapped = minimum.add(interval.multiply(maximumIndex))
-        }
-        return snapped.toDouble().coerceIn(min, max).normalizeNegativeZero()
-    }
-
-    private fun validateBounds(min: Double, max: Double) {
-        require(min.isFinite()) { "Range minimum must be finite: $min" }
-        require(max.isFinite()) { "Range maximum must be finite: $max" }
-        require(min <= max) { "Range minimum must not exceed maximum: $min > $max" }
-    }
-
-    private fun validateStep(step: Double?) {
-        require(step == null || step.isFinite() && step > 0.0) {
-            "Range step must be null or finite and positive: $step"
-        }
+    private fun setSanitized(value: T): Boolean {
+        if (value == this.value) return false
+        this.value = value
+        return true
     }
 }
 
-private fun Double.normalizeNegativeZero(): Double = if (this == 0.0) 0.0 else this
-
-private fun defaultRangeValueText(value: Double): String = BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()
-
-/** Adds a numeric range input to this container. */
-fun UiContainer.rangeInput(
-    value: Double? = null,
-    min: Double = 0.0,
-    max: Double = 100.0,
-    step: Double? = 1.0,
+/** Adds a typed numeric range input using an explicit numeric strategy. */
+fun <T : Number> UiContainer.rangeInput(
+    numberType: RangeNumberType<T>,
+    value: T? = null,
+    min: T = numberType.defaultMin,
+    max: T = numberType.defaultMax,
+    step: T? = numberType.defaultStep,
     orientation: RangeOrientation = RangeOrientation.HORIZONTAL,
     label: String = "Range input",
-    valueText: (Double) -> String = ::defaultRangeValueText,
+    valueText: (T) -> String = numberType::format,
     style: UiStyle = UiStyle(),
-    onInput: ((Double) -> Unit)? = null,
-    onChange: ((Double) -> Unit)? = null,
+    onInput: ((T) -> Unit)? = null,
+    onChange: ((T) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
@@ -323,8 +288,9 @@ fun UiContainer.rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
-): RangeInput = add(
+): RangeInput<T> = add(
     RangeInput(
+        numberType = numberType,
         value = value,
         min = min,
         max = max,
@@ -348,7 +314,53 @@ fun UiContainer.rangeInput(
     ),
 )
 
-/** Adds a dynamically styled numeric range input to this container. */
+/** Adds a typed numeric range input selected by its reified number type. */
+inline fun <reified T : Number> UiContainer.rangeInput(
+    value: T? = null,
+    min: T = rangeNumberType<T>().defaultMin,
+    max: T = rangeNumberType<T>().defaultMax,
+    step: T? = rangeNumberType<T>().defaultStep,
+    orientation: RangeOrientation = RangeOrientation.HORIZONTAL,
+    label: String = "Range input",
+    noinline valueText: (T) -> String = rangeNumberType<T>()::format,
+    style: UiStyle = UiStyle(),
+    noinline onInput: ((T) -> Unit)? = null,
+    noinline onChange: ((T) -> Unit)? = null,
+    noinline onFocus: (() -> Unit)? = null,
+    noinline onBlur: (() -> Unit)? = null,
+    noinline onClick: ((MouseButtonEvent) -> Unit)? = null,
+    noinline onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+    noinline onDrag: ((MouseButtonEvent) -> Unit)? = null,
+    noinline onMouseOver: (() -> Unit)? = null,
+    noinline onMouseOut: (() -> Unit)? = null,
+    tag: String = "input",
+    className: Set<String> = emptySet(),
+    id: String = "",
+): RangeInput<T> = rangeInput(
+    numberType = rangeNumberType<T>(),
+    value = value,
+    min = min,
+    max = max,
+    step = step,
+    orientation = orientation,
+    label = label,
+    valueText = valueText,
+    style = style,
+    onInput = onInput,
+    onChange = onChange,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onClick = onClick,
+    onMouseMove = onMouseMove,
+    onDrag = onDrag,
+    onMouseOver = onMouseOver,
+    onMouseOut = onMouseOut,
+    tag = tag,
+    className = className,
+    id = id,
+)
+
+/** Adds a Double range input when no number type is specified. */
 fun UiContainer.rangeInput(
     value: Double? = null,
     min: Double = 0.0,
@@ -356,8 +368,8 @@ fun UiContainer.rangeInput(
     step: Double? = 1.0,
     orientation: RangeOrientation = RangeOrientation.HORIZONTAL,
     label: String = "Range input",
-    valueText: (Double) -> String = ::defaultRangeValueText,
-    style: (RangeInput) -> UiStyle,
+    valueText: (Double) -> String = RangeNumberTypes.DOUBLE::format,
+    style: UiStyle = UiStyle(),
     onInput: ((Double) -> Unit)? = null,
     onChange: ((Double) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
@@ -370,7 +382,55 @@ fun UiContainer.rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
-): RangeInput = rangeInput(
+): RangeInput<Double> = rangeInput(
+    numberType = RangeNumberTypes.DOUBLE,
+    value = value,
+    min = min,
+    max = max,
+    step = step,
+    orientation = orientation,
+    label = label,
+    valueText = valueText,
+    style = style,
+    onInput = onInput,
+    onChange = onChange,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onClick = onClick,
+    onMouseMove = onMouseMove,
+    onDrag = onDrag,
+    onMouseOver = onMouseOver,
+    onMouseOut = onMouseOut,
+    tag = tag,
+    className = className,
+    id = id,
+)
+
+/** Adds a dynamically styled typed range input using an explicit numeric strategy. */
+fun <T : Number> UiContainer.rangeInput(
+    numberType: RangeNumberType<T>,
+    value: T? = null,
+    min: T = numberType.defaultMin,
+    max: T = numberType.defaultMax,
+    step: T? = numberType.defaultStep,
+    orientation: RangeOrientation = RangeOrientation.HORIZONTAL,
+    label: String = "Range input",
+    valueText: (T) -> String = numberType::format,
+    style: (RangeInput<T>) -> UiStyle,
+    onInput: ((T) -> Unit)? = null,
+    onChange: ((T) -> Unit)? = null,
+    onFocus: (() -> Unit)? = null,
+    onBlur: (() -> Unit)? = null,
+    onClick: ((MouseButtonEvent) -> Unit)? = null,
+    onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+    onDrag: ((MouseButtonEvent) -> Unit)? = null,
+    onMouseOver: (() -> Unit)? = null,
+    onMouseOut: (() -> Unit)? = null,
+    tag: String = "input",
+    className: Set<String> = emptySet(),
+    id: String = "",
+): RangeInput<T> = rangeInput(
+    numberType = numberType,
     value = value,
     min = min,
     max = max,
@@ -392,7 +452,172 @@ fun UiContainer.rangeInput(
     id = id,
 ).also { element -> element.setStyleProvider { style(element) } }
 
-/** Creates a numeric range input as the root of a UI tree. */
+/** Adds a dynamically styled typed range input selected by its reified number type. */
+inline fun <reified T : Number> UiContainer.rangeInput(
+    value: T? = null,
+    min: T = rangeNumberType<T>().defaultMin,
+    max: T = rangeNumberType<T>().defaultMax,
+    step: T? = rangeNumberType<T>().defaultStep,
+    orientation: RangeOrientation = RangeOrientation.HORIZONTAL,
+    label: String = "Range input",
+    noinline valueText: (T) -> String = rangeNumberType<T>()::format,
+    noinline style: (RangeInput<T>) -> UiStyle,
+    noinline onInput: ((T) -> Unit)? = null,
+    noinline onChange: ((T) -> Unit)? = null,
+    noinline onFocus: (() -> Unit)? = null,
+    noinline onBlur: (() -> Unit)? = null,
+    noinline onClick: ((MouseButtonEvent) -> Unit)? = null,
+    noinline onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+    noinline onDrag: ((MouseButtonEvent) -> Unit)? = null,
+    noinline onMouseOver: (() -> Unit)? = null,
+    noinline onMouseOut: (() -> Unit)? = null,
+    tag: String = "input",
+    className: Set<String> = emptySet(),
+    id: String = "",
+): RangeInput<T> = rangeInput(
+    numberType = rangeNumberType<T>(),
+    value = value,
+    min = min,
+    max = max,
+    step = step,
+    orientation = orientation,
+    label = label,
+    valueText = valueText,
+    style = style,
+    onInput = onInput,
+    onChange = onChange,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onClick = onClick,
+    onMouseMove = onMouseMove,
+    onDrag = onDrag,
+    onMouseOver = onMouseOver,
+    onMouseOut = onMouseOut,
+    tag = tag,
+    className = className,
+    id = id,
+)
+
+/** Adds a dynamically styled Double range input when no number type is specified. */
+fun UiContainer.rangeInput(
+    value: Double? = null,
+    min: Double = 0.0,
+    max: Double = 100.0,
+    step: Double? = 1.0,
+    orientation: RangeOrientation = RangeOrientation.HORIZONTAL,
+    label: String = "Range input",
+    valueText: (Double) -> String = RangeNumberTypes.DOUBLE::format,
+    style: (RangeInput<Double>) -> UiStyle,
+    onInput: ((Double) -> Unit)? = null,
+    onChange: ((Double) -> Unit)? = null,
+    onFocus: (() -> Unit)? = null,
+    onBlur: (() -> Unit)? = null,
+    onClick: ((MouseButtonEvent) -> Unit)? = null,
+    onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
+    onDrag: ((MouseButtonEvent) -> Unit)? = null,
+    onMouseOver: (() -> Unit)? = null,
+    onMouseOut: (() -> Unit)? = null,
+    tag: String = "input",
+    className: Set<String> = emptySet(),
+    id: String = "",
+): RangeInput<Double> = rangeInput(
+    numberType = RangeNumberTypes.DOUBLE,
+    value = value,
+    min = min,
+    max = max,
+    step = step,
+    orientation = orientation,
+    label = label,
+    valueText = valueText,
+    style = style,
+    onInput = onInput,
+    onChange = onChange,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onClick = onClick,
+    onMouseMove = onMouseMove,
+    onDrag = onDrag,
+    onMouseOver = onMouseOver,
+    onMouseOut = onMouseOut,
+    tag = tag,
+    className = className,
+    id = id,
+)
+
+/** Creates a typed numeric range input root using an explicit numeric strategy. */
+fun <T : Number> rangeInput(
+    numberType: RangeNumberType<T>,
+    value: T? = null,
+    min: T = numberType.defaultMin,
+    max: T = numberType.defaultMax,
+    step: T? = numberType.defaultStep,
+    orientation: RangeOrientation = RangeOrientation.HORIZONTAL,
+    label: String = "Range input",
+    valueText: (T) -> String = numberType::format,
+    style: UiStyle = UiStyle(),
+    onInput: ((T) -> Unit)? = null,
+    onChange: ((T) -> Unit)? = null,
+    onFocus: (() -> Unit)? = null,
+    onBlur: (() -> Unit)? = null,
+    tag: String = "input",
+    className: Set<String> = emptySet(),
+    id: String = "",
+): RangeInput<T> = RangeInput(
+    numberType = numberType,
+    value = value,
+    min = min,
+    max = max,
+    step = step,
+    orientation = orientation,
+    label = label,
+    valueText = valueText,
+    style = style,
+    onInput = onInput,
+    onChange = onChange,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    tag = tag,
+    className = className,
+    id = id,
+)
+
+/** Creates a typed numeric range input root selected by its reified number type. */
+inline fun <reified T : Number> rangeInput(
+    value: T? = null,
+    min: T = rangeNumberType<T>().defaultMin,
+    max: T = rangeNumberType<T>().defaultMax,
+    step: T? = rangeNumberType<T>().defaultStep,
+    orientation: RangeOrientation = RangeOrientation.HORIZONTAL,
+    label: String = "Range input",
+    noinline valueText: (T) -> String = rangeNumberType<T>()::format,
+    style: UiStyle = UiStyle(),
+    noinline onInput: ((T) -> Unit)? = null,
+    noinline onChange: ((T) -> Unit)? = null,
+    noinline onFocus: (() -> Unit)? = null,
+    noinline onBlur: (() -> Unit)? = null,
+    tag: String = "input",
+    className: Set<String> = emptySet(),
+    id: String = "",
+): RangeInput<T> = rangeInput(
+    numberType = rangeNumberType<T>(),
+    value = value,
+    min = min,
+    max = max,
+    step = step,
+    orientation = orientation,
+    label = label,
+    valueText = valueText,
+    style = style,
+    onInput = onInput,
+    onChange = onChange,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    tag = tag,
+    className = className,
+    id = id,
+)
+
+/** Creates a Double range input root when no number type is specified. */
 fun rangeInput(
     value: Double? = null,
     min: Double = 0.0,
@@ -400,7 +625,7 @@ fun rangeInput(
     step: Double? = 1.0,
     orientation: RangeOrientation = RangeOrientation.HORIZONTAL,
     label: String = "Range input",
-    valueText: (Double) -> String = ::defaultRangeValueText,
+    valueText: (Double) -> String = RangeNumberTypes.DOUBLE::format,
     style: UiStyle = UiStyle(),
     onInput: ((Double) -> Unit)? = null,
     onChange: ((Double) -> Unit)? = null,
@@ -409,7 +634,8 @@ fun rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
-): RangeInput = RangeInput(
+): RangeInput<Double> = rangeInput(
+    numberType = RangeNumberTypes.DOUBLE,
     value = value,
     min = min,
     max = max,

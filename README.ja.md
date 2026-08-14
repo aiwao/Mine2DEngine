@@ -442,17 +442,17 @@ widgetとして登録したlayoutを別途`layout.render(...)`で描画しない
 
 ### Range input
 
-`rangeInput()`はHTMLの`input type="range"`に対応する数値sliderを作ります。値は有限な`Double`で、常に`min`と`max`の範囲へclampされ、`step`が指定されている場合は`min`を基準に最も近いstepへ揃えられます。同距離のstepが2つある場合は大きい値が選ばれます。
+`rangeInput<T>()`はHTMLの`input type="range"`に対応する型付き数値sliderを作ります。`T`には`Int`、`Float`、`Double`を指定でき、`value`、`min`、`max`、`step`とcallbackの値は同じ型を保ちます。値は常に`min`と`max`の範囲へclampされ、`step`が指定されている場合は`min`を基準に最も近いstepへ揃えられます。同距離のstepが2つある場合は大きい値が選ばれます。
 
 ```kotlin
-lateinit var volume: RangeInput
+lateinit var volume: RangeInput<Float>
 
 val root = div {
-    volume = rangeInput(
-        value = 0.5,
-        min = 0.0,
-        max = 1.0,
-        step = 0.05,
+    volume = rangeInput<Float>(
+        value = 0.5f,
+        min = 0f,
+        max = 1f,
+        step = 0.05f,
         label = "Volume",
         valueText = { value -> "${(value * 100).toInt()} percent" },
         style = { input ->
@@ -472,7 +472,9 @@ val root = div {
 }
 ```
 
-`value`を省略または`null`にすると、`min`と`max`の中間をstepへ揃えた値で初期化されます。デフォルトは`min = 0.0`、`max = 100.0`、`step = 1.0`です。`step = null`は連続的なpointer入力に対応し、keyboardでは範囲の1/100ずつ変化します。`min`、`max`、`step`、`value`へのプログラムからの代入は値を再正規化しますが、callbackを呼びません。不正な非有限値、`min > max`、0以下のstepは拒否されます。
+型引数は`rangeInput<Int>()`のように明示できるほか、`rangeInput(value = 3, min = 0, max = 10)`のように数値引数から推論されます。型も数値引数も指定しない`rangeInput()`は後方互換のため`RangeInput<Double>`になります。明示的な型tokenが必要な箇所では`rangeInput(RangeNumberTypes.INT, ...)`も使用できます。
+
+`value`を省略または`null`にすると、`min`と`max`の中間をstepへ揃えた値で初期化されます。各型のデフォルトは数値として`min = 0`、`max = 100`、`step = 1`です。`step = null`はstep整列を無効にし、keyboardでは範囲の1/100ずつ変化します。ただし`Int`ではpointer・keyboardとも結果は最も近い整数になり、keyboardの最小変化量は1です。`min`、`max`、`step`、`value`へのプログラムからの代入は値を再正規化しますが、callbackを呼びません。`Float` / `Double`の非有限値、`min > max`、0以下のstepは拒否されます。
 
 trackのclickとdrag中は、step整列後の値が実際に変わるたびに`onInput`を呼び、mouse releaseまたはfocus喪失時に`onChange`を一度呼びます。keyboardの各操作は単独で確定され、変更時に`onInput`と`onChange`を呼びます。左右または上下矢印で1 step、Page Up/Downで10 steps、Home/Endで最小／最大の許容値へ移動します。wheelはsliderでは消費せず、通常のscroll containerへ配送されます。
 

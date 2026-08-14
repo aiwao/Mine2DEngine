@@ -47,7 +47,7 @@ internal data class RangeInputGeometry(
 )
 
 internal fun rangeInputGeometry(
-    input: RangeInput,
+    input: RangeInput<*>,
     bounds: UiRect,
 ): RangeInputGeometry {
     val thumbRadius = min(
@@ -91,8 +91,8 @@ internal fun rangeInputGeometry(
     }
 }
 
-internal fun rangeInputValueAt(
-    input: RangeInput,
+internal fun rangeInputFractionAt(
+    input: RangeInput<*>,
     bounds: UiRect,
     pointerX: Float,
     pointerY: Float,
@@ -101,17 +101,17 @@ internal fun rangeInputValueAt(
     val fraction = when (input.orientation) {
         RangeOrientation.HORIZONTAL -> {
             val travel = geometry.trackBounds.width
-            if (travel == 0f) return input.value
+            if (travel == 0f) return input.fraction()
             ((pointerX - geometry.trackBounds.left) / travel).coerceIn(0f, 1f)
         }
 
         RangeOrientation.VERTICAL -> {
             val travel = geometry.trackBounds.height
-            if (travel == 0f) return input.value
+            if (travel == 0f) return input.fraction()
             ((geometry.trackBounds.bottom - pointerY) / travel).coerceIn(0f, 1f)
         }
-    }.toDouble()
-    return input.min * (1.0 - fraction) + input.max * fraction
+    }
+    return fraction.toDouble()
 }
 
 private enum class ColorPickerDragTarget {
@@ -723,7 +723,7 @@ class UiLayout internal constructor(
                     }
 
                 is ColorInput -> element.openPicker()
-                is RangeInput -> hitRegion
+                is RangeInput<*> -> hitRegion
                     .takeIf { region -> region.node.element === element }
                     ?.let { region ->
                         element.beginUserEdit()
@@ -832,7 +832,7 @@ class UiLayout internal constructor(
                 handled = true
             }
             if (
-                element is RangeInput &&
+                element is RangeInput<*> &&
                 !element.disabled &&
                 dragButtonInfo?.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT
             ) {
@@ -916,7 +916,7 @@ class UiLayout internal constructor(
         }
 
         draggingElements.forEach { element ->
-            if (element is RangeInput) element.commitUserEdit()
+            if (element is RangeInput<*>) element.commitUserEdit()
             element.dragging = false
         }
         dragButtonInfo = null
@@ -945,7 +945,7 @@ class UiLayout internal constructor(
 
         return when (val focused = focusedElement as? InputControl ?: return false) {
             is ColorInput -> colorInputKeyPressed(focused, event)
-            is RangeInput -> rangeInputKeyPressed(focused, event)
+            is RangeInput<*> -> rangeInputKeyPressed(focused, event)
             is TextInput -> textInputKeyPressed(focused, event)
         }
     }
@@ -1008,7 +1008,7 @@ class UiLayout internal constructor(
         }
     }
 
-    private fun rangeInputKeyPressed(input: RangeInput, event: KeyEvent): Boolean =
+    private fun rangeInputKeyPressed(input: RangeInput<*>, event: KeyEvent): Boolean =
         when (event.key()) {
             GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_DOWN -> {
                 input.adjustFromKeyboard(-1)
@@ -1213,13 +1213,13 @@ class UiLayout internal constructor(
     }
 
     private fun updateRangeInputFromPointer(
-        input: RangeInput,
+        input: RangeInput<*>,
         node: UiLayoutNode,
         pointerX: Float,
         pointerY: Float,
     ) {
-        input.setFromUser(
-            rangeInputValueAt(
+        input.setFromUserFraction(
+            rangeInputFractionAt(
                 input = input,
                 bounds = node.contentBounds,
                 pointerX = pointerX,
@@ -1791,7 +1791,7 @@ class UiLayout internal constructor(
                 )
 
                 is ColorInput -> drawColorInput(node, element, renderer)
-                is RangeInput -> drawRangeInput(node, element, renderer)
+                is RangeInput<*> -> drawRangeInput(node, element, renderer)
                 else -> Unit
             }
 
@@ -1892,7 +1892,7 @@ class UiLayout internal constructor(
 
     private fun drawRangeInput(
         node: UiLayoutNode,
-        input: RangeInput,
+        input: RangeInput<*>,
         renderer: Mine2DEngine,
     ) {
         if (input.hovering) {

@@ -455,17 +455,17 @@ Do not also call `layout.render(...)` for a layout registered as a widget. Manua
 
 ### Range input
 
-`rangeInput()` creates a numeric slider corresponding to HTML `input type="range"`. Its value is a finite `Double`, always clamped between `min` and `max`. When `step` is present, the value is aligned to the nearest step relative to `min`; a tie selects the greater value.
+`rangeInput<T>()` creates a typed numeric slider corresponding to HTML `input type="range"`. `T` may be `Int`, `Float`, or `Double`; `value`, `min`, `max`, `step`, and callback values all retain that type. Values are always clamped between `min` and `max`. When `step` is present, the value is aligned to the nearest step relative to `min`; a tie selects the greater value.
 
 ```kotlin
-lateinit var volume: RangeInput
+lateinit var volume: RangeInput<Float>
 
 val root = div {
-    volume = rangeInput(
-        value = 0.5,
-        min = 0.0,
-        max = 1.0,
-        step = 0.05,
+    volume = rangeInput<Float>(
+        value = 0.5f,
+        min = 0f,
+        max = 1f,
+        step = 0.05f,
         label = "Volume",
         valueText = { value -> "${(value * 100).toInt()} percent" },
         style = { input ->
@@ -485,7 +485,9 @@ val root = div {
 }
 ```
 
-An omitted or null `value` initializes to the step-aligned midpoint of `min` and `max`. The defaults are `min = 0.0`, `max = 100.0`, and `step = 1.0`. A null `step` enables continuous pointer input; keyboard input then changes by one hundredth of the range. Programmatic assignment to `min`, `max`, `step`, or `value` re-sanitizes the value without invoking callbacks. Non-finite values, `min > max`, and non-positive steps are rejected.
+The type argument can be explicit, as in `rangeInput<Int>()`, or inferred from numeric arguments, as in `rangeInput(value = 3, min = 0, max = 10)`. Calling `rangeInput()` with neither a type nor numeric arguments returns `RangeInput<Double>` for backward compatibility. Code that needs an explicit type token can use `rangeInput(RangeNumberTypes.INT, ...)`.
+
+An omitted or null `value` initializes to the step-aligned midpoint of `min` and `max`. The defaults for every type are numerically `min = 0`, `max = 100`, and `step = 1`. A null `step` disables step alignment; keyboard input then changes by one hundredth of the range. For `Int`, pointer and keyboard results still round to the nearest integer, and the minimum keyboard increment is one. Programmatic assignment to `min`, `max`, `step`, or `value` re-sanitizes the value without invoking callbacks. Non-finite `Float` / `Double` values, `min > max`, and non-positive steps are rejected.
 
 Clicking or dragging the track dispatches `onInput` whenever the aligned value actually changes, then dispatches `onChange` once on mouse release or focus loss. Each keyboard operation is committed independently and dispatches both callbacks when it changes the value. Arrow keys change one step, Page Up/Down change ten steps, and Home/End select the minimum/maximum allowed value. Wheel input is left to the normal scroll-container chain.
 
