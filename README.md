@@ -202,7 +202,7 @@ The layout package builds an element tree from containers, paragraphs, and typed
 - Physical margins and padding, horizontal `auto` margins, and adjacent block margin collapsing
 - `position: static | relative | absolute`, length/percentage insets, and automatic stretching between paired insets
 - Flexbox rows and columns, reverse directions, wrapping, grow/shrink/basis, order, gaps, auto margins, and the justify/align properties
-- Single-line `TextInput` and opaque RGB `ColorInput` controls as replaced elements
+- Single-line `TextInput`, numeric slider `RangeInput`, and opaque RGB `ColorInput` controls as replaced elements
 - Generated `::before` and `::after` boxes
 - `display: none` subtree suppression and `display: contents` principal-box suppression
 
@@ -453,6 +453,46 @@ override fun repositionElements() {
 
 Do not also call `layout.render(...)` for a layout registered as a widget. Manual event forwarding remains available, but Screen registration is recommended to enable IME and receive preedit events correctly. Use `layout.focus(playerName)`, `layout.clearFocus()`, and `layout.focusedElement` to control or inspect focus.
 
+### Range input
+
+`rangeInput<T>()` creates a typed numeric slider corresponding to HTML `input type="range"`. `T` may be `Int`, `Float`, or `Double`; `value`, `min`, `max`, `step`, and callback values all retain that type. Values are always clamped between `min` and `max`. When `step` is present, the value is aligned to the nearest step relative to `min`; a tie selects the greater value.
+
+```kotlin
+lateinit var volume: RangeInput<Float>
+
+val root = div {
+    volume = rangeInput<Float>(
+        value = 0.5f,
+        min = 0f,
+        max = 1f,
+        step = 0.05f,
+        label = "Volume",
+        valueText = { value -> "${(value * 100).toInt()} percent" },
+        style = { input ->
+            UiStyle(
+                width = 140f.px,
+                height = 24f.px,
+                backgroundColor = if (input.focused) {
+                    0xFF303840.toInt()
+                } else {
+                    0xFF202428.toInt()
+                },
+            )
+        },
+        onInput = { value -> previewVolume(value) },
+        onChange = { value -> saveVolume(value) },
+    )
+}
+```
+
+The type argument can be explicit, as in `rangeInput<Int>()`, or inferred from numeric arguments, as in `rangeInput(value = 3, min = 0, max = 10)`. Calling `rangeInput()` with neither a type nor numeric arguments returns `RangeInput<Double>` for backward compatibility. Code that needs an explicit type token can use `rangeInput(RangeNumberTypes.INT, ...)`.
+
+An omitted or null `value` initializes to the step-aligned midpoint of `min` and `max`. The defaults for every type are numerically `min = 0`, `max = 100`, and `step = 1`. A null `step` disables step alignment; keyboard input then changes by one hundredth of the range. For `Int`, pointer and keyboard results still round to the nearest integer, and the minimum keyboard increment is one. Programmatic assignment to `min`, `max`, `step`, or `value` re-sanitizes the value without invoking callbacks. Non-finite `Float` / `Double` values, `min > max`, and non-positive steps are rejected.
+
+Clicking or dragging the track dispatches `onInput` whenever the aligned value actually changes, then dispatches `onChange` once on mouse release or focus loss. Each keyboard operation is committed independently and dispatches both callbacks when it changes the value. Arrow keys change one step, Page Up/Down change ten steps, and Home/End select the minimum/maximum allowed value. Wheel input is left to the normal scroll-container chain.
+
+With `orientation = RangeOrientation.VERTICAL`, the minimum is at the bottom and maximum at the top. The default content size is `100 × 20` horizontally and `20 × 100` vertically. Changing orientation requires `relayout()`; changing the value or constraints does not. Use `trackColor`, `activeTrackColor`, `thumbColor`, and `focusColor` to customize the internal appearance. `RangeInput` participates in focus and Tab order without activating platform text input or IME.
+
 ### Color input
 
 `colorInput()` creates a `ColorInput` corresponding to HTML `input type="color"`. Its value uses Mine2DEngine's `0xAARRGGBB` integer format and is always normalized to opaque `0xFFRRGGBB`; assigning a transparent color therefore discards its alpha channel.
@@ -484,7 +524,7 @@ val root = div {
 
 Clicking the swatch opens an HSV picker overlay. Dragging its saturation/value field or hue strip dispatches `onInput`; dismissing or confirming an edited picker dispatches `onChange` once. Programmatic `value` assignment dispatches neither callback. Enter or Space opens/confirms the picker, Escape restores the color from when the picker opened, arrow keys adjust saturation/value, and Page Up/Down adjusts hue. Holding Shift uses larger keyboard steps.
 
-The default `width: auto` and `height: auto` content size is `36 × 20` GUI pixels; these intrinsic metrics do not depend on a font. An inline formatting context can still require a parent font for its line box. `ColorInput` participates in the same focus and Tab order as `TextInput`, but does not activate the platform text-input/IME path. Both controls use the `input` tag by default; use a class or ID when they need distinct style-sheet rules.
+The default `width: auto` and `height: auto` content size is `36 × 20` GUI pixels; these intrinsic metrics do not depend on a font. An inline formatting context can still require a parent font for its line box. `ColorInput` participates in the same focus and Tab order as the other input controls, but does not activate the platform text-input/IME path. Every input control uses the `input` tag by default; use a class or ID when control types need distinct style-sheet rules.
 
 ### Results, rendering, and input
 

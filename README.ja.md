@@ -202,7 +202,7 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 - 物理margin / padding、横方向の`auto` margin、隣接block marginのcollapse
 - `position: static | relative | absolute`、length / percentage inset、両側inset間の自動stretch
 - Flexboxのrow / column、reverse、wrap、grow / shrink / basis、order、gap、auto margin、justify / align
-- replaced elementとしての単一行`TextInput`と不透明RGB `ColorInput`
+- replaced elementとしての単一行`TextInput`、数値slider `RangeInput`、不透明RGB `ColorInput`
 - `::before` / `::after` の生成box
 - `display: none`によるsubtree除外と、`display: contents`によるprincipal box除外
 
@@ -440,6 +440,46 @@ override fun repositionElements() {
 
 widgetとして登録したlayoutを別途`layout.render(...)`で描画しないでください。手動配送もできますが、IMEを有効化してpreeditを正しく受け取るにはScreenへの登録が推奨です。focusは`layout.focus(playerName)`、`layout.clearFocus()`、`layout.focusedElement`から制御・確認できます。
 
+### Range input
+
+`rangeInput<T>()`はHTMLの`input type="range"`に対応する型付き数値sliderを作ります。`T`には`Int`、`Float`、`Double`を指定でき、`value`、`min`、`max`、`step`とcallbackの値は同じ型を保ちます。値は常に`min`と`max`の範囲へclampされ、`step`が指定されている場合は`min`を基準に最も近いstepへ揃えられます。同距離のstepが2つある場合は大きい値が選ばれます。
+
+```kotlin
+lateinit var volume: RangeInput<Float>
+
+val root = div {
+    volume = rangeInput<Float>(
+        value = 0.5f,
+        min = 0f,
+        max = 1f,
+        step = 0.05f,
+        label = "Volume",
+        valueText = { value -> "${(value * 100).toInt()} percent" },
+        style = { input ->
+            UiStyle(
+                width = 140f.px,
+                height = 24f.px,
+                backgroundColor = if (input.focused) {
+                    0xFF303840.toInt()
+                } else {
+                    0xFF202428.toInt()
+                },
+            )
+        },
+        onInput = { value -> previewVolume(value) },
+        onChange = { value -> saveVolume(value) },
+    )
+}
+```
+
+型引数は`rangeInput<Int>()`のように明示できるほか、`rangeInput(value = 3, min = 0, max = 10)`のように数値引数から推論されます。型も数値引数も指定しない`rangeInput()`は後方互換のため`RangeInput<Double>`になります。明示的な型tokenが必要な箇所では`rangeInput(RangeNumberTypes.INT, ...)`も使用できます。
+
+`value`を省略または`null`にすると、`min`と`max`の中間をstepへ揃えた値で初期化されます。各型のデフォルトは数値として`min = 0`、`max = 100`、`step = 1`です。`step = null`はstep整列を無効にし、keyboardでは範囲の1/100ずつ変化します。ただし`Int`ではpointer・keyboardとも結果は最も近い整数になり、keyboardの最小変化量は1です。`min`、`max`、`step`、`value`へのプログラムからの代入は値を再正規化しますが、callbackを呼びません。`Float` / `Double`の非有限値、`min > max`、0以下のstepは拒否されます。
+
+trackのclickとdrag中は、step整列後の値が実際に変わるたびに`onInput`を呼び、mouse releaseまたはfocus喪失時に`onChange`を一度呼びます。keyboardの各操作は単独で確定され、変更時に`onInput`と`onChange`を呼びます。左右または上下矢印で1 step、Page Up/Downで10 steps、Home/Endで最小／最大の許容値へ移動します。wheelはsliderでは消費せず、通常のscroll containerへ配送されます。
+
+`orientation = RangeOrientation.VERTICAL`では最小値が下、最大値が上になります。デフォルトのcontent sizeはhorizontalで`100 × 20`、verticalで`20 × 100`です。orientation変更後は`relayout()`が必要ですが、値や範囲の変更では不要です。track、active track、thumb、focus ringの色はそれぞれ`trackColor`、`activeTrackColor`、`thumbColor`、`focusColor`から変更できます。`RangeInput`はfocusとTab順へ参加しますが、platform text input / IMEは有効化しません。
+
 ### Color input
 
 `colorInput()`はHTMLの`input type="color"`に対応する`ColorInput`を作ります。値はMine2DEngine共通の`0xAARRGGBB`整数ですが、常に不透明な`0xFFRRGGBB`へ正規化されるため、透明色を代入するとalphaは破棄されます。
@@ -471,7 +511,7 @@ val root = div {
 
 swatchをクリックするとHSV picker overlayが開きます。saturation/value領域またはhue stripのdrag中は`onInput`を呼び、編集したpickerの確定または外側clickによる終了時に`onChange`を一度呼びます。プログラムからの`value`代入ではどちらも呼びません。EnterまたはSpaceで開く／確定、Escapeでpickerを開いた時点の色へ復元、矢印keyでsaturation/value、Page Up/Downでhueを調整します。Shiftを押すとkeyboard操作のstepが大きくなります。
 
-デフォルトの`width:auto`と`height:auto`のcontent sizeはGUI座標で`36 × 20`で、このintrinsic metrics自体はfontに依存しません。ただしinline formatting contextのline boxには親のfontが必要になる場合があります。`ColorInput`は`TextInput`と同じfocus・Tab順へ参加しますが、platform text input / IMEは有効化しません。どちらもデフォルトtagは`input`なので、異なるstylesheet ruleが必要な場合はclassまたはIDを指定してください。
+デフォルトの`width:auto`と`height:auto`のcontent sizeはGUI座標で`36 × 20`で、このintrinsic metrics自体はfontに依存しません。ただしinline formatting contextのline boxには親のfontが必要になる場合があります。`ColorInput`はほかのinput controlと同じfocus・Tab順へ参加しますが、platform text input / IMEは有効化しません。すべてのinput controlはデフォルトtagが`input`なので、型ごとに異なるstylesheet ruleが必要な場合はclassまたはIDを指定してください。
 
 ### 結果、描画、入力
 
