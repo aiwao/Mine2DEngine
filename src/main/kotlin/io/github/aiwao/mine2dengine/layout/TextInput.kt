@@ -36,6 +36,9 @@ class TextInput(
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
 ) {
+    /** Whether reconciliation treats [value] as controlled by the current render. */
+    internal var valueControlled: Boolean = false
+
     private val editor = TextInputEditor(sanitizeTextInput(value), maxLength)
     private var valueAtFocus: String = editor.value
     private var changedByUserSinceFocus: Boolean = false
@@ -267,7 +270,7 @@ private fun Int.toCodePointBoundary(value: String): Int {
 
 /** Adds a single-line text input to this container. */
 fun UiContainer.input(
-    value: String = "",
+    value: String? = null,
     placeholder: String = "",
     maxLength: Int = Int.MAX_VALUE,
     size: Int = 20,
@@ -285,9 +288,10 @@ fun UiContainer.input(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: String = "",
 ): TextInput = add(
     TextInput(
-        value = value,
+        value = value ?: defaultValue,
         placeholder = placeholder,
         maxLength = maxLength,
         size = size,
@@ -306,11 +310,11 @@ fun UiContainer.input(
         className = className,
         id = id,
     ),
-)
+).also { it.valueControlled = value != null }
 
 /** Adds a dynamically styled single-line text input to this container. */
 fun UiContainer.input(
-    value: String = "",
+    value: String? = null,
     placeholder: String = "",
     maxLength: Int = Int.MAX_VALUE,
     size: Int = 20,
@@ -328,8 +332,10 @@ fun UiContainer.input(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: String = "",
 ): TextInput = input(
     value = value,
+    defaultValue = defaultValue,
     placeholder = placeholder,
     maxLength = maxLength,
     size = size,
@@ -346,11 +352,13 @@ fun UiContainer.input(
     tag = tag,
     className = className,
     id = id,
-).also { element -> element.setStyleProvider { style(element) } }
+).also { element ->
+    element.setStyleProvider { current -> style(current as TextInput) }
+}
 
 /** Creates a single-line text input as the root of a UI tree. */
 fun input(
-    value: String = "",
+    value: String? = null,
     placeholder: String = "",
     maxLength: Int = Int.MAX_VALUE,
     size: Int = 20,
@@ -363,8 +371,9 @@ fun input(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: String = "",
 ): TextInput = TextInput(
-    value = value,
+    value = value ?: defaultValue,
     placeholder = placeholder,
     maxLength = maxLength,
     size = size,
@@ -377,4 +386,4 @@ fun input(
     tag = tag,
     className = className,
     id = id,
-)
+).also { it.valueControlled = value != null }

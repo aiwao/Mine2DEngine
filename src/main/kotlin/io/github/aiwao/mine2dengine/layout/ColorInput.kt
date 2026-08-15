@@ -34,6 +34,9 @@ class ColorInput(
     className = className,
     id = id,
 ) {
+    /** Whether reconciliation synchronizes [value] from each render. */
+    internal var valueControlled: Boolean = false
+
     private var storedValue: Int = value.toOpaqueColor()
     private var valueAtCommit: Int = storedValue
     private var valueAtPickerOpen: Int = storedValue
@@ -207,7 +210,7 @@ private fun Float.normalizedHue(): Float {
 
 /** Adds an opaque RGB color input to this container. */
 fun UiContainer.colorInput(
-    value: Int = 0xFF000000.toInt(),
+    value: Int? = null,
     label: String = "Color input",
     style: UiStyle = UiStyle(),
     onInput: ((Int) -> Unit)? = null,
@@ -222,9 +225,10 @@ fun UiContainer.colorInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: Int = 0xFF000000.toInt(),
 ): ColorInput = add(
     ColorInput(
-        value = value,
+        value = value ?: defaultValue,
         label = label,
         style = style,
         onInput = onInput,
@@ -240,11 +244,11 @@ fun UiContainer.colorInput(
         className = className,
         id = id,
     ),
-)
+).also { it.valueControlled = value != null }
 
 /** Adds a dynamically styled opaque RGB color input to this container. */
 fun UiContainer.colorInput(
-    value: Int = 0xFF000000.toInt(),
+    value: Int? = null,
     label: String = "Color input",
     style: (ColorInput) -> UiStyle,
     onInput: ((Int) -> Unit)? = null,
@@ -259,8 +263,10 @@ fun UiContainer.colorInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: Int = 0xFF000000.toInt(),
 ): ColorInput = colorInput(
     value = value,
+    defaultValue = defaultValue,
     label = label,
     onInput = onInput,
     onChange = onChange,
@@ -274,11 +280,13 @@ fun UiContainer.colorInput(
     tag = tag,
     className = className,
     id = id,
-).also { element -> element.setStyleProvider { style(element) } }
+).also { element ->
+    element.setStyleProvider { current -> style(current as ColorInput) }
+}
 
 /** Creates an opaque RGB color input as the root of a UI tree. */
 fun colorInput(
-    value: Int = 0xFF000000.toInt(),
+    value: Int? = null,
     label: String = "Color input",
     style: UiStyle = UiStyle(),
     onInput: ((Int) -> Unit)? = null,
@@ -288,8 +296,9 @@ fun colorInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: Int = 0xFF000000.toInt(),
 ): ColorInput = ColorInput(
-    value = value,
+    value = value ?: defaultValue,
     label = label,
     style = style,
     onInput = onInput,
@@ -299,4 +308,4 @@ fun colorInput(
     tag = tag,
     className = className,
     id = id,
-)
+).also { it.valueControlled = value != null }
