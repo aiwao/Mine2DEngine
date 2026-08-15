@@ -97,6 +97,8 @@ private fun calculateLayout(
     textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
 ): UiLayout {
     val sheets = styleSheets.toList()
+    validateUniqueKeys(root)
+    val componentRuntime = UiComponentRuntime(root)
 
     fun calculateSnapshot(
         currentViewport: UiRect,
@@ -104,7 +106,7 @@ private fun calculateLayout(
     ): UiLayoutSnapshot {
         val displayStates = mutableListOf<UiDisplayState>()
         val boxTree = CssBoxTreeBuilder(
-            root = root,
+            root = componentRuntime.committedRoot,
             styleSheets = sheets,
             displayStates = displayStates,
             evaluatedDisplays = evaluatedDisplays,
@@ -118,7 +120,13 @@ private fun calculateLayout(
     }
 
     val snapshot = calculateSnapshot(viewport, emptyMap())
-    return UiLayout(snapshot, viewport, ::calculateSnapshot, textMeasurer)
+    return UiLayout(
+        snapshot,
+        viewport,
+        ::calculateSnapshot,
+        textMeasurer,
+        componentRuntime,
+    ).also(componentRuntime::attach)
 }
 
 private fun CssFragment.toLayoutNode(): UiLayoutNode {

@@ -50,6 +50,9 @@ class RangeInput<T : Number>(
     className = className,
     id = id,
 ) {
+    /** Whether reconciliation synchronizes [value] from each render. */
+    internal var valueControlled: Boolean = false
+
     private val model = RangeInputModel(numberType, value, min, max, step)
     private var valueAtCommit: T = model.value
     private var changedByUserSinceCommit: Boolean = false
@@ -194,6 +197,55 @@ class RangeInput<T : Number>(
         userEditActive = false
     }
 
+    internal fun patchConfigurationFrom(
+        next: RangeInput<*>,
+        undo: MutableList<() -> Unit>,
+        afterCommit: MutableList<() -> Unit>,
+    ) {
+        check(numberType === next.numberType) { "Range input number type changed during reconciliation" }
+        @Suppress("UNCHECKED_CAST")
+        next as RangeInput<T>
+        val oldValue = value
+        val oldMin = min
+        val oldMax = max
+        val oldStep = step
+        val oldValueControlled = valueControlled
+        val oldOrientation = orientation
+        val oldLabel = label
+        val oldValueText = valueText
+        val oldOnInput = onInput
+        val oldOnChange = onChange
+        val oldOnFocus = onFocus
+        val oldOnBlur = onBlur
+        val configurationChanged = oldMin != next.min || oldMax != next.max || oldStep != next.step
+        undo += {
+            orientation = oldOrientation
+            label = oldLabel
+            valueText = oldValueText
+            onInput = oldOnInput
+            onChange = oldOnChange
+            onFocus = oldOnFocus
+            onBlur = oldOnBlur
+            if (configurationChanged) {
+                model.setConfiguration(oldMin, oldMax, oldStep)
+                value = oldValue
+            }
+            valueControlled = oldValueControlled
+        }
+        orientation = next.orientation
+        label = next.label
+        valueText = next.valueText
+        onInput = next.onInput
+        onChange = next.onChange
+        onFocus = next.onFocus
+        onBlur = next.onBlur
+        if (configurationChanged) model.setConfiguration(next.min, next.max, next.step)
+        if (next.valueControlled && oldValue != next.value) {
+            afterCommit += { value = next.value }
+        }
+        valueControlled = next.valueControlled
+    }
+
     companion object {
         const val DEFAULT_LENGTH: Float = 100f
         const val DEFAULT_THICKNESS: Float = 20f
@@ -248,6 +300,14 @@ internal class RangeInputModel<T : Number>(
         value = numberType.sanitize(value, min, max, step)
     }
 
+    fun setConfiguration(min: T, max: T, step: T?) {
+        numberType.validateConfiguration(min, max, step)
+        this.min = min
+        this.max = max
+        this.step = step
+        value = numberType.sanitize(value, min, max, step)
+    }
+
     fun increment(steps: Int): Boolean = setSanitized(
         numberType.increment(value, steps, min, max, step),
     )
@@ -288,10 +348,11 @@ fun <T : Number> UiContainer.rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: T? = null,
 ): RangeInput<T> = add(
     RangeInput(
         numberType = numberType,
-        value = value,
+        value = value ?: defaultValue,
         min = min,
         max = max,
         step = step,
@@ -312,7 +373,7 @@ fun <T : Number> UiContainer.rangeInput(
         className = className,
         id = id,
     ),
-)
+).also { it.valueControlled = value != null }
 
 /** Adds a typed numeric range input selected by its reified number type. */
 inline fun <reified T : Number> UiContainer.rangeInput(
@@ -336,6 +397,7 @@ inline fun <reified T : Number> UiContainer.rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: T? = null,
 ): RangeInput<T> = rangeInput(
     numberType = rangeNumberType<T>(),
     value = value,
@@ -358,6 +420,7 @@ inline fun <reified T : Number> UiContainer.rangeInput(
     tag = tag,
     className = className,
     id = id,
+    defaultValue = defaultValue,
 )
 
 /** Adds a Double range input when no number type is specified. */
@@ -382,6 +445,7 @@ fun UiContainer.rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: Double? = null,
 ): RangeInput<Double> = rangeInput(
     numberType = RangeNumberTypes.DOUBLE,
     value = value,
@@ -404,6 +468,7 @@ fun UiContainer.rangeInput(
     tag = tag,
     className = className,
     id = id,
+    defaultValue = defaultValue,
 )
 
 /** Adds a dynamically styled typed range input using an explicit numeric strategy. */
@@ -429,6 +494,7 @@ fun <T : Number> UiContainer.rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: T? = null,
 ): RangeInput<T> = rangeInput(
     numberType = numberType,
     value = value,
@@ -450,7 +516,13 @@ fun <T : Number> UiContainer.rangeInput(
     tag = tag,
     className = className,
     id = id,
-).also { element -> element.setStyleProvider { style(element) } }
+    defaultValue = defaultValue,
+).also { element ->
+    element.setStyleProvider { current ->
+        @Suppress("UNCHECKED_CAST")
+        style(current as RangeInput<T>)
+    }
+}
 
 /** Adds a dynamically styled typed range input selected by its reified number type. */
 inline fun <reified T : Number> UiContainer.rangeInput(
@@ -474,6 +546,7 @@ inline fun <reified T : Number> UiContainer.rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: T? = null,
 ): RangeInput<T> = rangeInput(
     numberType = rangeNumberType<T>(),
     value = value,
@@ -496,6 +569,7 @@ inline fun <reified T : Number> UiContainer.rangeInput(
     tag = tag,
     className = className,
     id = id,
+    defaultValue = defaultValue,
 )
 
 /** Adds a dynamically styled Double range input when no number type is specified. */
@@ -520,6 +594,7 @@ fun UiContainer.rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: Double? = null,
 ): RangeInput<Double> = rangeInput(
     numberType = RangeNumberTypes.DOUBLE,
     value = value,
@@ -542,6 +617,7 @@ fun UiContainer.rangeInput(
     tag = tag,
     className = className,
     id = id,
+    defaultValue = defaultValue,
 )
 
 /** Creates a typed numeric range input root using an explicit numeric strategy. */
@@ -562,9 +638,10 @@ fun <T : Number> rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: T? = null,
 ): RangeInput<T> = RangeInput(
     numberType = numberType,
-    value = value,
+    value = value ?: defaultValue,
     min = min,
     max = max,
     step = step,
@@ -579,7 +656,7 @@ fun <T : Number> rangeInput(
     tag = tag,
     className = className,
     id = id,
-)
+).also { it.valueControlled = value != null }
 
 /** Creates a typed numeric range input root selected by its reified number type. */
 inline fun <reified T : Number> rangeInput(
@@ -598,6 +675,7 @@ inline fun <reified T : Number> rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: T? = null,
 ): RangeInput<T> = rangeInput(
     numberType = rangeNumberType<T>(),
     value = value,
@@ -615,6 +693,7 @@ inline fun <reified T : Number> rangeInput(
     tag = tag,
     className = className,
     id = id,
+    defaultValue = defaultValue,
 )
 
 /** Creates a Double range input root when no number type is specified. */
@@ -634,6 +713,7 @@ fun rangeInput(
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
+    defaultValue: Double? = null,
 ): RangeInput<Double> = rangeInput(
     numberType = RangeNumberTypes.DOUBLE,
     value = value,
@@ -651,4 +731,5 @@ fun rangeInput(
     tag = tag,
     className = className,
     id = id,
+    defaultValue = defaultValue,
 )

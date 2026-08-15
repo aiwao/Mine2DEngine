@@ -14,6 +14,13 @@ sealed class UiElement(
     open var onMouseOver: (() -> Unit)? = null,
     open var onMouseOut: (() -> Unit)? = null,
 ) {
+    /**
+     * Optional identity used while reconciling children produced by a component.
+     *
+     * Keys need only be unique among siblings. Unkeyed elements are matched by position.
+     */
+    var key: Any? = null
+
     /** The tag name for this element. Names are matched exactly and may contain whitespace. */
     var tag: String = tag
         private set
@@ -25,7 +32,7 @@ sealed class UiElement(
     /** The class names for this element. Names are matched exactly and may contain whitespace. */
     val className: Set<String> = className.toSet()
 
-    private var styleProvider: () -> UiStyle = { style }
+    private var styleProvider: (UiElement) -> UiStyle = { style }
 
     /**
      * The element's current style.
@@ -33,19 +40,34 @@ sealed class UiElement(
      * Assigning a value replaces a dynamic style supplied when this element was created.
      */
     var style: UiStyle
-        get() = styleProvider()
+        get() = styleProvider(this)
         set(value) {
             styleProvider = { value }
         }
 
-    internal fun setStyleProvider(provider: () -> UiStyle) {
+    internal fun setStyleProvider(provider: (UiElement) -> UiStyle) {
         styleProvider = provider
     }
 
-    internal fun addStyleOverrides(provider: () -> UiStyle) {
-        val baseStyleProvider = styleProvider
-        styleProvider = { baseStyleProvider().withOverrides(provider()) }
+    internal fun copyStyleProviderFrom(element: UiElement) {
+        styleProvider = element.styleProvider
     }
+
+    internal fun styleProviderSnapshot(): (UiElement) -> UiStyle = styleProvider
+
+    internal fun restoreStyleProvider(provider: (UiElement) -> UiStyle) {
+        styleProvider = provider
+    }
+
+    internal fun addStyleOverrides(provider: (UiElement) -> UiStyle) {
+        val baseStyleProvider = styleProvider
+        styleProvider = { element ->
+            baseStyleProvider(element).withOverrides(provider(element))
+        }
+    }
+
+    /** The component mount whose host root this element represents, if any. */
+    internal var componentInstance: ComponentInstance? = null
 
     /** Null outside a component root; an empty list still marks a component style boundary. */
     internal var componentStyleSheets: List<StyleSheet>? = null
@@ -96,11 +118,12 @@ sealed class UiContainer(
      * Creates and adds one instance of [component] with call-site style and event overrides.
      *
      * Specified [style] values override the component root's style. Null callbacks preserve the
-     * callbacks created by the component factory. [content] is built once by the component factory
-     * at the position it chooses in the created tree.
+     * callbacks created by the component renderer. [content] is built at most once per render at
+     * the position chosen by the component.
      */
     fun <T : UiElement> component(
         component: UiComponent<T>,
+        key: Any? = null,
         style: UiStyle = UiStyle(),
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -110,6 +133,7 @@ sealed class UiContainer(
         content: UiContent = {},
     ): T = mountComponent(
         component = component,
+        key = key,
         resolveStyle = { style },
         onClick = onClick,
         onMouseMove = onMouseMove,
@@ -123,11 +147,12 @@ sealed class UiContainer(
      * Creates an instance of [component] with style resolved from its root's current state.
      *
      * Specified style values override the component root's style. Null callbacks preserve the
-     * callbacks created by the component factory. [content] is built once by the component factory
-     * at the position it chooses in the created tree.
+     * callbacks created by the component renderer. [content] is built at most once per render at
+     * the position chosen by the component.
      */
     fun <T : UiElement> component(
         component: UiComponent<T>,
+        key: Any? = null,
         style: (T) -> UiStyle,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -137,6 +162,7 @@ sealed class UiContainer(
         content: UiContent = {},
     ): T = mountComponent(
         component = component,
+        key = key,
         resolveStyle = style,
         onClick = onClick,
         onMouseMove = onMouseMove,
@@ -148,6 +174,7 @@ sealed class UiContainer(
 
     private fun <T : UiElement> mountComponent(
         component: UiComponent<T>,
+        key: Any?,
         resolveStyle: (T) -> UiStyle,
         onClick: ((MouseButtonEvent) -> Unit)?,
         onMouseMove: ((x: Double, y: Double) -> Unit)?,
@@ -156,15 +183,11 @@ sealed class UiContainer(
         onMouseOut: (() -> Unit)?,
         content: UiContent,
     ): T {
-        var contentBuilt = false
-        val singleUseContent: UiContent = {
-            check(!contentBuilt) { "Component content may only be built once" }
-            contentBuilt = true
-            content(this)
-        }
-        return component.create(singleUseContent).also { root ->
-            root.componentStyleSheets = component.styleSheets.toList()
-            root.addStyleOverrides { resolveStyle(root) }
+        return component.mount(key, content).also { root ->
+            root.addStyleOverrides { element ->
+                @Suppress("UNCHECKED_CAST")
+                resolveStyle(element as T)
+            }
             onClick?.let { root.onClick = it }
             onMouseMove?.let { root.onMouseMove = it }
             onDrag?.let { root.onDrag = it }
@@ -683,5 +706,8 @@ fun div(
 )
 
 private fun <T : UiElement> T.withStyleProvider(provider: (T) -> UiStyle): T = apply {
-    setStyleProvider { provider(this) }
+    setStyleProvider { element ->
+        @Suppress("UNCHECKED_CAST")
+        provider(element as T)
+    }
 }

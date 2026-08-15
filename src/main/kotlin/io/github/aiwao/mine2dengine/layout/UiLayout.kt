@@ -352,6 +352,7 @@ class UiLayout internal constructor(
         Map<UiDisplayKey, Boolean>,
     ) -> UiLayoutSnapshot,
     private val textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
+    private val componentRuntime: UiComponentRuntime,
 ) : Renderable, GuiEventListener, NarratableEntry {
     /** The current initial containing block used by CSS layout. */
     var viewport: UiRect = viewport
@@ -415,6 +416,8 @@ class UiLayout internal constructor(
      * for elements that still generate boxes and cleared for elements removed by the new layout.
      */
     fun updateViewport(viewport: UiRect) {
+        componentRuntime.checkNotRendering("updateViewport")
+        componentRuntime.flushUpdates()
         val previous = this.viewport
         if (viewport == previous) return
 
@@ -443,14 +446,27 @@ class UiLayout internal constructor(
      * rendering and pointer operations.
      */
     fun relayout() {
+        componentRuntime.checkNotRendering("relayout")
+        if (componentRuntime.flushUpdates()) return
+        val snapshot = snapshotCalculator(viewport, emptyMap())
+        applySnapshot(snapshot)
+    }
+
+    /** Commits all pending state updates and performs at most one CSS layout calculation. */
+    fun flushUpdates() {
+        componentRuntime.checkNotRendering("flushUpdates")
+        componentRuntime.flushUpdates()
+    }
+
+    internal fun recalculateForStateUpdate() {
         val snapshot = snapshotCalculator(viewport, emptyMap())
         applySnapshot(snapshot)
     }
 
     /** Gives keyboard focus to [element]. Passing null clears the current focus. */
-    fun focus(element: UiElement?): Boolean {
+    fun focus(element: UiElement?): Boolean = dispatchEvent {
         refreshDisplay()
-        return focusInternal(element)
+        focusInternal(element)
     }
 
     /** Clears keyboard focus and commits the focused input's current change, if any. */
@@ -536,7 +552,7 @@ class UiLayout internal constructor(
         render(Mine2DEngine(graphics))
     }
 
-    override fun setFocused(focused: Boolean) {
+    override fun setFocused(focused: Boolean): Unit = dispatchEvent {
         if (!focused) {
             val hadTextFocus = (focusedElement as? InputControl)?.usesPlatformTextInput == true
             val wasScreenFocused = screenFocused
@@ -659,7 +675,7 @@ class UiLayout internal constructor(
     fun mouseClick(event: MouseButtonEvent): Boolean = mouseClick(event, doubleClick = false)
 
     /** Dispatches a pointer press, including the standard text-input focus and selection behavior. */
-    fun mouseClick(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
+    fun mouseClick(event: MouseButtonEvent, doubleClick: Boolean): Boolean = dispatchEvent {
         refreshDisplay()
         refreshFocusValidity()
         val x = event.x().toFloat()
@@ -741,7 +757,7 @@ class UiLayout internal constructor(
         if (!element.disabled) {
             element.onClick?.invoke(event)
         }
-        return true
+        true
     }
 
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean =
@@ -754,7 +770,7 @@ class UiLayout internal constructor(
      * button information from [mouseClick], even when the pointer is outside its bounds. Returns
      * true when at least one callback was invoked.
      */
-    fun mouseMove(x: Double, y: Double): Boolean {
+    fun mouseMove(x: Double, y: Double): Boolean = dispatchEvent {
         refreshDisplay()
         refreshFocusValidity()
         lastPointerX = x
@@ -854,7 +870,7 @@ class UiLayout internal constructor(
             }
         }
 
-        return handled
+        handled
     }
 
     override fun mouseMoved(x: Double, y: Double) {
@@ -873,7 +889,7 @@ class UiLayout internal constructor(
         y: Double,
         horizontalAmount: Double,
         verticalAmount: Double,
-    ): Boolean {
+    ): Boolean = dispatchEvent {
         refreshDisplay()
         if (!horizontalAmount.isFinite() || !verticalAmount.isFinite()) return false
         val pointerX = x.toFloat()
@@ -902,7 +918,7 @@ class UiLayout internal constructor(
     }
 
     /** Stops the current drag. Returns true when an element was dragging. */
-    fun mouseRelease(): Boolean {
+    fun mouseRelease(): Boolean = dispatchEvent {
         refreshDisplay()
         val wasDraggingPicker = colorPickerDragTarget != null
         colorPickerDragTarget = null
@@ -920,13 +936,13 @@ class UiLayout internal constructor(
             element.dragging = false
         }
         dragButtonInfo = null
-        return true
+        true
     }
 
     override fun mouseReleased(event: MouseButtonEvent): Boolean = mouseRelease()
 
     /** Dispatches a key press to the focused input control. */
-    override fun keyPressed(event: KeyEvent): Boolean {
+    override fun keyPressed(event: KeyEvent): Boolean = dispatchEvent {
         refreshDisplay()
         refreshFocusValidity()
 
@@ -1044,18 +1060,18 @@ class UiLayout internal constructor(
         }
 
     /** Inserts a committed Unicode code point into the focused text input. */
-    override fun charTyped(event: CharacterEvent): Boolean {
+    override fun charTyped(event: CharacterEvent): Boolean = dispatchEvent {
         refreshDisplay()
         refreshFocusValidity()
         val input = focusedElement as? TextInput ?: return false
         if (!event.isAllowedChatCharacter()) return false
         input.clearPreedit()
         if (!input.readOnly) input.insertUserText(event.codepointAsString())
-        return true
+        true
     }
 
     /** Updates the transient IME composition without changing the input's committed value. */
-    override fun preeditUpdated(event: PreeditEvent?): Boolean {
+    override fun preeditUpdated(event: PreeditEvent?): Boolean = dispatchEvent {
         refreshDisplay()
         refreshFocusValidity()
         val input = focusedElement as? TextInput ?: return false
@@ -1064,7 +1080,7 @@ class UiLayout internal constructor(
         } else {
             input.updatePreedit(event.fullText(), event.caretPosition())
         }
-        return true
+        true
     }
 
     fun nodeOf(element: UiElement): UiLayoutNode? {
@@ -1488,6 +1504,7 @@ class UiLayout internal constructor(
     }
 
     private fun refreshDisplay() {
+        componentRuntime.flushUpdates()
         val evaluatedDisplays = mutableMapOf<UiDisplayKey, Boolean>()
         var changed = false
         displayStates.forEach { state ->
@@ -1499,6 +1516,15 @@ class UiLayout internal constructor(
 
         val snapshot = snapshotCalculator(viewport, evaluatedDisplays)
         applySnapshot(snapshot)
+    }
+
+    private inline fun <T> dispatchEvent(block: () -> T): T {
+        componentRuntime.beginEvent()
+        return try {
+            block()
+        } finally {
+            componentRuntime.endEvent()
+        }
     }
 
     private fun applySnapshot(snapshot: UiLayoutSnapshot) {
