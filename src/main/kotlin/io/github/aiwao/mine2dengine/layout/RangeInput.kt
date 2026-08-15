@@ -30,6 +30,7 @@ class RangeInput<T : Number>(
     onChange: ((T) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
     onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -41,6 +42,7 @@ class RangeInput<T : Number>(
     id: String = "",
 ) : InputControl(
     style = style,
+    tabIndex = tabIndex,
     onFocus = onFocus,
     onBlur = onBlur,
     onKeyPressed = onKeyPressed,
@@ -218,8 +220,6 @@ class RangeInput<T : Number>(
         val oldValueText = valueText
         val oldOnInput = onInput
         val oldOnChange = onChange
-        val oldOnFocus = onFocus
-        val oldOnBlur = onBlur
         val configurationChanged = oldMin != next.min || oldMax != next.max || oldStep != next.step
         undo += {
             orientation = oldOrientation
@@ -227,8 +227,6 @@ class RangeInput<T : Number>(
             valueText = oldValueText
             onInput = oldOnInput
             onChange = oldOnChange
-            onFocus = oldOnFocus
-            onBlur = oldOnBlur
             if (configurationChanged) {
                 model.setConfiguration(oldMin, oldMax, oldStep)
                 value = oldValue
@@ -240,8 +238,6 @@ class RangeInput<T : Number>(
         valueText = next.valueText
         onInput = next.onInput
         onChange = next.onChange
-        onFocus = next.onFocus
-        onBlur = next.onBlur
         if (configurationChanged) model.setConfiguration(next.min, next.max, next.step)
         if (next.valueControlled && oldValue != next.value) {
             afterCommit += { value = next.value }
@@ -343,6 +339,7 @@ fun <T : Number> UiContainer.rangeInput(
     onChange: ((T) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
     onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -368,6 +365,7 @@ fun <T : Number> UiContainer.rangeInput(
         onChange = onChange,
         onFocus = onFocus,
         onBlur = onBlur,
+        tabIndex = tabIndex,
         onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
@@ -394,6 +392,7 @@ inline fun <reified T : Number> UiContainer.rangeInput(
     noinline onChange: ((T) -> Unit)? = null,
     noinline onFocus: (() -> Unit)? = null,
     noinline onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
     noinline onKeyPressed: ((KeyEvent) -> Unit)? = null,
     noinline onClick: ((MouseButtonEvent) -> Unit)? = null,
     noinline onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -418,6 +417,7 @@ inline fun <reified T : Number> UiContainer.rangeInput(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    tabIndex = tabIndex,
     onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
@@ -444,6 +444,7 @@ fun UiContainer.rangeInput(
     onChange: ((Double) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
     onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -468,6 +469,7 @@ fun UiContainer.rangeInput(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    tabIndex = tabIndex,
     onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
@@ -495,6 +497,7 @@ fun <T : Number> UiContainer.rangeInput(
     onChange: ((T) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
     onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -518,6 +521,7 @@ fun <T : Number> UiContainer.rangeInput(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    tabIndex = tabIndex,
     onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
@@ -549,6 +553,7 @@ inline fun <reified T : Number> UiContainer.rangeInput(
     noinline onChange: ((T) -> Unit)? = null,
     noinline onFocus: (() -> Unit)? = null,
     noinline onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
     noinline onKeyPressed: ((KeyEvent) -> Unit)? = null,
     noinline onClick: ((MouseButtonEvent) -> Unit)? = null,
     noinline onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -573,6 +578,7 @@ inline fun <reified T : Number> UiContainer.rangeInput(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    tabIndex = tabIndex,
     onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
@@ -599,6 +605,7 @@ fun UiContainer.rangeInput(
     onChange: ((Double) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
     onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
@@ -623,6 +630,7 @@ fun UiContainer.rangeInput(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    tabIndex = tabIndex,
     onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
@@ -650,6 +658,7 @@ fun <T : Number> rangeInput(
     onChange: ((T) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
     onKeyPressed: ((KeyEvent) -> Unit)? = null,
     tag: String = "input",
     className: Set<String> = emptySet(),
@@ -669,6 +678,7 @@ fun <T : Number> rangeInput(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    tabIndex = tabIndex,
     onKeyPressed = onKeyPressed,
     tag = tag,
     className = className,
@@ -689,6 +699,7 @@ inline fun <reified T : Number> rangeInput(
     noinline onChange: ((T) -> Unit)? = null,
     noinline onFocus: (() -> Unit)? = null,
     noinline onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
     noinline onKeyPressed: ((KeyEvent) -> Unit)? = null,
     tag: String = "input",
     className: Set<String> = emptySet(),
@@ -708,6 +719,7 @@ inline fun <reified T : Number> rangeInput(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    tabIndex = tabIndex,
     onKeyPressed = onKeyPressed,
     tag = tag,
     className = className,
@@ -729,6 +741,7 @@ fun rangeInput(
     onChange: ((Double) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
     onKeyPressed: ((KeyEvent) -> Unit)? = null,
     tag: String = "input",
     className: Set<String> = emptySet(),
@@ -748,6 +761,7 @@ fun rangeInput(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    tabIndex = tabIndex,
     onKeyPressed = onKeyPressed,
     tag = tag,
     className = className,

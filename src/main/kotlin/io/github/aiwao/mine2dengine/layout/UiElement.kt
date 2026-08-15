@@ -1,5 +1,6 @@
 package io.github.aiwao.mine2dengine.layout
 
+import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 
 /** Base type for nodes in a UI tree. */
@@ -8,6 +9,10 @@ sealed class UiElement(
     className: Set<String>,
     id: String,
     style: UiStyle,
+    tabIndex: Int? = null,
+    open var onFocus: (() -> Unit)? = null,
+    open var onBlur: (() -> Unit)? = null,
+    open var onKeyPressed: ((KeyEvent) -> Unit)? = null,
     open var onClick: ((MouseButtonEvent) -> Unit)? = null,
     open var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     open var onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -72,8 +77,24 @@ sealed class UiElement(
     /** Null outside a component root; an empty list still marks a component style boundary. */
     internal var componentStyleSheets: List<StyleSheet>? = null
 
-    /** Whether this element rejects its standard interaction and click callback. */
+    /** Whether this element rejects keyboard focus, standard interaction, and click callbacks. */
     var disabled: Boolean = false
+
+    /**
+     * Keyboard focus participation. Null disables focus, -1 allows pointer/programmatic focus,
+     * and non-negative values participate in sequential focus navigation.
+     */
+    var tabIndex: Int? = tabIndex
+        set(value) {
+            require(value == null || value >= -1) {
+                "tabIndex must be null or at least -1: $value"
+            }
+            field = value
+        }
+
+    /** True while this element owns its [UiLayout]'s keyboard focus. */
+    var focused: Boolean = false
+        internal set
 
     /** Whether this element has been clicked and not yet released. */
     var dragging: Boolean = false
@@ -82,6 +103,33 @@ sealed class UiElement(
     /** Whether the pointer is currently inside this element's bounds. */
     var hovering: Boolean = false
         internal set
+
+    /** Whether focusing this element should enable the platform text-input/IME path. */
+    internal open val usesPlatformTextInput: Boolean = false
+
+    internal fun focusGained() {
+        if (focused) return
+        focused = true
+        didGainFocus()
+        onFocus?.invoke()
+    }
+
+    internal fun focusLost() {
+        if (!focused) return
+        focused = false
+        didLoseFocus()
+        onBlur?.invoke()
+    }
+
+    internal open fun didGainFocus() = Unit
+
+    internal open fun didLoseFocus() = Unit
+
+    init {
+        require(tabIndex == null || tabIndex >= -1) {
+            "tabIndex must be null or at least -1: $tabIndex"
+        }
+    }
 }
 
 /** Base type for UI elements that arrange child elements. */
@@ -91,13 +139,31 @@ sealed class UiContainer(
     id: String,
     style: UiStyle,
     children: Iterable<UiElement> = emptyList(),
+    tabIndex: Int? = null,
+    onFocus: (() -> Unit)? = null,
+    onBlur: (() -> Unit)? = null,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     override var onClick: ((MouseButtonEvent) -> Unit)? = null,
     override var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     override var onDrag: ((MouseButtonEvent) -> Unit)? = null,
     override var onMouseOver: (() -> Unit)? = null,
     override var onMouseOut: (() -> Unit)? = null,
     styleSheets: Iterable<StyleSheet> = emptyList(),
-) : UiElement(tag, className, id, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
+) : UiElement(
+    tag = tag,
+    className = className,
+    id = id,
+    style = style,
+    tabIndex = tabIndex,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
+    onClick = onClick,
+    onMouseMove = onMouseMove,
+    onDrag = onDrag,
+    onMouseOver = onMouseOver,
+    onMouseOut = onMouseOut,
+) {
     val children: MutableList<UiElement> = children.toMutableList()
 
     /**
@@ -125,6 +191,10 @@ sealed class UiContainer(
         component: UiComponent<T>,
         key: Any? = null,
         style: UiStyle = UiStyle(),
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -135,6 +205,10 @@ sealed class UiContainer(
         component = component,
         key = key,
         resolveStyle = { style },
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -154,6 +228,10 @@ sealed class UiContainer(
         component: UiComponent<T>,
         key: Any? = null,
         style: (T) -> UiStyle,
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -164,6 +242,10 @@ sealed class UiContainer(
         component = component,
         key = key,
         resolveStyle = style,
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -176,6 +258,10 @@ sealed class UiContainer(
         component: UiComponent<T>,
         key: Any?,
         resolveStyle: (T) -> UiStyle,
+        tabIndex: Int?,
+        onFocus: (() -> Unit)?,
+        onBlur: (() -> Unit)?,
+        onKeyPressed: ((KeyEvent) -> Unit)?,
         onClick: ((MouseButtonEvent) -> Unit)?,
         onMouseMove: ((x: Double, y: Double) -> Unit)?,
         onDrag: ((MouseButtonEvent) -> Unit)?,
@@ -188,6 +274,10 @@ sealed class UiContainer(
                 @Suppress("UNCHECKED_CAST")
                 resolveStyle(element as T)
             }
+            tabIndex?.let { root.tabIndex = it }
+            onFocus?.let { root.onFocus = it }
+            onBlur?.let { root.onBlur = it }
+            onKeyPressed?.let { root.onKeyPressed = it }
             onClick?.let { root.onClick = it }
             onMouseMove?.let { root.onMouseMove = it }
             onDrag?.let { root.onDrag = it }
@@ -199,6 +289,10 @@ sealed class UiContainer(
 
     fun div(
         style: UiStyle = UiStyle(),
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -212,6 +306,10 @@ sealed class UiContainer(
     ): Div = add(
         Div(
             style = style,
+            tabIndex = tabIndex,
+            onFocus = onFocus,
+            onBlur = onBlur,
+            onKeyPressed = onKeyPressed,
             onClick = onClick,
             onMouseMove = onMouseMove,
             onDrag = onDrag,
@@ -227,6 +325,10 @@ sealed class UiContainer(
     /** Creates a div with [className] as its single, unsplit class name. */
     fun div(
         style: UiStyle = UiStyle(),
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -239,6 +341,10 @@ sealed class UiContainer(
         content: Div.() -> Unit = {},
     ): Div = div(
         style = style,
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -254,6 +360,10 @@ sealed class UiContainer(
     /** Creates a div whose style is resolved from its current state when used. */
     fun div(
         style: (Div) -> UiStyle,
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -266,6 +376,10 @@ sealed class UiContainer(
         content: Div.() -> Unit = {},
     ): Div = add(
         Div(
+            tabIndex = tabIndex,
+            onFocus = onFocus,
+            onBlur = onBlur,
+            onKeyPressed = onKeyPressed,
             onClick = onClick,
             onMouseMove = onMouseMove,
             onDrag = onDrag,
@@ -281,6 +395,10 @@ sealed class UiContainer(
     /** Creates a dynamically styled div with [className] as its single, unsplit class name. */
     fun div(
         style: (Div) -> UiStyle,
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -293,6 +411,10 @@ sealed class UiContainer(
         content: Div.() -> Unit = {},
     ): Div = div(
         style = style,
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -308,6 +430,10 @@ sealed class UiContainer(
     fun p(
         text: String,
         style: UiStyle = UiStyle(),
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -318,16 +444,20 @@ sealed class UiContainer(
         id: String = "",
     ): Paragraph = add(
         Paragraph(
-            text,
-            style,
-            onClick,
-            onMouseMove,
-            onDrag,
-            onMouseOver,
-            onMouseOut,
-            tag,
-            className,
-            id,
+            text = text,
+            style = style,
+            tabIndex = tabIndex,
+            onFocus = onFocus,
+            onBlur = onBlur,
+            onKeyPressed = onKeyPressed,
+            onClick = onClick,
+            onMouseMove = onMouseMove,
+            onDrag = onDrag,
+            onMouseOver = onMouseOver,
+            onMouseOut = onMouseOut,
+            tag = tag,
+            className = className,
+            id = id,
         ),
     )
 
@@ -335,6 +465,10 @@ sealed class UiContainer(
     fun p(
         text: String,
         style: UiStyle = UiStyle(),
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -346,6 +480,10 @@ sealed class UiContainer(
     ): Paragraph = p(
         text = text,
         style = style,
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -360,6 +498,10 @@ sealed class UiContainer(
     fun p(
         text: String,
         style: (Paragraph) -> UiStyle,
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -370,7 +512,11 @@ sealed class UiContainer(
         id: String = "",
     ): Paragraph = add(
         Paragraph(
-            text,
+            text = text,
+            tabIndex = tabIndex,
+            onFocus = onFocus,
+            onBlur = onBlur,
+            onKeyPressed = onKeyPressed,
             onClick = onClick,
             onMouseMove = onMouseMove,
             onDrag = onDrag,
@@ -386,6 +532,10 @@ sealed class UiContainer(
     fun p(
         text: String,
         style: (Paragraph) -> UiStyle,
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -397,6 +547,10 @@ sealed class UiContainer(
     ): Paragraph = p(
         text = text,
         style = style,
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -410,6 +564,10 @@ sealed class UiContainer(
     fun paragraph(
         text: String,
         style: UiStyle = UiStyle(),
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -419,22 +577,30 @@ sealed class UiContainer(
         className: Set<String> = emptySet(),
         id: String = "",
     ): Paragraph = p(
-        text,
-        style,
-        onClick,
-        onMouseMove,
-        onDrag,
-        onMouseOver,
-        onMouseOut,
-        tag,
-        className,
-        id,
+        text = text,
+        style = style,
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+        tag = tag,
+        className = className,
+        id = id,
     )
 
     /** Alias of [p] with [className] as its single, unsplit class name. */
     fun paragraph(
         text: String,
         style: UiStyle = UiStyle(),
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -446,6 +612,10 @@ sealed class UiContainer(
     ): Paragraph = p(
         text = text,
         style = style,
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -460,6 +630,10 @@ sealed class UiContainer(
     fun paragraph(
         text: String,
         style: (Paragraph) -> UiStyle,
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -469,22 +643,30 @@ sealed class UiContainer(
         className: Set<String> = emptySet(),
         id: String = "",
     ): Paragraph = p(
-        text,
-        style,
-        onClick,
-        onMouseMove,
-        onDrag,
-        onMouseOver,
-        onMouseOut,
-        tag,
-        className,
-        id,
+        text = text,
+        style = style,
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
+        onClick = onClick,
+        onMouseMove = onMouseMove,
+        onDrag = onDrag,
+        onMouseOver = onMouseOver,
+        onMouseOut = onMouseOut,
+        tag = tag,
+        className = className,
+        id = id,
     )
 
     /** Dynamic-style alias of [p] with [className] as its single, unsplit class name. */
     fun paragraph(
         text: String,
         style: (Paragraph) -> UiStyle,
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -496,6 +678,10 @@ sealed class UiContainer(
     ): Paragraph = p(
         text = text,
         style = style,
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -511,6 +697,10 @@ sealed class UiContainer(
 class Div(
     style: UiStyle = UiStyle(),
     children: Iterable<UiElement> = emptyList(),
+    tabIndex: Int? = null,
+    onFocus: (() -> Unit)? = null,
+    onBlur: (() -> Unit)? = null,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -521,22 +711,30 @@ class Div(
     className: Set<String> = emptySet(),
     id: String = "",
 ) : UiContainer(
-    tag,
-    className,
-    id,
-    style,
-    children,
-    onClick,
-    onMouseMove,
-    onDrag,
-    onMouseOver,
-    onMouseOut,
-    styleSheets,
+    tag = tag,
+    className = className,
+    id = id,
+    style = style,
+    children = children,
+    tabIndex = tabIndex,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
+    onClick = onClick,
+    onMouseMove = onMouseMove,
+    onDrag = onDrag,
+    onMouseOver = onMouseOver,
+    onMouseOut = onMouseOut,
+    styleSheets = styleSheets,
 ) {
     /** Creates a div with [className] as its single, unsplit class name. */
     constructor(
         style: UiStyle = UiStyle(),
         children: Iterable<UiElement> = emptyList(),
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -549,6 +747,10 @@ class Div(
     ) : this(
         style = style,
         children = children,
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -565,6 +767,10 @@ class Div(
 class Paragraph(
     var text: String,
     style: UiStyle = UiStyle(),
+    tabIndex: Int? = null,
+    onFocus: (() -> Unit)? = null,
+    onBlur: (() -> Unit)? = null,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     override var onClick: ((MouseButtonEvent) -> Unit)? = null,
     override var onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     override var onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -573,11 +779,29 @@ class Paragraph(
     tag: String = "p",
     className: Set<String> = emptySet(),
     id: String = "",
-) : UiElement(tag, className, id, style, onClick, onMouseMove, onDrag, onMouseOver, onMouseOut) {
+) : UiElement(
+    tag = tag,
+    className = className,
+    id = id,
+    style = style,
+    tabIndex = tabIndex,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
+    onClick = onClick,
+    onMouseMove = onMouseMove,
+    onDrag = onDrag,
+    onMouseOver = onMouseOver,
+    onMouseOut = onMouseOut,
+) {
     /** Creates a paragraph with [className] as its single, unsplit class name. */
     constructor(
         text: String,
         style: UiStyle = UiStyle(),
+        tabIndex: Int? = null,
+        onFocus: (() -> Unit)? = null,
+        onBlur: (() -> Unit)? = null,
+        onKeyPressed: ((KeyEvent) -> Unit)? = null,
         onClick: ((MouseButtonEvent) -> Unit)? = null,
         onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
         onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -589,6 +813,10 @@ class Paragraph(
     ) : this(
         text = text,
         style = style,
+        tabIndex = tabIndex,
+        onFocus = onFocus,
+        onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -603,6 +831,10 @@ class Paragraph(
 /** Creates the root of a UI tree. */
 fun div(
     style: UiStyle = UiStyle(),
+    tabIndex: Int? = null,
+    onFocus: (() -> Unit)? = null,
+    onBlur: (() -> Unit)? = null,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -615,6 +847,10 @@ fun div(
     content: Div.() -> Unit = {},
 ): Div = Div(
     style = style,
+    tabIndex = tabIndex,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
     onDrag = onDrag,
@@ -629,6 +865,10 @@ fun div(
 /** Creates the root of a UI tree with [className] as its single, unsplit class name. */
 fun div(
     style: UiStyle = UiStyle(),
+    tabIndex: Int? = null,
+    onFocus: (() -> Unit)? = null,
+    onBlur: (() -> Unit)? = null,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -641,6 +881,10 @@ fun div(
     content: Div.() -> Unit = {},
 ): Div = div(
     style = style,
+    tabIndex = tabIndex,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
     onDrag = onDrag,
@@ -656,6 +900,10 @@ fun div(
 /** Creates the root of a UI tree with a style resolved from the div's current state. */
 fun div(
     style: (Div) -> UiStyle,
+    tabIndex: Int? = null,
+    onFocus: (() -> Unit)? = null,
+    onBlur: (() -> Unit)? = null,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -667,6 +915,10 @@ fun div(
     id: String = "",
     content: Div.() -> Unit = {},
 ): Div = Div(
+    tabIndex = tabIndex,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
     onDrag = onDrag,
@@ -681,6 +933,10 @@ fun div(
 /** Creates a dynamically styled root with [className] as its single, unsplit class name. */
 fun div(
     style: (Div) -> UiStyle,
+    tabIndex: Int? = null,
+    onFocus: (() -> Unit)? = null,
+    onBlur: (() -> Unit)? = null,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -693,6 +949,10 @@ fun div(
     content: Div.() -> Unit = {},
 ): Div = div(
     style = style,
+    tabIndex = tabIndex,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
     onDrag = onDrag,

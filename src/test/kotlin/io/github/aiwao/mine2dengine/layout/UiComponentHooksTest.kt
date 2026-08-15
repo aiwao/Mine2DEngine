@@ -235,12 +235,15 @@ class UiComponentHooksTest {
         val component = uiComponent {
             val (version, setter) = useState { 0 }
             setVersion = setter
-            input(onKeyPressed = { observedVersions += version })
+            div(
+                tabIndex = 0,
+                onKeyPressed = { observedVersions += version },
+            )
         }
         val root = div { component(component) }
-        val mountedInput = root.children.single() as TextInput
+        val mountedElement = root.children.single() as Div
         val result = layout(root)
-        result.focus(mountedInput)
+        result.focus(mountedElement)
 
         result.keyPressed(KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0))
         setVersion(1)
@@ -248,7 +251,32 @@ class UiComponentHooksTest {
         result.keyPressed(KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0))
 
         assertEquals(listOf(0, 1), observedVersions)
-        assertSame(mountedInput, root.children.single())
+        assertSame(mountedElement, root.children.single())
+    }
+
+    @Test
+    fun `removing tab index during reconciliation clears element focus`() {
+        lateinit var setFocusable: StateSetter<Boolean>
+        var blurs = 0
+        val component = uiComponent {
+            val (focusable, setter) = useState { true }
+            setFocusable = setter
+            div(
+                tabIndex = if (focusable) 0 else null,
+                onBlur = { blurs += 1 },
+            )
+        }
+        val root = div { component(component) }
+        val mountedElement = root.children.single() as Div
+        val result = layout(root)
+        result.focus(mountedElement)
+
+        setFocusable(false)
+        result.flushUpdates()
+
+        assertEquals(null, result.focusedElement)
+        assertEquals(1, blurs)
+        assertSame(mountedElement, root.children.single())
     }
 
     @Test

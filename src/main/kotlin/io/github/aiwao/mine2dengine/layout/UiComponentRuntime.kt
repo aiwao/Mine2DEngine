@@ -249,9 +249,6 @@ private class ReconcileTransaction(
         }
 
         patchCommon(previous, next)
-        if (previous is InputControl && next is InputControl) {
-            patchInputControl(previous, next)
-        }
         when {
             previous is Paragraph && next is Paragraph -> patchParagraph(previous, next)
             previous is TextInput && next is TextInput -> patchTextInput(previous, next)
@@ -306,6 +303,10 @@ private class ReconcileTransaction(
 
     private fun patchCommon(previous: UiElement, next: UiElement) {
         val oldStyle = previous.styleProviderSnapshot()
+        val oldTabIndex = previous.tabIndex
+        val oldOnFocus = previous.onFocus
+        val oldOnBlur = previous.onBlur
+        val oldOnKeyPressed = previous.onKeyPressed
         val oldOnClick = previous.onClick
         val oldOnMouseMove = previous.onMouseMove
         val oldOnDrag = previous.onDrag
@@ -315,6 +316,10 @@ private class ReconcileTransaction(
         val oldSheets = previous.componentStyleSheets
         undo += {
             previous.restoreStyleProvider(oldStyle)
+            previous.tabIndex = oldTabIndex
+            previous.onFocus = oldOnFocus
+            previous.onBlur = oldOnBlur
+            previous.onKeyPressed = oldOnKeyPressed
             previous.onClick = oldOnClick
             previous.onMouseMove = oldOnMouseMove
             previous.onDrag = oldOnDrag
@@ -324,6 +329,10 @@ private class ReconcileTransaction(
             previous.componentStyleSheets = oldSheets
         }
         previous.copyStyleProviderFrom(next)
+        previous.tabIndex = next.tabIndex
+        previous.onFocus = next.onFocus
+        previous.onBlur = next.onBlur
+        previous.onKeyPressed = next.onKeyPressed
         previous.onClick = next.onClick
         previous.onMouseMove = next.onMouseMove
         previous.onDrag = next.onDrag
@@ -331,12 +340,6 @@ private class ReconcileTransaction(
         previous.onMouseOut = next.onMouseOut
         previous.disabled = next.disabled
         previous.componentStyleSheets = next.componentStyleSheets
-    }
-
-    private fun patchInputControl(previous: InputControl, next: InputControl) {
-        val oldOnKeyPressed = previous.onKeyPressed
-        undo += { previous.onKeyPressed = oldOnKeyPressed }
-        previous.onKeyPressed = next.onKeyPressed
     }
 
     private fun patchParagraph(previous: Paragraph, next: Paragraph) {
@@ -354,8 +357,6 @@ private class ReconcileTransaction(
         val oldReadOnly = previous.readOnly
         val oldOnInput = previous.onInput
         val oldOnChange = previous.onChange
-        val oldOnFocus = previous.onFocus
-        val oldOnBlur = previous.onBlur
         undo += {
             previous.placeholder = oldPlaceholder
             if (previous.maxLength != oldMaxLength) previous.maxLength = oldMaxLength
@@ -363,8 +364,6 @@ private class ReconcileTransaction(
             previous.readOnly = oldReadOnly
             previous.onInput = oldOnInput
             previous.onChange = oldOnChange
-            previous.onFocus = oldOnFocus
-            previous.onBlur = oldOnBlur
             previous.valueControlled = oldValueControlled
         }
         previous.placeholder = next.placeholder
@@ -373,8 +372,6 @@ private class ReconcileTransaction(
         previous.readOnly = next.readOnly
         previous.onInput = next.onInput
         previous.onChange = next.onChange
-        previous.onFocus = next.onFocus
-        previous.onBlur = next.onBlur
         previous.valueControlled = next.valueControlled
         if (next.valueControlled && oldValue != next.value) {
             afterCommit += { previous.value = next.value }
@@ -387,21 +384,15 @@ private class ReconcileTransaction(
         val oldLabel = previous.label
         val oldOnInput = previous.onInput
         val oldOnChange = previous.onChange
-        val oldOnFocus = previous.onFocus
-        val oldOnBlur = previous.onBlur
         undo += {
             previous.label = oldLabel
             previous.onInput = oldOnInput
             previous.onChange = oldOnChange
-            previous.onFocus = oldOnFocus
-            previous.onBlur = oldOnBlur
             previous.valueControlled = oldValueControlled
         }
         previous.label = next.label
         previous.onInput = next.onInput
         previous.onChange = next.onChange
-        previous.onFocus = next.onFocus
-        previous.onBlur = next.onBlur
         previous.valueControlled = next.valueControlled
         if (next.valueControlled && oldValue != next.value) {
             afterCommit += { previous.value = next.value }

@@ -440,7 +440,20 @@ override fun repositionElements() {
 
 widgetとして登録したlayoutを別途`layout.render(...)`で描画しないでください。手動配送もできますが、IMEを有効化してpreeditを正しく受け取るにはScreenへの登録が推奨です。focusは`layout.focus(playerName)`、`layout.clearFocus()`、`layout.focusedElement`から制御・確認できます。
 
-すべてのinput controlは`onKeyPressed`で、focus中に配送された`KeyEvent`を監視できます。callbackはcontrol固有の標準key処理の後に呼ばれ、eventの消費結果や標準処理には影響しません。たとえばText inputのEnterは標準処理では消費されないため、`onKeyPressed`を設定しても`UiLayout.keyPressed()`の戻り値は`false`のままです。確定文字の値変更は引き続き`charTyped`経由で処理されるため、`onInput`で監視してください。
+すべての`UiElement`は`tabIndex`を指定するとkeyboard focusを受け取れます。`null`はfocus不可、`-1`はclickまたは`layout.focus()`だけ、`0`は通常のTab順です。正数は小さい順で`0`より先に並び、同じ値ではlayout順になります。input controlのデフォルトは`0`、そのほかのelementは`null`です。`disabled`またはboxを生成しないelementはfocusできません。
+
+```kotlin
+div(
+    tabIndex = 0,
+    onFocus = { println("focused") },
+    onBlur = { println("blurred") },
+    onKeyPressed = { event ->
+        if (event.key() == GLFW.GLFW_KEY_ENTER) activate()
+    },
+)
+```
+
+`onKeyPressed`はfocus中に配送された`KeyEvent`を監視します。callbackはelement固有の標準key処理の後に呼ばれ、eventの消費結果や標準処理には影響しません。たとえば標準key処理を持たない`div`では、callbackを設定しても`UiLayout.keyPressed()`の戻り値は`false`のままです。確定文字によるText inputの値変更は引き続き`charTyped`経由で処理されるため、`onInput`で監視してください。
 
 ### Range input
 
