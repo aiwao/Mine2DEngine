@@ -1,5 +1,6 @@
 package io.github.aiwao.mine2dengine.layout
 
+import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -13,6 +14,8 @@ class ColorInput(
     onChange: ((Int) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -23,8 +26,10 @@ class ColorInput(
     id: String = "",
 ) : InputControl(
     style = style,
+    tabIndex = tabIndex,
     onFocus = onFocus,
     onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
     onDrag = onDrag,
@@ -217,6 +222,8 @@ fun UiContainer.colorInput(
     onChange: ((Int) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -235,6 +242,8 @@ fun UiContainer.colorInput(
         onChange = onChange,
         onFocus = onFocus,
         onBlur = onBlur,
+        tabIndex = tabIndex,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -255,6 +264,8 @@ fun UiContainer.colorInput(
     onChange: ((Int) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -272,6 +283,8 @@ fun UiContainer.colorInput(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    tabIndex = tabIndex,
+    onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
     onDrag = onDrag,
@@ -293,6 +306,8 @@ fun colorInput(
     onChange: ((Int) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    tabIndex: Int? = 0,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
@@ -305,6 +320,8 @@ fun colorInput(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    tabIndex = tabIndex,
+    onKeyPressed = onKeyPressed,
     tag = tag,
     className = className,
     id = id,

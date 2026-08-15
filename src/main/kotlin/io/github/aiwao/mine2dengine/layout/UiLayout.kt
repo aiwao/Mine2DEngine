@@ -370,7 +370,7 @@ class UiLayout internal constructor(
 
     private var dragButtonInfo: MouseButtonInfo? = null
     private var screenFocused: Boolean = false
-    private var pendingNavigationFocus: InputControl? = null
+    private var pendingNavigationFocus: UiElement? = null
     private var colorPickerDragTarget: ColorPickerDragTarget? = null
     private var lastPointerX: Double? = null
     private var lastPointerY: Double? = null
@@ -379,7 +379,7 @@ class UiLayout internal constructor(
         Minecraft.getInstance().onTextInputFocusChange(this, focused)
     }
 
-    /** The element that currently receives keyboard input, or null when focus is outside a control. */
+    /** The element that currently receives keyboard input, or null when nothing is focused. */
     var focusedElement: UiElement? = null
         private set
 
@@ -478,21 +478,17 @@ class UiLayout internal constructor(
         element: UiElement?,
         notifyPlatform: Boolean = true,
     ): Boolean {
-        val next = when (element) {
-            null -> null
-            is InputControl -> element
-            else -> return false
-        }
+        val next = element
         if (
             next != null &&
-            (next.disabled || nodesInPaintOrder().none { node ->
+            (next.tabIndex == null || next.disabled || nodesInPaintOrder().none { node ->
                 node.displayed && node.element === next
             })
         ) {
             return false
         }
 
-        val previous = focusedElement as? InputControl
+        val previous = focusedElement
         if (previous === next) return true
 
         val previouslyUsedPlatformTextInput = previous?.usesPlatformTextInput == true
@@ -517,8 +513,9 @@ class UiLayout internal constructor(
     }
 
     private fun refreshFocusValidity() {
-        val focused = focusedElement as? InputControl ?: return
+        val focused = focusedElement ?: return
         if (
+            focused.tabIndex == null ||
             focused.disabled ||
             nodesInPaintOrder().none { node -> node.displayed && node.element === focused }
         ) {
@@ -526,14 +523,22 @@ class UiLayout internal constructor(
         }
     }
 
-    private fun focusableInputControls(): List<InputControl> = nodesInPaintOrder()
-        .asSequence()
-        .filter(UiLayoutNode::displayed)
-        .map(UiLayoutNode::element)
-        .filterIsInstance<InputControl>()
-        .filterNot(UiElement::disabled)
-        .distinct()
-        .toList()
+    private fun focusableElements(): List<UiElement> {
+        val elements = nodesInPaintOrder()
+            .asSequence()
+            .filter(UiLayoutNode::displayed)
+            .map(UiLayoutNode::element)
+            .filter { element ->
+                val tabIndex = element.tabIndex
+                tabIndex != null && tabIndex >= 0 && !element.disabled
+            }
+            .distinct()
+            .toList()
+        return elements
+            .filter { element -> checkNotNull(element.tabIndex) > 0 }
+            .sortedBy { element -> checkNotNull(element.tabIndex) } +
+            elements.filter { element -> element.tabIndex == 0 }
+    }
 
     /** Allows the complete layout to be registered with `Screen.addRenderableWidget`. */
     override fun extractRenderState(
@@ -554,7 +559,7 @@ class UiLayout internal constructor(
 
     override fun setFocused(focused: Boolean): Unit = dispatchEvent {
         if (!focused) {
-            val hadTextFocus = (focusedElement as? InputControl)?.usesPlatformTextInput == true
+            val hadTextFocus = focusedElement?.usesPlatformTextInput == true
             val wasScreenFocused = screenFocused
             screenFocused = false
             focusInternal(null, notifyPlatform = false)
@@ -568,7 +573,7 @@ class UiLayout internal constructor(
             focusInternal(target, notifyPlatform = false)
         }
         pendingNavigationFocus = null
-        if ((focusedElement as? InputControl)?.usesPlatformTextInput == true) {
+        if (focusedElement?.usesPlatformTextInput == true) {
             notifyPlatformTextInputFocus(true)
         }
     }
@@ -599,23 +604,23 @@ class UiLayout internal constructor(
     override fun nextFocusPath(event: FocusNavigationEvent): ComponentPath? {
         refreshDisplay()
         refreshFocusValidity()
-        val inputs = focusableInputControls()
-        if (inputs.isEmpty()) return null
+        val elements = focusableElements()
+        if (elements.isEmpty()) return null
 
         val forward = when (event) {
             is FocusNavigationEvent.TabNavigation -> event.forward()
             is FocusNavigationEvent.ArrowNavigation -> event.direction().isPositive
             else -> true
         }
-        val currentIndex = inputs.indexOfFirst { input -> input === focusedElement }
+        val currentIndex = elements.indexOfFirst { element -> element === focusedElement }
         val nextIndex = when {
-            currentIndex < 0 -> if (forward) 0 else inputs.lastIndex
+            currentIndex < 0 -> if (forward) 0 else elements.lastIndex
             forward -> currentIndex + 1
             else -> currentIndex - 1
         }
-        if (nextIndex !in inputs.indices) return null
+        if (nextIndex !in elements.indices) return null
 
-        pendingNavigationFocus = inputs[nextIndex]
+        pendingNavigationFocus = elements[nextIndex]
         return ComponentPath.leaf(this)
     }
 
@@ -666,8 +671,7 @@ class UiLayout internal constructor(
 
     /**
      * Invokes the topmost clickable element at the GUI coordinate in [event].
-     * Elements with an [UiElement.onClick] or [UiElement.onDrag] callback and [InputControl]
-     * elements
+     * Elements with an [UiElement.onClick] or [UiElement.onDrag] callback and focusable elements
      * are clickable. The hit element starts dragging until [mouseRelease] is called. Its
      * [UiElement.onClick] callback is not invoked while [UiElement.disabled] is true. Returns true
      * when one was hit.
@@ -708,17 +712,19 @@ class UiLayout internal constructor(
             .firstOrNull { region ->
                 (region.element.onClick != null ||
                     region.element.onDrag != null ||
-                    region.element is InputControl) &&
+                    region.element.tabIndex != null) &&
                     region.contains(x, y)
             }
         val element = hitRegion?.element
-        val focusedInput = (element as? InputControl)?.takeUnless(UiElement::disabled)
-        focusInternal(focusedInput)
+        val focusTarget = element?.takeIf { candidate ->
+            candidate.tabIndex != null && !candidate.disabled
+        }
+        focusInternal(focusTarget)
         element ?: return false
 
         nodes.forEach { node -> node.element.dragging = false }
         dragButtonInfo = null
-        if (element.disabled && element is InputControl) return true
+        if (element.disabled && element.tabIndex != null) return true
 
         element.dragging = true
         dragButtonInfo = event.buttonInfo()
@@ -941,29 +947,34 @@ class UiLayout internal constructor(
 
     override fun mouseReleased(event: MouseButtonEvent): Boolean = mouseRelease()
 
-    /** Dispatches a key press to the focused input control. */
+    /** Dispatches a key press and then notifies the element that owned focus. */
     override fun keyPressed(event: KeyEvent): Boolean = dispatchEvent {
         refreshDisplay()
         refreshFocusValidity()
+        val focused = focusedElement
 
-        if (event.isCycleFocus()) {
-            if (screenFocused) return false
-            val inputs = focusableInputControls()
-            if (inputs.isEmpty()) return false
-            val currentIndex = inputs.indexOfFirst { input -> input === focusedElement }
-            val nextIndex = if (event.hasShiftDown()) {
-                if (currentIndex <= 0) inputs.lastIndex else currentIndex - 1
-            } else {
-                if (currentIndex < 0 || currentIndex == inputs.lastIndex) 0 else currentIndex + 1
-            }
-            return focusInternal(inputs[nextIndex])
+        val handled = when {
+            event.isCycleFocus() -> cycleFocus(event)
+            focused is ColorInput -> colorInputKeyPressed(focused, event)
+            focused is RangeInput<*> -> rangeInputKeyPressed(focused, event)
+            focused is TextInput -> textInputKeyPressed(focused, event)
+            else -> false
         }
+        if (focused?.disabled == false) focused.onKeyPressed?.invoke(event)
+        handled
+    }
 
-        return when (val focused = focusedElement as? InputControl ?: return false) {
-            is ColorInput -> colorInputKeyPressed(focused, event)
-            is RangeInput<*> -> rangeInputKeyPressed(focused, event)
-            is TextInput -> textInputKeyPressed(focused, event)
+    private fun cycleFocus(event: KeyEvent): Boolean {
+        if (screenFocused) return false
+        val elements = focusableElements()
+        if (elements.isEmpty()) return false
+        val currentIndex = elements.indexOfFirst { element -> element === focusedElement }
+        val nextIndex = if (event.hasShiftDown()) {
+            if (currentIndex <= 0) elements.lastIndex else currentIndex - 1
+        } else {
+            if (currentIndex < 0 || currentIndex == elements.lastIndex) 0 else currentIndex + 1
         }
+        return focusInternal(elements[nextIndex])
     }
 
     private fun textInputKeyPressed(input: TextInput, event: KeyEvent): Boolean {
@@ -1548,7 +1559,11 @@ class UiLayout internal constructor(
             dragButtonInfo = null
         }
         focusedElement?.let { focused ->
-            if (hiddenElements.any { element -> element === focused }) {
+            if (
+                focused.tabIndex == null ||
+                focused.disabled ||
+                focused !in displayedElements
+            ) {
                 focusInternal(null)
             }
         }

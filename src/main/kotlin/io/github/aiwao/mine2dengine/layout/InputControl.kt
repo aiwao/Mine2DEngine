@@ -1,5 +1,6 @@
 package io.github.aiwao.mine2dengine.layout
 
+import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 
 /** Intrinsic content-box metrics supplied by a replaced input control. */
@@ -20,8 +21,10 @@ internal data class InputIntrinsicMetrics(
 /** Common focus and replaced-element behavior for typed form controls. */
 sealed class InputControl(
     style: UiStyle,
+    tabIndex: Int?,
     onFocus: (() -> Unit)?,
     onBlur: (() -> Unit)?,
+    onKeyPressed: ((KeyEvent) -> Unit)?,
     onClick: ((MouseButtonEvent) -> Unit)?,
     onMouseMove: ((x: Double, y: Double) -> Unit)?,
     onDrag: ((MouseButtonEvent) -> Unit)?,
@@ -35,43 +38,22 @@ sealed class InputControl(
     className = className,
     id = id,
     style = style,
+    tabIndex = tabIndex,
+    onFocus = onFocus,
+    onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
     onDrag = onDrag,
     onMouseOver = onMouseOver,
     onMouseOut = onMouseOut,
 ) {
-    var onFocus: (() -> Unit)? = onFocus
-    var onBlur: (() -> Unit)? = onBlur
-
-    /** True while this control owns its [UiLayout]'s keyboard focus. */
-    var focused: Boolean = false
-        internal set
-
     /** Whether focusing this control should enable the platform text-input/IME path. */
-    internal abstract val usesPlatformTextInput: Boolean
+    internal abstract override val usesPlatformTextInput: Boolean
 
     internal abstract fun intrinsicMetrics(
         textMeasurer: () -> UiTextMeasurer,
     ): InputIntrinsicMetrics
 
     internal abstract fun narration(): String
-
-    internal fun focusGained() {
-        if (focused) return
-        focused = true
-        didGainFocus()
-        onFocus?.invoke()
-    }
-
-    internal fun focusLost() {
-        if (!focused) return
-        focused = false
-        didLoseFocus()
-        onBlur?.invoke()
-    }
-
-    internal open fun didGainFocus() = Unit
-
-    internal open fun didLoseFocus() = Unit
 }

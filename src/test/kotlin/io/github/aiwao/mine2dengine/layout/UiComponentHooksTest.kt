@@ -4,8 +4,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
+import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.MouseButtonInfo
+import org.lwjgl.glfw.GLFW
 
 class UiComponentHooksTest {
     private class InheritedCounter : UiComponent<Div>() {
@@ -224,6 +226,57 @@ class UiComponentHooksTest {
 
         assertEquals(2, renders)
         assertEquals("2", ((root.children.single() as Div).children.single() as Paragraph).text)
+    }
+
+    @Test
+    fun `reconciliation installs the latest key observer`() {
+        lateinit var setVersion: StateSetter<Int>
+        val observedVersions = mutableListOf<Int>()
+        val component = uiComponent {
+            val (version, setter) = useState { 0 }
+            setVersion = setter
+            div(
+                tabIndex = 0,
+                onKeyPressed = { observedVersions += version },
+            )
+        }
+        val root = div { component(component) }
+        val mountedElement = root.children.single() as Div
+        val result = layout(root)
+        result.focus(mountedElement)
+
+        result.keyPressed(KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0))
+        setVersion(1)
+        result.flushUpdates()
+        result.keyPressed(KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0))
+
+        assertEquals(listOf(0, 1), observedVersions)
+        assertSame(mountedElement, root.children.single())
+    }
+
+    @Test
+    fun `removing tab index during reconciliation clears element focus`() {
+        lateinit var setFocusable: StateSetter<Boolean>
+        var blurs = 0
+        val component = uiComponent {
+            val (focusable, setter) = useState { true }
+            setFocusable = setter
+            div(
+                tabIndex = if (focusable) 0 else null,
+                onBlur = { blurs += 1 },
+            )
+        }
+        val root = div { component(component) }
+        val mountedElement = root.children.single() as Div
+        val result = layout(root)
+        result.focus(mountedElement)
+
+        setFocusable(false)
+        result.flushUpdates()
+
+        assertEquals(null, result.focusedElement)
+        assertEquals(1, blurs)
+        assertSame(mountedElement, root.children.single())
     }
 
     @Test

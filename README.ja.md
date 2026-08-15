@@ -440,6 +440,21 @@ override fun repositionElements() {
 
 widgetとして登録したlayoutを別途`layout.render(...)`で描画しないでください。手動配送もできますが、IMEを有効化してpreeditを正しく受け取るにはScreenへの登録が推奨です。focusは`layout.focus(playerName)`、`layout.clearFocus()`、`layout.focusedElement`から制御・確認できます。
 
+すべての`UiElement`は`tabIndex`を指定するとkeyboard focusを受け取れます。`null`はfocus不可、`-1`はclickまたは`layout.focus()`だけ、`0`は通常のTab順です。正数は小さい順で`0`より先に並び、同じ値ではlayout順になります。input controlのデフォルトは`0`、そのほかのelementは`null`です。`disabled`またはboxを生成しないelementはfocusできません。
+
+```kotlin
+div(
+    tabIndex = 0,
+    onFocus = { println("focused") },
+    onBlur = { println("blurred") },
+    onKeyPressed = { event ->
+        if (event.key() == GLFW.GLFW_KEY_ENTER) activate()
+    },
+)
+```
+
+`onKeyPressed`はfocus中に配送された`KeyEvent`を監視します。callbackはelement固有の標準key処理の後に呼ばれ、eventの消費結果や標準処理には影響しません。たとえば標準key処理を持たない`div`では、callbackを設定しても`UiLayout.keyPressed()`の戻り値は`false`のままです。確定文字によるText inputの値変更は引き続き`charTyped`経由で処理されるため、`onInput`で監視してください。
+
 ### Range input
 
 `rangeInput<T>()`はHTMLの`input type="range"`に対応する型付き数値sliderを作ります。`T`には`Int`、`Float`、`Double`を指定でき、`value`、`min`、`max`、`step`とcallbackの値は同じ型を保ちます。値は常に`min`と`max`の範囲へclampされ、`step`が指定されている場合は`min`を基準に最も近いstepへ揃えられます。同距離のstepが2つある場合は大きい値が選ばれます。
