@@ -941,29 +941,34 @@ class UiLayout internal constructor(
 
     override fun mouseReleased(event: MouseButtonEvent): Boolean = mouseRelease()
 
-    /** Dispatches a key press to the focused input control. */
+    /** Dispatches a key press and then notifies the input control that owned focus. */
     override fun keyPressed(event: KeyEvent): Boolean = dispatchEvent {
         refreshDisplay()
         refreshFocusValidity()
+        val focused = focusedElement as? InputControl
 
-        if (event.isCycleFocus()) {
-            if (screenFocused) return false
-            val inputs = focusableInputControls()
-            if (inputs.isEmpty()) return false
-            val currentIndex = inputs.indexOfFirst { input -> input === focusedElement }
-            val nextIndex = if (event.hasShiftDown()) {
-                if (currentIndex <= 0) inputs.lastIndex else currentIndex - 1
-            } else {
-                if (currentIndex < 0 || currentIndex == inputs.lastIndex) 0 else currentIndex + 1
-            }
-            return focusInternal(inputs[nextIndex])
+        val handled = when {
+            event.isCycleFocus() -> cycleFocus(event)
+            focused is ColorInput -> colorInputKeyPressed(focused, event)
+            focused is RangeInput<*> -> rangeInputKeyPressed(focused, event)
+            focused is TextInput -> textInputKeyPressed(focused, event)
+            else -> false
         }
+        if (focused?.disabled == false) focused.onKeyPressed?.invoke(event)
+        handled
+    }
 
-        return when (val focused = focusedElement as? InputControl ?: return false) {
-            is ColorInput -> colorInputKeyPressed(focused, event)
-            is RangeInput<*> -> rangeInputKeyPressed(focused, event)
-            is TextInput -> textInputKeyPressed(focused, event)
+    private fun cycleFocus(event: KeyEvent): Boolean {
+        if (screenFocused) return false
+        val inputs = focusableInputControls()
+        if (inputs.isEmpty()) return false
+        val currentIndex = inputs.indexOfFirst { input -> input === focusedElement }
+        val nextIndex = if (event.hasShiftDown()) {
+            if (currentIndex <= 0) inputs.lastIndex else currentIndex - 1
+        } else {
+            if (currentIndex < 0 || currentIndex == inputs.lastIndex) 0 else currentIndex + 1
         }
+        return focusInternal(inputs[nextIndex])
     }
 
     private fun textInputKeyPressed(input: TextInput, event: KeyEvent): Boolean {

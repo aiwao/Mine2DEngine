@@ -249,6 +249,9 @@ private class ReconcileTransaction(
         }
 
         patchCommon(previous, next)
+        if (previous is InputControl && next is InputControl) {
+            patchInputControl(previous, next)
+        }
         when {
             previous is Paragraph && next is Paragraph -> patchParagraph(previous, next)
             previous is TextInput && next is TextInput -> patchTextInput(previous, next)
@@ -328,6 +331,12 @@ private class ReconcileTransaction(
         previous.onMouseOut = next.onMouseOut
         previous.disabled = next.disabled
         previous.componentStyleSheets = next.componentStyleSheets
+    }
+
+    private fun patchInputControl(previous: InputControl, next: InputControl) {
+        val oldOnKeyPressed = previous.onKeyPressed
+        undo += { previous.onKeyPressed = oldOnKeyPressed }
+        previous.onKeyPressed = next.onKeyPressed
     }
 
     private fun patchParagraph(previous: Paragraph, next: Paragraph) {

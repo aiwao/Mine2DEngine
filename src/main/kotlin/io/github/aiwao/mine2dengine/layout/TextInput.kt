@@ -1,5 +1,6 @@
 package io.github.aiwao.mine2dengine.layout
 
+import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.util.StringUtil
 
@@ -15,6 +16,7 @@ class TextInput(
     onChange: ((String) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -30,6 +32,7 @@ class TextInput(
     style = style,
     onFocus = onFocus,
     onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
     onDrag = onDrag,
@@ -280,6 +283,7 @@ fun UiContainer.input(
     onChange: ((String) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -301,6 +305,7 @@ fun UiContainer.input(
         onChange = onChange,
         onFocus = onFocus,
         onBlur = onBlur,
+        onKeyPressed = onKeyPressed,
         onClick = onClick,
         onMouseMove = onMouseMove,
         onDrag = onDrag,
@@ -324,6 +329,7 @@ fun UiContainer.input(
     onChange: ((String) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     onClick: ((MouseButtonEvent) -> Unit)? = null,
     onMouseMove: ((x: Double, y: Double) -> Unit)? = null,
     onDrag: ((MouseButtonEvent) -> Unit)? = null,
@@ -344,6 +350,7 @@ fun UiContainer.input(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
     onClick = onClick,
     onMouseMove = onMouseMove,
     onDrag = onDrag,
@@ -368,6 +375,7 @@ fun input(
     onChange: ((String) -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
     onBlur: (() -> Unit)? = null,
+    onKeyPressed: ((KeyEvent) -> Unit)? = null,
     tag: String = "input",
     className: Set<String> = emptySet(),
     id: String = "",
@@ -383,6 +391,7 @@ fun input(
     onChange = onChange,
     onFocus = onFocus,
     onBlur = onBlur,
+    onKeyPressed = onKeyPressed,
     tag = tag,
     className = className,
     id = id,

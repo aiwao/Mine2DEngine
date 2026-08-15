@@ -440,6 +440,8 @@ override fun repositionElements() {
 
 widgetとして登録したlayoutを別途`layout.render(...)`で描画しないでください。手動配送もできますが、IMEを有効化してpreeditを正しく受け取るにはScreenへの登録が推奨です。focusは`layout.focus(playerName)`、`layout.clearFocus()`、`layout.focusedElement`から制御・確認できます。
 
+すべてのinput controlは`onKeyPressed`で、focus中に配送された`KeyEvent`を監視できます。callbackはcontrol固有の標準key処理の後に呼ばれ、eventの消費結果や標準処理には影響しません。たとえばText inputのEnterは標準処理では消費されないため、`onKeyPressed`を設定しても`UiLayout.keyPressed()`の戻り値は`false`のままです。確定文字の値変更は引き続き`charTyped`経由で処理されるため、`onInput`で監視してください。
+
 ### Range input
 
 `rangeInput<T>()`はHTMLの`input type="range"`に対応する型付き数値sliderを作ります。`T`には`Int`、`Float`、`Double`を指定でき、`value`、`min`、`max`、`step`とcallbackの値は同じ型を保ちます。値は常に`min`と`max`の範囲へclampされ、`step`が指定されている場合は`min`を基準に最も近いstepへ揃えられます。同距離のstepが2つある場合は大きい値が選ばれます。

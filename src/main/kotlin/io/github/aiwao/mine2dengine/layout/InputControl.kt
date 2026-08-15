@@ -1,5 +1,6 @@
 package io.github.aiwao.mine2dengine.layout
 
+import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 
 /** Intrinsic content-box metrics supplied by a replaced input control. */
@@ -22,6 +23,7 @@ sealed class InputControl(
     style: UiStyle,
     onFocus: (() -> Unit)?,
     onBlur: (() -> Unit)?,
+    onKeyPressed: ((KeyEvent) -> Unit)?,
     onClick: ((MouseButtonEvent) -> Unit)?,
     onMouseMove: ((x: Double, y: Double) -> Unit)?,
     onDrag: ((MouseButtonEvent) -> Unit)?,
@@ -43,6 +45,9 @@ sealed class InputControl(
 ) {
     var onFocus: (() -> Unit)? = onFocus
     var onBlur: (() -> Unit)? = onBlur
+
+    /** Invoked after this control's standard handling of a focused key press. */
+    var onKeyPressed: ((KeyEvent) -> Unit)? = onKeyPressed
 
     /** True while this control owns its [UiLayout]'s keyboard focus. */
     var focused: Boolean = false

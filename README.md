@@ -453,6 +453,8 @@ override fun repositionElements() {
 
 Do not also call `layout.render(...)` for a layout registered as a widget. Manual event forwarding remains available, but Screen registration is recommended to enable IME and receive preedit events correctly. Use `layout.focus(playerName)`, `layout.clearFocus()`, and `layout.focusedElement` to control or inspect focus.
 
+Every input control can observe a focused `KeyEvent` through `onKeyPressed`. The callback runs after the control's standard key handling and affects neither that handling nor the event's consumed result. For example, Enter has no standard TextInput behavior, so setting `onKeyPressed` still leaves `UiLayout.keyPressed()` returning `false`. Committed character changes continue to arrive through `charTyped` and should be observed with `onInput`.
+
 ### Range input
 
 `rangeInput<T>()` creates a typed numeric slider corresponding to HTML `input type="range"`. `T` may be `Int`, `Float`, or `Double`; `value`, `min`, `max`, `step`, and callback values all retain that type. Values are always clamped between `min` and `max`. When `step` is present, the value is aligned to the nearest step relative to `min`; a tie selects the greater value.

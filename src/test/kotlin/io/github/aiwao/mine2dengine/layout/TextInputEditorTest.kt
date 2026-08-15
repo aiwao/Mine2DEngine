@@ -158,6 +158,29 @@ class TextInputEditorTest {
     }
 
     @Test
+    fun `key observer runs after standard handling without consuming unsupported keys`() {
+        val observations = mutableListOf<Pair<Int, Int>>()
+        lateinit var input: TextInput
+        input = TextInput(
+            value = "ab",
+            onKeyPressed = { event -> observations += event.key() to input.caretPosition },
+        )
+        val result = layout(input)
+        result.focus(input)
+
+        assertTrue(result.keyPressed(KeyEvent(GLFW.GLFW_KEY_LEFT, 0, 0)))
+        assertFalse(result.keyPressed(KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0)))
+
+        assertEquals(
+            listOf(
+                GLFW.GLFW_KEY_LEFT to 1,
+                GLFW.GLFW_KEY_ENTER to 1,
+            ),
+            observations,
+        )
+    }
+
+    @Test
     fun `preedit is transient and committed input clears it`() {
         val input = TextInput("a")
         val result = layout(input)
