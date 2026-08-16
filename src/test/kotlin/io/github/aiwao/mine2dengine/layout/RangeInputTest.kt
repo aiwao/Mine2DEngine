@@ -402,6 +402,29 @@ class RangeInputTest {
     }
 
     @Test
+    fun `default track and progress retain circular end caps instead of elliptical sides`() {
+        val input = rangeInput(value = 50.0)
+        val result = layout(input)
+        val styles = UiControlPart.entries.associateWith(result.root::controlPartStyle)
+        val geometry = rangeInputGeometry(input, result.root.contentBounds, styles)
+        val trackRadius = styles.getValue(UiControlPart.RANGE_TRACK)
+            .borderRadius
+            .resolve(geometry.track.borderBounds)
+            .radii
+            .topLeft
+        val progressRadius = styles.getValue(UiControlPart.RANGE_PROGRESS)
+            .borderRadius
+            .resolve(geometry.progress.borderBounds)
+            .radii
+            .topLeft
+
+        assertEquals(2f, trackRadius.horizontal)
+        assertEquals(2f, trackRadius.vertical)
+        assertEquals(2f, progressRadius.horizontal)
+        assertEquals(2f, progressRadius.vertical)
+    }
+
+    @Test
     fun `typed range inputs are font-independent replaced elements`() {
         val horizontal = rangeInput<Int>(style = UiStyle(width = UiSizeValue.MIN_CONTENT))
         val vertical = rangeInput<Float>(

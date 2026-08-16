@@ -336,7 +336,7 @@ internal fun userAgentStyleFor(
             width = if (element.orientation == RangeOrientation.HORIZONTAL) 100f.percent else 4f.px,
             height = if (element.orientation == RangeOrientation.HORIZONTAL) 4f.px else 100f.percent,
             backgroundColor = 0xFF555555.toInt(),
-            borderRadius = 50f.percent.let(::UiBorderRadii),
+            borderRadius = UiBorderRadii(RangeInput.TRACK_THICKNESS / 2f),
         )
 
         UiControlPart.RANGE_PROGRESS -> UiStyle(
@@ -344,7 +344,7 @@ internal fun userAgentStyleFor(
             width = if (element.orientation == RangeOrientation.HORIZONTAL) 100f.percent else 4f.px,
             height = if (element.orientation == RangeOrientation.HORIZONTAL) 4f.px else 100f.percent,
             backgroundColor = 0xFF4F8CFF.toInt(),
-            borderRadius = 50f.percent.let(::UiBorderRadii),
+            borderRadius = UiBorderRadii(RangeInput.TRACK_THICKNESS / 2f),
         )
 
         UiControlPart.RANGE_THUMB -> UiStyle(
