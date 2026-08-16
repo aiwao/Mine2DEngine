@@ -42,6 +42,8 @@ class LayoutEngineTest {
         assertEquals(-4f, (-4f).px.value)
         assertFailsWith<IllegalArgumentException> { Float.NaN.px }
         assertFailsWith<IllegalArgumentException> { UiStyle(width = (-1f).px) }
+        assertFailsWith<IllegalArgumentException> { UiStyle(minWidth = UiSizeValue.NONE) }
+        assertFailsWith<IllegalArgumentException> { UiStyle(maxWidth = UiSizeValue.AUTO) }
         assertFailsWith<IllegalArgumentException> { UiStyle(padding = UiPaddings((-1f).px)) }
         assertFailsWith<IllegalArgumentException> { UiStyle(gap = (-1f).px) }
         assertFailsWith<IllegalArgumentException> { UiStyle(flexGrow = -1f) }
@@ -318,6 +320,139 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `minimum size wins when it exceeds maximum size`() {
+        val result = layout(
+            div(
+                UiStyle(
+                    width = 30f.px,
+                    height = 30f.px,
+                    minWidth = 60f.px,
+                    minHeight = 50f.px,
+                    maxWidth = 40f.px,
+                    maxHeight = 20f.px,
+                ),
+            ),
+        )
+
+        assertEquals(60f, result.root.contentBounds.width)
+        assertEquals(50f, result.root.contentBounds.height)
+    }
+
+    @Test
+    fun `percentage min and max sizes use the containing block axes`() {
+        val result = layout(
+            div(
+                UiStyle(
+                    width = 20f.percent,
+                    height = 80f.percent,
+                    minWidth = 50f.percent,
+                    maxHeight = 50f.percent,
+                ),
+            ),
+            width = 200f,
+            height = 100f,
+        )
+
+        assertEquals(100f, result.root.contentBounds.width)
+        assertEquals(50f, result.root.contentBounds.height)
+    }
+
+    @Test
+    fun `border box min and max lengths constrain the border box`() {
+        val minimum = layout(
+            div(
+                UiStyle(
+                    width = 10f.px,
+                    minWidth = 40f.px,
+                    padding = UiPaddings(vertical = 0f, horizontal = 10f),
+                    border = UiBorders(2f),
+                    boxSizing = UiBoxSizing.BORDER_BOX,
+                ),
+            ),
+        )
+        val maximum = layout(
+            div(
+                UiStyle(
+                    width = 80f.px,
+                    maxWidth = 40f.px,
+                    padding = UiPaddings(vertical = 0f, horizontal = 10f),
+                    border = UiBorders(2f),
+                    boxSizing = UiBoxSizing.BORDER_BOX,
+                ),
+            ),
+        )
+
+        assertEquals(40f, minimum.root.bounds.width)
+        assertEquals(16f, minimum.root.contentBounds.width)
+        assertEquals(40f, maximum.root.bounds.width)
+        assertEquals(16f, maximum.root.contentBounds.width)
+    }
+
+    @Test
+    fun `intrinsic sizing keywords are independent of box sizing`() {
+        val preferred = layout(
+            Paragraph(
+                "abcdefgh",
+                UiStyle(
+                    width = UiSizeValue.MIN_CONTENT,
+                    padding = UiPaddings(vertical = 0f, horizontal = 10f),
+                    border = UiBorders(2f),
+                    boxSizing = UiBoxSizing.BORDER_BOX,
+                ),
+            ),
+            width = 200f,
+        )
+        val maximum = layout(
+            Paragraph(
+                "abcdefgh",
+                UiStyle(
+                    width = 100f.px,
+                    maxWidth = UiSizeValue.MAX_CONTENT,
+                    padding = UiPaddings(vertical = 0f, horizontal = 10f),
+                    border = UiBorders(2f),
+                    boxSizing = UiBoxSizing.BORDER_BOX,
+                ),
+            ),
+            width = 200f,
+        )
+
+        assertEquals(40f, preferred.root.contentBounds.width)
+        assertEquals(64f, preferred.root.bounds.width)
+        assertEquals(40f, maximum.root.contentBounds.width)
+        assertEquals(64f, maximum.root.bounds.width)
+    }
+
+    @Test
+    fun `fit content argument is converted through the sizing box once`() {
+        val contentBox = layout(
+            Paragraph(
+                "a a a a a",
+                UiStyle(
+                    width = UiSizeValue.FitContent(30f.px),
+                    padding = UiPaddings(vertical = 0f, horizontal = 10f),
+                ),
+            ),
+            width = 200f,
+        )
+        val borderBox = layout(
+            Paragraph(
+                "a a a a a",
+                UiStyle(
+                    width = UiSizeValue.FitContent(40f.px),
+                    padding = UiPaddings(vertical = 0f, horizontal = 10f),
+                    boxSizing = UiBoxSizing.BORDER_BOX,
+                ),
+            ),
+            width = 200f,
+        )
+
+        assertEquals(30f, contentBox.root.contentBounds.width)
+        assertEquals(50f, contentBox.root.bounds.width)
+        assertEquals(20f, borderBox.root.contentBounds.width)
+        assertEquals(40f, borderBox.root.bounds.width)
+    }
+
+    @Test
     fun `adjacent block margins collapse including negative margins`() {
         lateinit var second: Div
         val root = div {
@@ -476,6 +611,26 @@ class LayoutEngineTest {
 
         assertClose(28f, result.nodeOf(minimum)!!.contentBounds.width)
         assertClose(12f, result.nodeOf(maximum)!!.contentBounds.width)
+    }
+
+    @Test
+    fun `explicit flex minimum wins over a smaller maximum`() {
+        lateinit var child: Div
+        val root = div(UiStyle(display = UiDisplay.FLEX, width = 100f.px)) {
+            child = div(
+                UiStyle(
+                    flexGrow = 1f,
+                    flexBasis = 0f.px,
+                    minWidth = 60f.px,
+                    maxWidth = 20f.px,
+                    height = 5f.px,
+                ),
+            )
+        }
+
+        val result = layout(root)
+
+        assertEquals(60f, result.nodeOf(child)!!.contentBounds.width)
     }
 
     @Test
@@ -857,6 +1012,30 @@ class LayoutEngineTest {
         val result = layout(root)
 
         assertEquals(UiRect(10f, 5f, 70f, 40f), result.nodeOf(absolute)!!.bounds)
+    }
+
+    @Test
+    fun `min and max sizes constrain an absolute inset stretch`() {
+        lateinit var absolute: Div
+        val root = div(
+            UiStyle(width = 100f.px, height = 60f.px, position = UiPosition.RELATIVE),
+        ) {
+            absolute = div(
+                UiStyle(
+                    position = UiPosition.ABSOLUTE,
+                    left = 10f.px,
+                    right = 10f.px,
+                    top = 5f.px,
+                    bottom = 5f.px,
+                    minWidth = 90f.px,
+                    maxHeight = 30f.px,
+                ),
+            )
+        }
+
+        val result = layout(root)
+
+        assertEquals(UiRect(10f, 5f, 90f, 30f), result.nodeOf(absolute)!!.bounds)
     }
 
     @Test

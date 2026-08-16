@@ -296,7 +296,7 @@ in intrinsic, flex, positioned, and `box-sizing` layout.
 
 `borderRadius` does not affect layout dimensions. Horizontal corner percentages use the border-box width and vertical percentages use its height. When both overflow axes clip, the outer radius is inset by the adjacent border widths to shape the padding-box clip. A box shadow follows the resolved outer border radius by default. To use the legacy equal radius, specify `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)`; a positive `cornerRadius` makes `followBorderRadius` default to false.
 
-Supported preferred/minimum/maximum size values are `AUTO`, `MIN_CONTENT`, `MAX_CONTENT`, `FitContent(...)`, and a length-percentage. Maximum sizes additionally accept `NONE`.
+Supported preferred/minimum/maximum size values are `AUTO`, `MIN_CONTENT`, `MAX_CONTENT`, `FitContent(...)`, and a length-percentage. Maximum sizes additionally accept `NONE`. The minimum wins when it exceeds the maximum. `box-sizing` applies to length-percentage values and the quantitative limit of `FitContent(...)`, but not to `MIN_CONTENT` or `MAX_CONTENT` themselves.
 
 ### Overflow
 

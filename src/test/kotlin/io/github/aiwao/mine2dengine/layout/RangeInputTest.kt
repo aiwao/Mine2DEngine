@@ -291,6 +291,26 @@ class RangeInputTest {
     }
 
     @Test
+    fun `column flex stretches a range input to its definite inner width`() {
+        lateinit var input: RangeInput<Int>
+        val root = div(
+            UiStyle(
+                display = UiDisplay.FLEX,
+                flexDirection = UiFlexDirection.COLUMN,
+                width = 100f.px,
+                padding = UiPaddings(horizontal = 8f, vertical = 0f),
+                boxSizing = UiBoxSizing.BORDER_BOX,
+            ),
+        ) {
+            input = rangeInput<Int>()
+        }
+
+        val result = layout(root)
+
+        assertEquals(84f, result.nodeOf(input)!!.contentBounds.width)
+    }
+
+    @Test
     fun `tiny geometry keeps the thumb centered and pointer fraction stable`() {
         val input = rangeInput(value = 4.0, min = 0.0, max = 10.0)
         val bounds = UiRect(5f, 6f, 4f, 4f)
