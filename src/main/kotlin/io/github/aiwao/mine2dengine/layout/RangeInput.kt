@@ -238,7 +238,6 @@ class RangeInput<T : Number>(
         const val DEFAULT_THICKNESS: Float = 20f
         internal const val TRACK_THICKNESS: Float = 4f
         internal const val THUMB_RADIUS: Float = 5f
-        internal const val THUMB_SEGMENTS: Int = 20
     }
 }
 

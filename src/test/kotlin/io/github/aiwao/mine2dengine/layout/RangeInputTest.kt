@@ -68,66 +68,114 @@ class RangeInputTest {
     }
 
     @Test
-    fun `range input style resolves defaults and cascades each internal part independently`() {
+    fun `range control parts use independent stylesheet cascades over UA defaults`() {
         val sheet = object : StyleSheet {
             override val styles = mutableListOf<StyleSheetObject>()
         }.apply {
             newStyle(
-                TargetClass("styled-range"),
+                TargetClass("styled-range").rangeTrack,
+                UiStyle(backgroundColor = 0xFF102030.toInt()),
+            )
+            newStyle(
+                TargetTag("input").rangeThumb,
                 UiStyle(
-                    rangeInputStyle = UiRangeInputStyle(
-                        trackColor = 0xFF102030.toInt(),
-                        thumbColor = 0xFF405060.toInt(),
-                    ),
+                    width = 14f.px,
+                    backgroundColor = 0xFF405060.toInt(),
+                ),
+            )
+            newStyle(
+                TargetClass("styled-range").rangeThumb,
+                UiStyle(
+                    backgroundColor = 0xFF708090.toInt(),
+                    border = UiBorders(2f, 0xFFA0B0C0.toInt()),
                 ),
             )
         }
         val input = rangeInput<Int>(
-            style = UiStyle(
-                rangeInputStyle = UiRangeInputStyle(
-                    thumbColor = 0xFF708090.toInt(),
-                    focusColor = 0xFFA0B0C0.toInt(),
-                ),
-            ),
+            style = UiStyle(backgroundColor = 0xFF010203.toInt()),
             className = setOf("styled-range"),
         )
 
-        val resolved = layout(input, styleSheets = listOf(sheet)).root
-            .styleProvider()
-            .rangeInputStyle
+        val node = layout(input, styleSheets = listOf(sheet)).root
+        val track = node.controlPartStyle(UiControlPart.RANGE_TRACK)
+        val progress = node.controlPartStyle(UiControlPart.RANGE_PROGRESS)
+        val thumb = node.controlPartStyle(UiControlPart.RANGE_THUMB)
 
-        assertEquals(0xFF102030.toInt(), resolved.trackColor)
-        assertEquals(0xFF4F8CFF.toInt(), resolved.activeTrackColor)
-        assertEquals(0xFF708090.toInt(), resolved.thumbColor)
-        assertEquals(0xFFA0B0C0.toInt(), resolved.focusColor)
+        assertEquals(0xFF010203.toInt(), node.styleProvider().backgroundColor)
+        assertEquals(0xFF102030.toInt(), track.backgroundColor)
+        assertEquals(0xFF4F8CFF.toInt(), progress.backgroundColor)
+        assertEquals(0xFF708090.toInt(), thumb.backgroundColor)
+        assertEquals(14f.px, thumb.width)
+        assertEquals(2f, thumb.border.top.usedWidth)
+        assertEquals(0xFFA0B0C0.toInt(), thumb.border.top.color)
     }
 
     @Test
-    fun `dynamic range input style follows interaction state without relayout`() {
+    fun `dynamic range thumb stylesheet follows owner state without relayout`() {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(TargetClass("dynamic-range").rangeThumb) { owner ->
+                owner as RangeInput<*>
+                UiStyle(
+                    backgroundColor = if (owner.focused) {
+                        0xFFFFFFFF.toInt()
+                    } else {
+                        0xFF808080.toInt()
+                    },
+                )
+            }
+        }
         lateinit var input: RangeInput<Int>
-        val root = div {
+        val root = div(styleSheets = listOf(sheet)) {
             input = rangeInput<Int>(
-                style = { range ->
-                    UiStyle(
-                        rangeInputStyle = UiRangeInputStyle(
-                            thumbColor = if (range.focused) {
-                                0xFFFFFFFF.toInt()
-                            } else {
-                                0xFF808080.toInt()
-                            },
-                        ),
-                    )
-                },
+                className = setOf("dynamic-range"),
             )
         }
         val result = layout(root)
         val node = result.nodeOf(input)!!
 
-        assertEquals(0xFF808080.toInt(), node.styleProvider().rangeInputStyle.thumbColor)
+        assertEquals(
+            0xFF808080.toInt(),
+            node.controlPartStyle(UiControlPart.RANGE_THUMB).backgroundColor,
+        )
 
         result.focus(input)
 
-        assertEquals(0xFFFFFFFF.toInt(), node.styleProvider().rangeInputStyle.thumbColor)
+        assertEquals(
+            0xFFFFFFFF.toInt(),
+            node.controlPartStyle(UiControlPart.RANGE_THUMB).backgroundColor,
+        )
+    }
+
+    @Test
+    fun `thumb UiStyle box metrics determine geometry and pointer travel`() {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(
+                TargetId("wide-thumb").rangeThumb,
+                UiStyle(
+                    width = 20f.px,
+                    height = 12f.px,
+                    boxSizing = UiBoxSizing.BORDER_BOX,
+                    padding = UiPaddings(1f),
+                    border = UiBorders(2f, 0xFFFFFFFF.toInt()),
+                ),
+            )
+        }
+        val input = rangeInput(value = 50.0, id = "wide-thumb")
+        val result = layout(input, styleSheets = listOf(sheet))
+        val styles = UiControlPart.entries.associateWith(result.root::controlPartStyle)
+        val bounds = result.root.contentBounds
+        val geometry = rangeInputGeometry(input, bounds, styles)
+
+        assertEquals(20f, geometry.thumb.borderBounds.width)
+        assertEquals(12f, geometry.thumb.borderBounds.height)
+        assertEquals(bounds.left + 10f, geometry.thumbTravelStart)
+        assertEquals(bounds.right - 10f, geometry.thumbTravelEnd)
+        assertEquals(0.0, rangeInputFractionAt(input, bounds, bounds.left, 10f, styles))
+        assertEquals(1.0, rangeInputFractionAt(input, bounds, bounds.right, 10f, styles))
     }
 
     @Test

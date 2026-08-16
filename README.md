@@ -475,7 +475,38 @@ div(
 ```kotlin
 lateinit var volume: RangeInput<Float>
 
-val root = div {
+val rangeStyles = object : StyleSheet {
+    override val styles = mutableListOf<StyleSheetObject>()
+}.apply {
+    newStyle(
+        TargetClass("volume").rangeTrack,
+        UiStyle(backgroundColor = 0xFF404850.toInt()),
+    )
+    newStyle(
+        TargetClass("volume").rangeProgress,
+        UiStyle(backgroundColor = 0xFF4F8CFF.toInt()),
+    )
+    newStyle(TargetClass("volume").rangeThumb) { owner ->
+        owner as RangeInput<*>
+        UiStyle(
+            width = 12f.px,
+            height = 12f.px,
+            backgroundColor = if (owner.focused) {
+                0xFFFFFFFF.toInt()
+            } else {
+                0xFFE0E0E0.toInt()
+            },
+            border = if (owner.focused) {
+                UiBorders(1f, 0xFF80B0FF.toInt())
+            } else {
+                UiBorders.NONE
+            },
+            borderRadius = UiBorderRadii(50f.percent),
+        )
+    }
+}
+
+val root = div(styleSheets = listOf(rangeStyles)) {
     volume = rangeInput<Float>(
         value = 0.5f,
         min = 0f,
@@ -483,6 +514,7 @@ val root = div {
         step = 0.05f,
         label = "Volume",
         valueText = { value -> "${(value * 100).toInt()} percent" },
+        className = setOf("volume"),
         style = { input ->
             UiStyle(
                 width = 140f.px,
@@ -492,16 +524,6 @@ val root = div {
                 } else {
                     0xFF202428.toInt()
                 },
-                rangeInputStyle = UiRangeInputStyle(
-                    trackColor = 0xFF404850.toInt(),
-                    activeTrackColor = 0xFF4F8CFF.toInt(),
-                    thumbColor = if (input.focused) {
-                        0xFFFFFFFF.toInt()
-                    } else {
-                        0xFFE0E0E0.toInt()
-                    },
-                    focusColor = 0xFF80B0FF.toInt(),
-                ),
             )
         },
         onInput = { value -> previewVolume(value) },
@@ -516,7 +538,9 @@ An omitted or null `value` initializes to the step-aligned midpoint of `min` and
 
 Clicking or dragging the track dispatches `onInput` whenever the aligned value actually changes, then dispatches `onChange` once on mouse release or focus loss. Each keyboard operation is committed independently and dispatches both callbacks when it changes the value. Arrow keys change one step, Page Up/Down change ten steps, and Home/End select the minimum/maximum allowed value. Wheel input is left to the normal scroll-container chain.
 
-With `orientation = RangeOrientation.VERTICAL`, the minimum is at the bottom and maximum at the top. The default content size is `100 × 20` horizontally and `20 × 100` vertically. Changing orientation requires `relayout()`; changing the value or constraints does not. Use `trackColor`, `activeTrackColor`, `thumbColor`, and `focusColor` on `UiStyle.rangeInputStyle` to customize the internal appearance. Each property cascades independently, and omitted colors use their defaults. `RangeInput` participates in focus and Tab order without activating platform text input or IME.
+With `orientation = RangeOrientation.VERTICAL`, the minimum is at the bottom and maximum at the top. The default content size is `100 × 20` horizontally and `20 × 100` vertically. Changing orientation requires `relayout()`; changing the value or constraints does not.
+
+The track, filled progress, and thumb are user-agent-managed control parts selected with `rangeTrack`, `rangeProgress`, and `rangeThumb`. They can only be styled through a style sheet; `rangeInput()` deliberately has no part-style arguments. Each part receives an independent cascade over its UA defaults and accepts an ordinary `UiStyle`. Box sizing, dimensions and constraints, margin, padding, border, background, radius, and shadows affect its generated empty box. Layout properties without a meaningful internal context, such as flex item ordering, have no effect. A dynamic part rule receives the originating `RangeInput`, allowing focused, hovering, dragging, and disabled appearances without a separate part state object. Pointer value conversion uses the same styled track and thumb geometry as painting. `RangeInput` remains the only focus, event, and accessibility target and does not activate platform text input or IME.
 
 ### Color input
 

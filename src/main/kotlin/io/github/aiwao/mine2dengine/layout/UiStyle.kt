@@ -31,7 +31,7 @@ enum class UiPosition {
 }
 
 /**
- * Specified declarations for an element or generated pseudo-element.
+ * Specified declarations for an element, generated pseudo-element, or built-in control part.
  *
  * `null` always means “not declared”, never CSS `auto`. CSS keywords such as `auto`, `none`, and
  * `content` have explicit values in [UiSizeValue], [UiMarginValue], [UiInsetValue], and
@@ -81,7 +81,6 @@ data class UiStyle(
     val dropShadow: UiDropShadow? = null,
     val borderRadius: UiBorderRadii? = null,
     val border: UiBorders? = null,
-    val rangeInputStyle: UiRangeInputStyle? = null,
 ) {
     companion object {
         const val DEFAULT_COLOR: Int = -1
@@ -167,7 +166,6 @@ internal data class ResolvedUiStyle(
     val boxShadow: UiBoxShadow?,
     val textShadow: UiTextShadow?,
     val dropShadow: UiDropShadow?,
-    val rangeInputStyle: ResolvedUiRangeInputStyle,
 )
 
 internal fun UiStyle.resolveDefaults(
@@ -218,7 +216,6 @@ internal fun UiStyle.resolveDefaults(
         boxShadow = boxShadow,
         textShadow = textShadow,
         dropShadow = dropShadow,
-        rangeInputStyle = rangeInputStyle.resolveDefaults(),
     )
 }
 
@@ -296,7 +293,6 @@ internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
     boxShadow = overrides.boxShadow ?: boxShadow,
     textShadow = overrides.textShadow ?: textShadow,
     dropShadow = overrides.dropShadow ?: dropShadow,
-    rangeInputStyle = rangeInputStyle.withOverrides(overrides.rangeInputStyle),
 )
 
 /** Computed physical overflow values after the two axes have interacted. */
@@ -326,4 +322,43 @@ internal fun userAgentStyleFor(element: UiElement): UiStyle {
         "section", "ul",
     )
     return UiStyle(display = if (element.tag.lowercase() in blockTags) UiDisplay.BLOCK else UiDisplay.INLINE)
+}
+
+/** Lowest-priority UA declaration for a built-in control part. */
+internal fun userAgentStyleFor(
+    element: UiElement,
+    part: UiControlPart,
+): UiStyle {
+    require(element is RangeInput<*>) { "$part is not available on ${element.javaClass.simpleName}" }
+    return when (part) {
+        UiControlPart.RANGE_TRACK -> UiStyle(
+            display = UiDisplay.BLOCK,
+            width = if (element.orientation == RangeOrientation.HORIZONTAL) 100f.percent else 4f.px,
+            height = if (element.orientation == RangeOrientation.HORIZONTAL) 4f.px else 100f.percent,
+            backgroundColor = 0xFF555555.toInt(),
+            borderRadius = 50f.percent.let(::UiBorderRadii),
+        )
+
+        UiControlPart.RANGE_PROGRESS -> UiStyle(
+            display = UiDisplay.BLOCK,
+            width = if (element.orientation == RangeOrientation.HORIZONTAL) 100f.percent else 4f.px,
+            height = if (element.orientation == RangeOrientation.HORIZONTAL) 4f.px else 100f.percent,
+            backgroundColor = 0xFF4F8CFF.toInt(),
+            borderRadius = 50f.percent.let(::UiBorderRadii),
+        )
+
+        UiControlPart.RANGE_THUMB -> UiStyle(
+            display = UiDisplay.BLOCK,
+            width = (RangeInput.THUMB_RADIUS * 2f).px,
+            height = (RangeInput.THUMB_RADIUS * 2f).px,
+            boxSizing = UiBoxSizing.BORDER_BOX,
+            backgroundColor = 0xFFE0E0E0.toInt(),
+            borderRadius = 50f.percent.let(::UiBorderRadii),
+            border = if (element.focused) {
+                UiBorders(1f, 0xFFFFFFFF.toInt())
+            } else {
+                UiBorders.NONE
+            },
+        )
+    }
 }

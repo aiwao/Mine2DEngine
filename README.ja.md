@@ -462,7 +462,38 @@ div(
 ```kotlin
 lateinit var volume: RangeInput<Float>
 
-val root = div {
+val rangeStyles = object : StyleSheet {
+    override val styles = mutableListOf<StyleSheetObject>()
+}.apply {
+    newStyle(
+        TargetClass("volume").rangeTrack,
+        UiStyle(backgroundColor = 0xFF404850.toInt()),
+    )
+    newStyle(
+        TargetClass("volume").rangeProgress,
+        UiStyle(backgroundColor = 0xFF4F8CFF.toInt()),
+    )
+    newStyle(TargetClass("volume").rangeThumb) { owner ->
+        owner as RangeInput<*>
+        UiStyle(
+            width = 12f.px,
+            height = 12f.px,
+            backgroundColor = if (owner.focused) {
+                0xFFFFFFFF.toInt()
+            } else {
+                0xFFE0E0E0.toInt()
+            },
+            border = if (owner.focused) {
+                UiBorders(1f, 0xFF80B0FF.toInt())
+            } else {
+                UiBorders.NONE
+            },
+            borderRadius = UiBorderRadii(50f.percent),
+        )
+    }
+}
+
+val root = div(styleSheets = listOf(rangeStyles)) {
     volume = rangeInput<Float>(
         value = 0.5f,
         min = 0f,
@@ -470,6 +501,7 @@ val root = div {
         step = 0.05f,
         label = "Volume",
         valueText = { value -> "${(value * 100).toInt()} percent" },
+        className = setOf("volume"),
         style = { input ->
             UiStyle(
                 width = 140f.px,
@@ -479,16 +511,6 @@ val root = div {
                 } else {
                     0xFF202428.toInt()
                 },
-                rangeInputStyle = UiRangeInputStyle(
-                    trackColor = 0xFF404850.toInt(),
-                    activeTrackColor = 0xFF4F8CFF.toInt(),
-                    thumbColor = if (input.focused) {
-                        0xFFFFFFFF.toInt()
-                    } else {
-                        0xFFE0E0E0.toInt()
-                    },
-                    focusColor = 0xFF80B0FF.toInt(),
-                ),
             )
         },
         onInput = { value -> previewVolume(value) },
@@ -503,7 +525,9 @@ val root = div {
 
 trackのclickとdrag中は、step整列後の値が実際に変わるたびに`onInput`を呼び、mouse releaseまたはfocus喪失時に`onChange`を一度呼びます。keyboardの各操作は単独で確定され、変更時に`onInput`と`onChange`を呼びます。左右または上下矢印で1 step、Page Up/Downで10 steps、Home/Endで最小／最大の許容値へ移動します。wheelはsliderでは消費せず、通常のscroll containerへ配送されます。
 
-`orientation = RangeOrientation.VERTICAL`では最小値が下、最大値が上になります。デフォルトのcontent sizeはhorizontalで`100 × 20`、verticalで`20 × 100`です。orientation変更後は`relayout()`が必要ですが、値や範囲の変更では不要です。track、active track、thumb、focus ringの色は`UiStyle.rangeInputStyle`の`trackColor`、`activeTrackColor`、`thumbColor`、`focusColor`から変更できます。各プロパティは独立してcascadeされ、未指定の色にはデフォルト値が適用されます。`RangeInput`はfocusとTab順へ参加しますが、platform text input / IMEは有効化しません。
+`orientation = RangeOrientation.VERTICAL`では最小値が下、最大値が上になります。デフォルトのcontent sizeはhorizontalで`100 × 20`、verticalで`20 × 100`です。orientation変更後は`relayout()`が必要ですが、値や範囲の変更では不要です。
+
+track、塗りつぶされたprogress、thumbはuser agentが管理するcontrol partで、`rangeTrack`、`rangeProgress`、`rangeThumb`から選択します。スタイルはstylesheetからだけ設定でき、`rangeInput()`にpart用引数はありません。各partはUAデフォルトの上で独立してcascadeされ、通常の`UiStyle`を受け取ります。box sizing、寸法と制約、margin、padding、border、background、radius、shadowは生成された空boxへ反映されます。flex itemのorderなど、内部contextを持たないlayout propertyには効果がありません。動的part ruleには所有元の`RangeInput`が渡るため、part専用の状態objectを増やさずにfocused、hovering、dragging、disabledの見た目を指定できます。pointerから値への変換にも描画と同じstyled track・thumb geometryを使用します。focus、event、accessibilityの対象は引き続き`RangeInput`だけで、platform text input / IMEは有効化しません。
 
 ### Color input
 

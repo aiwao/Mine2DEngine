@@ -51,6 +51,7 @@ internal data class CssBox(
     val pseudoStyleProvider: (() -> UiPseudoStyle)? = null,
     val style: ResolvedUiStyle,
     val styleProvider: () -> ResolvedUiStyle,
+    val controlPartStyleProviders: Map<UiControlPart, () -> ResolvedUiStyle> = emptyMap(),
     val textStyle: ResolvedUiTextStyle,
     val children: List<CssBox> = emptyList(),
     val text: String? = null,
@@ -178,6 +179,7 @@ internal class CssBoxTreeBuilder(
         if (suppressed || style.display == UiDisplay.NONE) return emptyList()
 
         val textStyle = style.resolveTextStyle(inheritedTextStyle)
+        val controlPartStyleProviders = controlPartStyleProviders(element, elementScopes)
         val before = buildPseudo(
             element = element,
             pseudoElement = UiPseudoElement.BEFORE,
@@ -244,6 +246,7 @@ internal class CssBoxTreeBuilder(
                 element = element,
                 style = style,
                 styleProvider = styleProvider,
+                controlPartStyleProviders = controlPartStyleProviders,
                 textStyle = textStyle,
                 children = generatedChildren,
                 text = (element as? Paragraph)?.text,
@@ -349,6 +352,23 @@ internal class CssBoxTreeBuilder(
             val author = scopes.scopedStyleFor()
             val cascaded = author?.let(userAgent::withOverrides) ?: userAgent
             cascaded.withOverrides(element.style)
+        }
+    }
+
+    private fun controlPartStyleProviders(
+        element: UiElement,
+        elementScopes: List<StyleSheetScopeContext>,
+    ): Map<UiControlPart, () -> ResolvedUiStyle> {
+        if (element !is RangeInput<*>) return emptyMap()
+        return UiControlPart.entries.associateWith { part ->
+            val authorProvider = elementScopes.scopedControlPartStyleFor(part)
+            val provider: () -> ResolvedUiStyle = {
+                val userAgent = userAgentStyleFor(element, part)
+                val author = authorProvider?.invoke()
+                (author?.let(userAgent::withOverrides) ?: userAgent)
+                    .resolveDefaults(initialDisplay = UiDisplay.BLOCK)
+            }
+            provider
         }
     }
 

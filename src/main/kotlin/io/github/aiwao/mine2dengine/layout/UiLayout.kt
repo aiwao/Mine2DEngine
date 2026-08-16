@@ -39,66 +39,290 @@ internal data class ColorPickerGeometry(
 )
 
 internal data class RangeInputGeometry(
-    val trackBounds: UiRect,
-    val activeTrackBounds: UiRect,
-    val thumbCenterX: Float,
-    val thumbCenterY: Float,
-    val thumbRadius: Float,
+    val track: UiControlPartBox,
+    val progress: UiControlPartBox,
+    val thumb: UiControlPartBox,
+    internal val thumbTravelStart: Float,
+    internal val thumbTravelEnd: Float,
+) {
+    val trackBounds: UiRect
+        get() = track.borderBounds
+
+    val activeTrackBounds: UiRect
+        get() = progress.borderBounds
+
+    val thumbCenterX: Float
+        get() = thumb.marginBounds.left + thumb.marginBounds.width / 2f
+
+    val thumbCenterY: Float
+        get() = thumb.marginBounds.top + thumb.marginBounds.height / 2f
+
+    val thumbRadius: Float
+        get() = min(thumb.borderBounds.width, thumb.borderBounds.height) / 2f
+}
+
+/** Used box geometry for a user-agent-positioned control part. */
+internal data class UiControlPartBox(
+    val marginBounds: UiRect,
+    val borderBounds: UiRect,
+    val paddingBounds: UiRect,
+    val contentBounds: UiRect,
 )
+
+private data class UiControlPartMetrics(
+    val margin: UsedEdges,
+    val border: UsedEdges,
+    val padding: UsedEdges,
+    val contentWidth: Float,
+    val contentHeight: Float,
+) {
+    val borderWidth: Float
+        get() = contentWidth + border.horizontal + padding.horizontal
+
+    val borderHeight: Float
+        get() = contentHeight + border.vertical + padding.vertical
+
+    val outerWidth: Float
+        get() = (borderWidth + margin.horizontal).coerceAtLeast(0f)
+
+    val outerHeight: Float
+        get() = (borderHeight + margin.vertical).coerceAtLeast(0f)
+
+    fun centeredIn(bounds: UiRect): UiControlPartBox {
+        val marginBounds = UiRect(
+            left = bounds.left + (bounds.width - outerWidth) / 2f,
+            top = bounds.top + (bounds.height - outerHeight) / 2f,
+            width = outerWidth,
+            height = outerHeight,
+        )
+        return placedAt(marginBounds.left, marginBounds.top)
+    }
+
+    fun centeredAt(x: Float, y: Float): UiControlPartBox =
+        placedAt(x - outerWidth / 2f, y - outerHeight / 2f)
+
+    private fun placedAt(marginLeft: Float, marginTop: Float): UiControlPartBox {
+        val marginBounds = UiRect(marginLeft, marginTop, outerWidth, outerHeight)
+        val borderBounds = UiRect(
+            left = marginLeft + margin.left,
+            top = marginTop + margin.top,
+            width = borderWidth,
+            height = borderHeight,
+        )
+        val paddingBounds = UiRect(
+            left = borderBounds.left + border.left,
+            top = borderBounds.top + border.top,
+            width = (borderBounds.width - border.horizontal).coerceAtLeast(0f),
+            height = (borderBounds.height - border.vertical).coerceAtLeast(0f),
+        )
+        val contentBounds = UiRect(
+            left = paddingBounds.left + padding.left,
+            top = paddingBounds.top + padding.top,
+            width = contentWidth,
+            height = contentHeight,
+        )
+        return UiControlPartBox(marginBounds, borderBounds, paddingBounds, contentBounds)
+    }
+}
 
 internal fun rangeInputGeometry(
     input: RangeInput<*>,
     bounds: UiRect,
+    partStyles: Map<UiControlPart, ResolvedUiStyle> = defaultRangeInputPartStyles(input),
 ): RangeInputGeometry {
-    val thumbRadius = min(
-        RangeInput.THUMB_RADIUS,
-        min(bounds.width, bounds.height) / 2f,
-    ).coerceAtLeast(0f)
+    val trackStyle = partStyles.getValue(UiControlPart.RANGE_TRACK)
+    val progressStyle = partStyles.getValue(UiControlPart.RANGE_PROGRESS)
+    val thumbStyle = partStyles.getValue(UiControlPart.RANGE_THUMB)
+    val track = resolveControlPartMetrics(
+        style = trackStyle,
+        containingBlock = bounds,
+        intrinsicWidth = if (input.orientation == RangeOrientation.HORIZONTAL) {
+            bounds.width
+        } else {
+            RangeInput.TRACK_THICKNESS
+        },
+        intrinsicHeight = if (input.orientation == RangeOrientation.HORIZONTAL) {
+            RangeInput.TRACK_THICKNESS
+        } else {
+            bounds.height
+        },
+    ).centeredIn(bounds)
+    val interactionTrackBounds = if (trackStyle.display.box == null) bounds else track.borderBounds
+    val thumbMetrics = resolveControlPartMetrics(
+        style = thumbStyle,
+        containingBlock = bounds,
+        intrinsicWidth = RangeInput.THUMB_RADIUS * 2f,
+        intrinsicHeight = RangeInput.THUMB_RADIUS * 2f,
+    )
     val fraction = input.fraction().toFloat()
     return when (input.orientation) {
         RangeOrientation.HORIZONTAL -> {
-            val thumbStart = bounds.left + thumbRadius
-            val thumbTravel = (bounds.width - thumbRadius * 2f).coerceAtLeast(0f)
-            val centerX = thumbStart + thumbTravel * fraction
-            val centerY = bounds.top + bounds.height / 2f
-            val trackThickness = min(RangeInput.TRACK_THICKNESS, bounds.height)
-            val trackTop = centerY - trackThickness / 2f
+            val start = interactionTrackBounds.left + thumbMetrics.outerWidth / 2f
+            val end = interactionTrackBounds.right - thumbMetrics.outerWidth / 2f
+            val (travelStart, travelEnd) = orderedTravel(
+                start,
+                end,
+                interactionTrackBounds.left + interactionTrackBounds.width / 2f,
+            )
+            val centerX = travelStart + (travelEnd - travelStart) * fraction
+            val centerY = interactionTrackBounds.top + interactionTrackBounds.height / 2f
+            val thumb = thumbMetrics.centeredAt(centerX, centerY)
+            val progressArea = UiRect(
+                left = interactionTrackBounds.left,
+                top = bounds.top,
+                width = (centerX - interactionTrackBounds.left).coerceAtLeast(0f),
+                height = bounds.height,
+            )
+            val progress = resolveControlPartMetrics(
+                style = progressStyle,
+                containingBlock = progressArea,
+                intrinsicWidth = progressArea.width,
+                intrinsicHeight = RangeInput.TRACK_THICKNESS,
+            ).centeredIn(progressArea)
             RangeInputGeometry(
-                trackBounds = UiRect(bounds.left, trackTop, bounds.width, trackThickness),
-                activeTrackBounds = UiRect(
-                    bounds.left,
-                    trackTop,
-                    centerX - bounds.left,
-                    trackThickness,
-                ),
-                thumbCenterX = centerX,
-                thumbCenterY = centerY,
-                thumbRadius = thumbRadius,
+                track = track,
+                progress = progress,
+                thumb = thumb,
+                thumbTravelStart = travelStart,
+                thumbTravelEnd = travelEnd,
             )
         }
 
         RangeOrientation.VERTICAL -> {
-            val thumbStart = bounds.top + thumbRadius
-            val thumbTravel = (bounds.height - thumbRadius * 2f).coerceAtLeast(0f)
-            val centerX = bounds.left + bounds.width / 2f
-            val thumbEnd = thumbStart + thumbTravel
-            val centerY = thumbEnd - thumbTravel * fraction
-            val trackThickness = min(RangeInput.TRACK_THICKNESS, bounds.width)
-            val trackLeft = centerX - trackThickness / 2f
+            val start = interactionTrackBounds.top + thumbMetrics.outerHeight / 2f
+            val end = interactionTrackBounds.bottom - thumbMetrics.outerHeight / 2f
+            val (travelStart, travelEnd) = orderedTravel(
+                start,
+                end,
+                interactionTrackBounds.top + interactionTrackBounds.height / 2f,
+            )
+            val centerX = interactionTrackBounds.left + interactionTrackBounds.width / 2f
+            val centerY = travelEnd - (travelEnd - travelStart) * fraction
+            val thumb = thumbMetrics.centeredAt(centerX, centerY)
+            val progressArea = UiRect(
+                left = bounds.left,
+                top = centerY,
+                width = bounds.width,
+                height = (interactionTrackBounds.bottom - centerY).coerceAtLeast(0f),
+            )
+            val progress = resolveControlPartMetrics(
+                style = progressStyle,
+                containingBlock = progressArea,
+                intrinsicWidth = RangeInput.TRACK_THICKNESS,
+                intrinsicHeight = progressArea.height,
+            ).centeredIn(progressArea)
             RangeInputGeometry(
-                trackBounds = UiRect(trackLeft, bounds.top, trackThickness, bounds.height),
-                activeTrackBounds = UiRect(
-                    trackLeft,
-                    centerY,
-                    trackThickness,
-                    bounds.bottom - centerY,
-                ),
-                thumbCenterX = centerX,
-                thumbCenterY = centerY,
-                thumbRadius = thumbRadius,
+                track = track,
+                progress = progress,
+                thumb = thumb,
+                thumbTravelStart = travelStart,
+                thumbTravelEnd = travelEnd,
             )
         }
     }
+}
+
+private fun orderedTravel(start: Float, end: Float, fallback: Float): Pair<Float, Float> =
+    if (end >= start) start to end else fallback to fallback
+
+private fun defaultRangeInputPartStyles(
+    input: RangeInput<*>,
+): Map<UiControlPart, ResolvedUiStyle> = UiControlPart.entries.associateWith { part ->
+    userAgentStyleFor(input, part).resolveDefaults(initialDisplay = UiDisplay.BLOCK)
+}
+
+private fun resolveControlPartMetrics(
+    style: ResolvedUiStyle,
+    containingBlock: UiRect,
+    intrinsicWidth: Float,
+    intrinsicHeight: Float,
+): UiControlPartMetrics {
+    if (style.display.box == null) {
+        return UiControlPartMetrics(
+            margin = UsedEdges(),
+            border = UsedEdges(),
+            padding = UsedEdges(),
+            contentWidth = 0f,
+            contentHeight = 0f,
+        )
+    }
+
+    fun margin(value: UiMarginValue): Float = when (value) {
+        UiMarginValue.Auto -> 0f
+        is UiLength -> value.resolve(containingBlock.width) ?: 0f
+    }
+
+    val resolvedMargin = UsedEdges(
+        top = margin(style.margin.top),
+        right = margin(style.margin.right),
+        bottom = margin(style.margin.bottom),
+        left = margin(style.margin.left),
+    )
+    val border = UsedEdges(
+        top = style.border.top.usedWidth,
+        right = style.border.right.usedWidth,
+        bottom = style.border.bottom.usedWidth,
+        left = style.border.left.usedWidth,
+    )
+    val padding = UsedEdges(
+        top = style.padding.top.resolve(containingBlock.width) ?: 0f,
+        right = style.padding.right.resolve(containingBlock.width) ?: 0f,
+        bottom = style.padding.bottom.resolve(containingBlock.width) ?: 0f,
+        left = style.padding.left.resolve(containingBlock.width) ?: 0f,
+    )
+    val nonContent = border + padding
+    val contentWidth = resolveControlPartContentSize(
+        preferred = style.width,
+        minimum = style.minWidth,
+        maximum = style.maxWidth,
+        percentageBase = containingBlock.width,
+        intrinsic = intrinsicWidth,
+        nonContentSize = nonContent.horizontal,
+        boxSizing = style.boxSizing,
+    )
+    val contentHeight = resolveControlPartContentSize(
+        preferred = style.height,
+        minimum = style.minHeight,
+        maximum = style.maxHeight,
+        percentageBase = containingBlock.height,
+        intrinsic = intrinsicHeight,
+        nonContentSize = nonContent.vertical,
+        boxSizing = style.boxSizing,
+    )
+    return UiControlPartMetrics(resolvedMargin, border, padding, contentWidth, contentHeight)
+}
+
+private fun resolveControlPartContentSize(
+    preferred: UiSizeValue,
+    minimum: UiSizeValue,
+    maximum: UiSizeValue,
+    percentageBase: Float,
+    intrinsic: Float,
+    nonContentSize: Float,
+    boxSizing: UiBoxSizing,
+): Float {
+    fun quantitative(value: Float): Float = when (boxSizing) {
+        UiBoxSizing.CONTENT_BOX -> value.coerceAtLeast(0f)
+        UiBoxSizing.BORDER_BOX -> (value - nonContentSize).coerceAtLeast(0f)
+    }
+
+    fun resolve(value: UiSizeValue, auto: Float?): Float? = when (value) {
+        UiSizeValue.Auto -> auto
+        UiSizeValue.None -> null
+        UiSizeValue.MinContent, UiSizeValue.MaxContent -> intrinsic
+        is UiSizeValue.FitContent -> value.limit
+            ?.resolve(percentageBase)
+            ?.let(::quantitative)
+            ?.coerceAtMost(intrinsic)
+            ?: intrinsic
+
+        is UiLength -> value.resolve(percentageBase)?.let(::quantitative)
+    }
+
+    val resolvedMaximum = resolve(maximum, auto = null) ?: Float.POSITIVE_INFINITY
+    val resolvedMinimum = (resolve(minimum, auto = 0f) ?: 0f).coerceAtMost(resolvedMaximum)
+    val resolvedPreferred = resolve(preferred, auto = intrinsic) ?: intrinsic
+    return resolvedPreferred.coerceIn(resolvedMinimum, max(resolvedMinimum, resolvedMaximum))
 }
 
 internal fun rangeInputFractionAt(
@@ -106,23 +330,20 @@ internal fun rangeInputFractionAt(
     bounds: UiRect,
     pointerX: Float,
     pointerY: Float,
+    partStyles: Map<UiControlPart, ResolvedUiStyle> = defaultRangeInputPartStyles(input),
 ): Double {
-    val geometry = rangeInputGeometry(input, bounds)
+    val geometry = rangeInputGeometry(input, bounds, partStyles)
     val fraction = when (input.orientation) {
         RangeOrientation.HORIZONTAL -> {
-            val travel = (geometry.trackBounds.width - geometry.thumbRadius * 2f)
-                .coerceAtLeast(0f)
+            val travel = geometry.thumbTravelEnd - geometry.thumbTravelStart
             if (travel == 0f) return input.fraction()
-            val start = geometry.trackBounds.left + geometry.thumbRadius
-            ((pointerX - start) / travel).coerceIn(0f, 1f)
+            ((pointerX - geometry.thumbTravelStart) / travel).coerceIn(0f, 1f)
         }
 
         RangeOrientation.VERTICAL -> {
-            val travel = (geometry.trackBounds.height - geometry.thumbRadius * 2f)
-                .coerceAtLeast(0f)
+            val travel = geometry.thumbTravelEnd - geometry.thumbTravelStart
             if (travel == 0f) return input.fraction()
-            val end = geometry.trackBounds.bottom - geometry.thumbRadius
-            ((end - pointerY) / travel).coerceIn(0f, 1f)
+            ((geometry.thumbTravelEnd - pointerY) / travel).coerceIn(0f, 1f)
         }
     }
     return fraction.toDouble()
@@ -307,6 +528,7 @@ data class UiLayoutNode(
     ),
 ) {
     internal var styleProvider: () -> ResolvedUiStyle = { element.style.resolveDefaults() }
+    internal var controlPartStyleProviders: Map<UiControlPart, () -> ResolvedUiStyle> = emptyMap()
     internal var styledTextFragments: List<UiStyledTextLayoutFragment> = emptyList()
 
     /** Largest supported positive horizontal scroll offset for this layout snapshot. */
@@ -317,6 +539,15 @@ data class UiLayoutNode(
     val maximumScrollY: Float
         get() = (scrollableOverflowBounds.bottom - paddingBounds.bottom).coerceAtLeast(0f)
 }
+
+/** Returns the current cascaded style for one internal control part owned by this node. */
+internal fun UiLayoutNode.controlPartStyle(part: UiControlPart): ResolvedUiStyle =
+    requireNotNull(controlPartStyleProviders[part]) {
+        "${element.javaClass.simpleName} does not expose ${part.cssName}"
+    }.invoke()
+
+private fun UiLayoutNode.resolvedControlPartStyles(): Map<UiControlPart, ResolvedUiStyle> =
+    UiControlPart.entries.associateWith(::controlPartStyle)
 
 /** Calculated geometry and content for one generated pseudo-element box. */
 data class UiPseudoLayoutNode(
@@ -1265,6 +1496,7 @@ class UiLayout internal constructor(
                 bounds = node.contentBounds,
                 pointerX = pointerX,
                 pointerY = pointerY,
+                partStyles = node.resolvedControlPartStyles(),
             ),
         )
     }
@@ -1849,8 +2081,9 @@ class UiLayout internal constructor(
                 is RangeInput<*> -> drawRangeInput(
                     node,
                     element,
-                    style.rangeInputStyle,
+                    resolvedTextStyle,
                     renderer,
+                    timeSeconds,
                 )
                 else -> Unit
             }
@@ -1953,8 +2186,9 @@ class UiLayout internal constructor(
     private fun drawRangeInput(
         node: UiLayoutNode,
         input: RangeInput<*>,
-        style: ResolvedUiRangeInputStyle,
+        inheritedTextStyle: ResolvedUiTextStyle,
         renderer: Mine2DEngine,
+        timeSeconds: Float,
     ) {
         if (input.hovering) {
             renderer.graphics.requestCursor(
@@ -1963,34 +2197,30 @@ class UiLayout internal constructor(
         }
         val content = node.contentBounds
         if (content.width <= 0f || content.height <= 0f) return
-        val geometry = rangeInputGeometry(input, content)
+        val partStyles = node.resolvedControlPartStyles()
+        val geometry = rangeInputGeometry(input, content, partStyles)
 
-        geometry.trackBounds.drawRangePart(renderer, style.trackColor)
-        geometry.activeTrackBounds.drawRangePart(renderer, style.activeTrackColor)
-
-        if (geometry.thumbRadius > 0f) {
-            val thumbRadius = if (input.focused && geometry.thumbRadius > 1f) {
-                renderer.circle(
-                    geometry.thumbCenterX,
-                    geometry.thumbCenterY,
-                    geometry.thumbRadius,
-                    style.focusColor,
-                    RangeInput.THUMB_SEGMENTS,
-                    Mine2DMaterials.COLOR,
-                )
-                geometry.thumbRadius - 1f
-            } else {
-                geometry.thumbRadius
-            }
-            renderer.circle(
-                geometry.thumbCenterX,
-                geometry.thumbCenterY,
-                thumbRadius,
-                style.thumbColor,
-                RangeInput.THUMB_SEGMENTS,
-                Mine2DMaterials.COLOR,
-            )
-        }
+        drawControlPart(
+            geometry.track,
+            partStyles.getValue(UiControlPart.RANGE_TRACK),
+            inheritedTextStyle,
+            renderer,
+            timeSeconds,
+        )
+        drawControlPart(
+            geometry.progress,
+            partStyles.getValue(UiControlPart.RANGE_PROGRESS),
+            inheritedTextStyle,
+            renderer,
+            timeSeconds,
+        )
+        drawControlPart(
+            geometry.thumb,
+            partStyles.getValue(UiControlPart.RANGE_THUMB),
+            inheritedTextStyle,
+            renderer,
+            timeSeconds,
+        )
 
         if (input.disabled) {
             renderer.quad(
@@ -2002,6 +2232,85 @@ class UiLayout internal constructor(
                 Mine2DMaterials.COLOR,
             )
         }
+    }
+
+    private fun drawControlPart(
+        box: UiControlPartBox,
+        style: ResolvedUiStyle,
+        inheritedTextStyle: ResolvedUiTextStyle,
+        renderer: Mine2DEngine,
+        timeSeconds: Float,
+    ) {
+        if (
+            style.display.box == null ||
+            box.borderBounds.width <= 0f ||
+            box.borderBounds.height <= 0f
+        ) {
+            return
+        }
+
+        fun drawBox() {
+            val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
+            val roundedBox = style.borderRadius.resolve(box.borderBounds)
+            style.boxShadow?.let { shadow ->
+                renderer.boxShadow(
+                    x = box.borderBounds.left,
+                    y = box.borderBounds.top,
+                    width = box.borderBounds.width,
+                    height = box.borderBounds.height,
+                    color = shadow.color,
+                    offsetX = shadow.offsetX,
+                    offsetY = shadow.offsetY,
+                    blurRadius = shadow.blurRadius,
+                    spreadRadius = shadow.spreadRadius,
+                    cornerRadii = if (shadow.followBorderRadius) {
+                        roundedBox.radii
+                    } else {
+                        Mine2DRoundedRectRadii(shadow.cornerRadius)
+                    },
+                )
+            }
+            style.drawBackground(renderer.material) { color, material ->
+                renderer.roundedRect(
+                    box.borderBounds.left,
+                    box.borderBounds.top,
+                    box.borderBounds.width,
+                    box.borderBounds.height,
+                    roundedBox.radii,
+                    color,
+                    material,
+                    renderer.uniformContext(
+                        elementBounds = box.borderBounds.toUniformRect(),
+                        contentBounds = box.contentBounds.toUniformRect(),
+                        timeSeconds = timeSeconds,
+                    ),
+                )
+            }
+            drawBorder(
+                renderer = renderer,
+                border = style.border,
+                currentColor = resolvedTextStyle.color,
+                borderBounds = box.borderBounds,
+                paddingBounds = box.paddingBounds,
+                outerRadii = roundedBox.radii,
+                contentBounds = box.contentBounds,
+                timeSeconds = timeSeconds,
+            )
+        }
+
+        style.dropShadow?.let { shadow ->
+            renderer.withDropShadow(
+                x = box.borderBounds.left,
+                y = box.borderBounds.top,
+                width = box.borderBounds.width,
+                height = box.borderBounds.height,
+                color = shadow.color,
+                offsetX = shadow.offsetX,
+                offsetY = shadow.offsetY,
+                blurRadius = shadow.blurRadius,
+                draw = { drawBox() },
+            )
+        } ?: drawBox()
     }
 
     private fun drawOpenColorPicker(renderer: Mine2DEngine) {
@@ -2574,19 +2883,6 @@ internal fun textIndexAtHorizontalPosition(
     return text.length
 }
 
-private fun UiRect.drawRangePart(renderer: Mine2DEngine, color: Int) {
-    if (width <= 0f || height <= 0f) return
-    renderer.roundedRect(
-        left,
-        top,
-        width,
-        height,
-        min(width, height) / 2f,
-        color,
-        Mine2DMaterials.COLOR,
-    )
-}
-
 internal fun textInputAlignmentOffset(
     availableWidth: Float,
     textWidth: Float,
@@ -2670,6 +2966,7 @@ private fun UiLayoutNode.translated(deltaX: Float, deltaY: Float): UiLayoutNode 
     },
 ).also { translated ->
     translated.styleProvider = styleProvider
+    translated.controlPartStyleProviders = controlPartStyleProviders
     translated.styledTextFragments = styledTextFragments.map { styled ->
         styled.copy(
             fragment = styled.fragment.copy(
