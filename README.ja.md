@@ -291,7 +291,7 @@ borderはintrinsic size、flex、positioned layout、`box-sizing`の計算に含
 
 `borderRadius`はレイアウト寸法には影響しません。角半径の水平方向percentageはborder boxの幅、垂直方向percentageは高さを基準にします。overflowの両軸がclipする場合は、外側の半径から隣接するborder幅を引いたpadding-edge半径がclipに適用されます。box shadowは既定で外側のborder radiusを使用します。従来の単一半径を使う場合は `UiBoxShadow(cornerRadius = ..., followBorderRadius = false)` を指定します。0より大きい `cornerRadius` では `followBorderRadius` の既定値がfalseになります。
 
-preferred / minimum / maximum sizeでは`AUTO`、`MIN_CONTENT`、`MAX_CONTENT`、`FitContent(...)`、length-percentageを利用できます。maximum sizeでは`NONE`も利用できます。
+preferred / minimum / maximum sizeでは`AUTO`、`MIN_CONTENT`、`MAX_CONTENT`、`FitContent(...)`、length-percentageを利用できます。maximum sizeでは`NONE`も利用できます。minimumがmaximumを上回る場合はminimumが優先されます。`box-sizing`はlength-percentageと`FitContent(...)`の定量的なlimitへ適用され、`MIN_CONTENT`と`MAX_CONTENT`自体には適用されません。
 
 ### Overflow
 

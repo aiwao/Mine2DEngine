@@ -71,6 +71,19 @@ private data class IntrinsicWidths(
     }
 }
 
+/** Resolved content-box constraints for one physical axis. */
+private data class UsedSizeConstraints(
+    val minimum: Float,
+    val maximum: Float,
+) {
+    init {
+        require(minimum.isFinite() && minimum >= 0f)
+        require(maximum >= minimum)
+    }
+
+    fun clamp(size: Float): Float = size.coerceIn(minimum, maximum)
+}
+
 private data class ContentLayout(
     val naturalWidth: Float,
     val naturalHeight: Float,
@@ -141,12 +154,12 @@ internal class CssLayoutAlgorithm(
         val display = box.displayBox
 
         var usedMargin = metrics.margin.withAutoAsZero()
-        val specifiedContentWidth = constraints.forcedContentWidth ?: resolvePreferredSize(
+        val specifiedContentWidth = constraints.forcedContentWidth ?: resolveContentBoxSize(
             value = style.width,
             percentageBase = percentageWidth,
             intrinsic = intrinsic,
             available = availableWidth,
-            padding = metrics.insets.horizontal,
+            nonContentSize = metrics.insets.horizontal,
             boxSizing = style.boxSizing,
         )
         val fillsAvailableWidth = display.outside == UiDisplayOutside.BLOCK &&
@@ -166,7 +179,7 @@ internal class CssLayoutAlgorithm(
             preferredContentWidth,
             percentageWidth,
             intrinsic,
-            metrics.insets,
+            nonContentEdges = metrics.insets,
         )
 
         if (!constraints.isFlexItem && (
@@ -183,12 +196,12 @@ internal class CssLayoutAlgorithm(
             )
         }
 
-        val specifiedContentHeight = constraints.forcedContentHeight ?: resolvePreferredSize(
+        val specifiedContentHeight = constraints.forcedContentHeight ?: resolveContentBoxSize(
             value = style.height,
             percentageBase = constraints.percentageHeight,
             intrinsic = IntrinsicWidths(0f, 0f),
             available = (constraints.availableHeight as? AvailableSize.Definite)?.value,
-            padding = metrics.insets.vertical,
+            nonContentSize = metrics.insets.vertical,
             boxSizing = style.boxSizing,
         )
 
@@ -238,7 +251,7 @@ internal class CssLayoutAlgorithm(
             box = box,
             contentHeight = contentHeight,
             percentageBase = constraints.percentageHeight,
-            padding = metrics.insets,
+            nonContentEdges = metrics.insets,
             naturalHeight = contentLayout.naturalHeight,
         )
 
@@ -341,38 +354,86 @@ internal class CssLayoutAlgorithm(
         is UiLength -> value.resolve(percentageWidth) ?: 0f
     }
 
-    private fun resolvePreferredSize(
+    /** Resolves a sizing value to the content-box size used internally by layout. */
+    private fun resolveContentBoxSize(
         value: UiSizeValue,
         percentageBase: Float?,
         intrinsic: IntrinsicWidths,
         available: Float?,
-        padding: Float,
+        nonContentSize: Float,
         boxSizing: UiBoxSizing,
     ): Float? {
-        val specified = when (value) {
-            UiSizeValue.Auto, UiSizeValue.None -> return null
+        fun quantitativeSize(value: Float): Float = when (boxSizing) {
+            UiBoxSizing.CONTENT_BOX -> value.coerceAtLeast(0f)
+            UiBoxSizing.BORDER_BOX -> (value - nonContentSize).coerceAtLeast(0f)
+        }
+
+        return when (value) {
+            UiSizeValue.Auto, UiSizeValue.None -> null
             UiSizeValue.MinContent -> intrinsic.min
             UiSizeValue.MaxContent -> intrinsic.max
             is UiSizeValue.FitContent -> {
-                val limit = value.limit?.resolve(percentageBase) ?: available
-                limit?.let { max(intrinsic.min, min(intrinsic.max, (it - padding).coerceAtLeast(0f))) }
+                val limit = if (value.limit != null) {
+                    value.limit.resolve(percentageBase)?.let(::quantitativeSize)
+                        ?: return null
+                } else {
+                    available?.let { (it - nonContentSize).coerceAtLeast(0f) }
+                }
+                limit?.let { max(intrinsic.min, min(intrinsic.max, it)) }
                     ?: intrinsic.max
             }
 
-            is UiLength -> value.resolve(percentageBase) ?: return null
+            is UiLength -> value.resolve(percentageBase)?.let(::quantitativeSize)
         }
-        return when (boxSizing) {
-            UiBoxSizing.CONTENT_BOX -> specified.coerceAtLeast(0f)
-            UiBoxSizing.BORDER_BOX -> (specified - padding).coerceAtLeast(0f)
+    }
+
+    /**
+     * Resolves minimum and maximum sizes together so their conflict rule cannot differ between
+     * formatting contexts. An explicit minimum wins over a smaller maximum. A context-provided
+     * automatic minimum, such as a flex item's content-based minimum, is itself capped by max-size.
+     */
+    private fun resolveSizeConstraints(
+        minimum: UiSizeValue,
+        maximum: UiSizeValue,
+        percentageBase: Float?,
+        intrinsic: IntrinsicWidths,
+        available: Float?,
+        nonContentSize: Float,
+        boxSizing: UiBoxSizing,
+        automaticMinimum: Float = 0f,
+    ): UsedSizeConstraints {
+        val resolvedMaximum = resolveContentBoxSize(
+            value = maximum,
+            percentageBase = percentageBase,
+            intrinsic = intrinsic,
+            available = available,
+            nonContentSize = nonContentSize,
+            boxSizing = boxSizing,
+        ) ?: Float.POSITIVE_INFINITY
+        val resolvedMinimum = if (minimum == UiSizeValue.AUTO) {
+            automaticMinimum.coerceAtLeast(0f).coerceAtMost(resolvedMaximum)
+        } else {
+            resolveContentBoxSize(
+                value = minimum,
+                percentageBase = percentageBase,
+                intrinsic = intrinsic,
+                available = available,
+                nonContentSize = nonContentSize,
+                boxSizing = boxSizing,
+            ) ?: 0f
         }
+        return UsedSizeConstraints(
+            minimum = resolvedMinimum,
+            maximum = max(resolvedMinimum, resolvedMaximum),
+        )
     }
 
     private fun fitContentWidth(
         intrinsic: IntrinsicWidths,
         availableWidth: Float?,
-        padding: Float,
+        nonContentSize: Float,
     ): Float = availableWidth?.let { available ->
-        max(intrinsic.min, min(intrinsic.max, (available - padding).coerceAtLeast(0f)))
+        max(intrinsic.min, min(intrinsic.max, (available - nonContentSize).coerceAtLeast(0f)))
     } ?: intrinsic.max
 
     private fun clampWidth(
@@ -380,56 +441,38 @@ internal class CssLayoutAlgorithm(
         width: Float,
         percentageBase: Float?,
         intrinsic: IntrinsicWidths,
-        padding: UsedEdges,
+        nonContentEdges: UsedEdges,
     ): Float {
-        val minWidth = resolvePreferredSize(
-            box.style.minWidth,
-            percentageBase,
-            intrinsic,
-            null,
-            padding.horizontal,
-            box.style.boxSizing,
-        ) ?: if (box.style.minWidth == UiSizeValue.AUTO && box.style.flexShrink > 0f) {
-            0f
-        } else {
-            0f
-        }
-        val maxWidth = resolvePreferredSize(
-            box.style.maxWidth,
-            percentageBase,
-            intrinsic,
-            null,
-            padding.horizontal,
-            box.style.boxSizing,
-        ) ?: Float.POSITIVE_INFINITY
-        return width.coerceIn(minWidth.coerceAtMost(maxWidth), maxWidth)
+        val constraints = resolveSizeConstraints(
+            minimum = box.style.minWidth,
+            maximum = box.style.maxWidth,
+            percentageBase = percentageBase,
+            intrinsic = intrinsic,
+            available = null,
+            nonContentSize = nonContentEdges.horizontal,
+            boxSizing = box.style.boxSizing,
+        )
+        return constraints.clamp(width)
     }
 
     private fun clampHeight(
         box: CssBox,
         contentHeight: Float,
         percentageBase: Float?,
-        padding: UsedEdges,
+        nonContentEdges: UsedEdges,
         naturalHeight: Float,
     ): Float {
         val intrinsic = IntrinsicWidths(naturalHeight, naturalHeight)
-        val minHeight = resolvePreferredSize(
-            box.style.minHeight,
-            percentageBase,
-            intrinsic,
-            null,
-            padding.vertical,
-            box.style.boxSizing,
-        ) ?: 0f
-        val maxHeight = resolvePreferredSize(
-            box.style.maxHeight,
-            percentageBase,
-            intrinsic,
-            null,
-            padding.vertical,
-            box.style.boxSizing,
-        ) ?: Float.POSITIVE_INFINITY
-        return contentHeight.coerceIn(minHeight.coerceAtMost(maxHeight), maxHeight)
+        val constraints = resolveSizeConstraints(
+            minimum = box.style.minHeight,
+            maximum = box.style.maxHeight,
+            percentageBase = percentageBase,
+            intrinsic = intrinsic,
+            available = null,
+            nonContentSize = nonContentEdges.vertical,
+            boxSizing = box.style.boxSizing,
+        )
+        return constraints.clamp(contentHeight)
     }
 
     private fun resolveHorizontalAutoMargins(
@@ -935,41 +978,27 @@ internal class CssLayoutAlgorithm(
         }
 
         val natural = IntrinsicWidths(contentMin, max(contentMin, contentMax))
-        val specified = resolvePreferredSize(
+        val specified = resolveContentBoxSize(
             value = box.style.width,
             percentageBase = null,
             intrinsic = natural,
             available = null,
-            padding = metrics.insets.horizontal,
+            nonContentSize = metrics.insets.horizontal,
             boxSizing = box.style.boxSizing,
         )
-        var usedMin = specified ?: natural.min
-        var usedMax = specified ?: natural.max
-        val minimum = resolvePreferredSize(
-            value = box.style.minWidth,
+        val constraints = resolveSizeConstraints(
+            minimum = box.style.minWidth,
+            maximum = box.style.maxWidth,
             percentageBase = null,
             intrinsic = natural,
             available = null,
-            padding = metrics.insets.horizontal,
+            nonContentSize = metrics.insets.horizontal,
             boxSizing = box.style.boxSizing,
         )
-        val maximum = resolvePreferredSize(
-            value = box.style.maxWidth,
-            percentageBase = null,
-            intrinsic = natural,
-            available = null,
-            padding = metrics.insets.horizontal,
-            boxSizing = box.style.boxSizing,
+        return IntrinsicWidths(
+            min = constraints.clamp(specified ?: natural.min),
+            max = constraints.clamp(specified ?: natural.max),
         )
-        if (maximum != null) {
-            usedMin = min(usedMin, maximum)
-            usedMax = min(usedMax, maximum)
-        }
-        if (minimum != null) {
-            usedMin = max(usedMin, minimum)
-            usedMax = max(usedMax, minimum)
-        }
-        return IntrinsicWidths(usedMin.coerceAtLeast(0f), max(usedMin, usedMax).coerceAtLeast(0f))
     }
 
     private fun outerIntrinsicWidths(box: CssBox): IntrinsicWidths {
@@ -1312,12 +1341,12 @@ internal class CssLayoutAlgorithm(
         val mainPadding = if (axis.isRow) metrics.insets.horizontal else metrics.insets.vertical
         val mainProperty = if (axis.isRow) box.style.width else box.style.height
         val percentageBase = availableMain
-        val propertyMain = resolvePreferredSize(
+        val propertyMain = resolveContentBoxSize(
             value = mainProperty,
             percentageBase = percentageBase,
             intrinsic = intrinsicMain,
             available = availableMain,
-            padding = mainPadding,
+            nonContentSize = mainPadding,
             boxSizing = box.style.boxSizing,
         )
         val flexBase = when (val basis = box.style.flexBasis) {
@@ -1325,12 +1354,14 @@ internal class CssLayoutAlgorithm(
             UiFlexBasis.Content -> naturalMain
             UiFlexBasis.MinContent -> intrinsicMain.min
             UiFlexBasis.MaxContent -> intrinsicMain.max
-            is UiLength -> basis.resolve(percentageBase)?.let { specified ->
-                when (box.style.boxSizing) {
-                    UiBoxSizing.CONTENT_BOX -> specified
-                    UiBoxSizing.BORDER_BOX -> (specified - mainPadding).coerceAtLeast(0f)
-                }
-            } ?: naturalMain
+            is UiLength -> resolveContentBoxSize(
+                value = basis,
+                percentageBase = percentageBase,
+                intrinsic = intrinsicMain,
+                available = availableMain,
+                nonContentSize = mainPadding,
+                boxSizing = box.style.boxSizing,
+            ) ?: naturalMain
         }
         val minProperty = if (axis.isRow) box.style.minWidth else box.style.minHeight
         val maxProperty = if (axis.isRow) box.style.maxWidth else box.style.maxHeight
@@ -1338,32 +1369,22 @@ internal class CssLayoutAlgorithm(
             min(intrinsicMain.min, specified)
         } ?: intrinsicMain.min
         val mainOverflow = if (axis.isRow) box.style.overflow.x else box.style.overflow.y
-        val minimum = if (minProperty == UiSizeValue.AUTO) {
-            if (mainOverflow.isScrollable) 0f else automaticMinimum
-        } else {
-            resolvePreferredSize(
-                minProperty,
-                percentageBase,
-                intrinsicMain,
-                availableMain,
-                mainPadding,
-                box.style.boxSizing,
-            ) ?: 0f
-        }
-        val maximum = resolvePreferredSize(
-            maxProperty,
-            percentageBase,
-            intrinsicMain,
-            availableMain,
-            mainPadding,
-            box.style.boxSizing,
-        ) ?: Float.POSITIVE_INFINITY
+        val constraints = resolveSizeConstraints(
+            minimum = minProperty,
+            maximum = maxProperty,
+            percentageBase = percentageBase,
+            intrinsic = intrinsicMain,
+            available = availableMain,
+            nonContentSize = mainPadding,
+            boxSizing = box.style.boxSizing,
+            automaticMinimum = if (mainOverflow.isScrollable) 0f else automaticMinimum,
+        )
         return FlexItemPlan(
             box = box,
             metrics = metrics,
             baseMainSize = flexBase.coerceAtLeast(0f),
-            minMainSize = minimum.coerceAtMost(maximum),
-            maxMainSize = maximum,
+            minMainSize = constraints.minimum,
+            maxMainSize = constraints.maximum,
             sourceIndex = sourceIndex,
         )
     }
