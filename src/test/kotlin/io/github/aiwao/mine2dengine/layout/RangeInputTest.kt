@@ -267,10 +267,25 @@ class RangeInputTest {
         val bounds = UiRect(0f, 0f, 20f, 100f)
         val geometry = rangeInputGeometry(input, bounds)
 
+        assertEquals(bounds.top, geometry.trackBounds.top)
+        assertEquals(bounds.height, geometry.trackBounds.height)
         assertEquals(10f, geometry.thumbCenterX)
         assertEquals(50f, geometry.thumbCenterY)
         assertEquals(1.0, rangeInputFractionAt(input, bounds, 10f, 5f))
         assertEquals(0.0, rangeInputFractionAt(input, bounds, 10f, 95f))
+    }
+
+    @Test
+    fun `horizontal track fills the content width without adding an internal inset`() {
+        val input = rangeInput(value = 50.0)
+        val bounds = UiRect(8f, 4f, 84f, 20f)
+        val geometry = rangeInputGeometry(input, bounds)
+
+        assertEquals(bounds.left, geometry.trackBounds.left)
+        assertEquals(bounds.width, geometry.trackBounds.width)
+        assertEquals(50f, geometry.thumbCenterX)
+        assertEquals(0.0, rangeInputFractionAt(input, bounds, bounds.left, 14f))
+        assertEquals(1.0, rangeInputFractionAt(input, bounds, bounds.right, 14f))
     }
 
     @Test

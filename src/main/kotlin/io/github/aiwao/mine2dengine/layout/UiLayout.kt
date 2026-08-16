@@ -57,15 +57,20 @@ internal fun rangeInputGeometry(
     val fraction = input.fraction().toFloat()
     return when (input.orientation) {
         RangeOrientation.HORIZONTAL -> {
-            val start = bounds.left + thumbRadius
-            val travel = (bounds.width - thumbRadius * 2f).coerceAtLeast(0f)
-            val centerX = start + travel * fraction
+            val thumbStart = bounds.left + thumbRadius
+            val thumbTravel = (bounds.width - thumbRadius * 2f).coerceAtLeast(0f)
+            val centerX = thumbStart + thumbTravel * fraction
             val centerY = bounds.top + bounds.height / 2f
             val trackThickness = min(RangeInput.TRACK_THICKNESS, bounds.height)
             val trackTop = centerY - trackThickness / 2f
             RangeInputGeometry(
-                trackBounds = UiRect(start, trackTop, travel, trackThickness),
-                activeTrackBounds = UiRect(start, trackTop, centerX - start, trackThickness),
+                trackBounds = UiRect(bounds.left, trackTop, bounds.width, trackThickness),
+                activeTrackBounds = UiRect(
+                    bounds.left,
+                    trackTop,
+                    centerX - bounds.left,
+                    trackThickness,
+                ),
                 thumbCenterX = centerX,
                 thumbCenterY = centerY,
                 thumbRadius = thumbRadius,
@@ -73,16 +78,21 @@ internal fun rangeInputGeometry(
         }
 
         RangeOrientation.VERTICAL -> {
-            val start = bounds.top + thumbRadius
-            val travel = (bounds.height - thumbRadius * 2f).coerceAtLeast(0f)
+            val thumbStart = bounds.top + thumbRadius
+            val thumbTravel = (bounds.height - thumbRadius * 2f).coerceAtLeast(0f)
             val centerX = bounds.left + bounds.width / 2f
-            val end = start + travel
-            val centerY = end - travel * fraction
+            val thumbEnd = thumbStart + thumbTravel
+            val centerY = thumbEnd - thumbTravel * fraction
             val trackThickness = min(RangeInput.TRACK_THICKNESS, bounds.width)
             val trackLeft = centerX - trackThickness / 2f
             RangeInputGeometry(
-                trackBounds = UiRect(trackLeft, start, trackThickness, travel),
-                activeTrackBounds = UiRect(trackLeft, centerY, trackThickness, end - centerY),
+                trackBounds = UiRect(trackLeft, bounds.top, trackThickness, bounds.height),
+                activeTrackBounds = UiRect(
+                    trackLeft,
+                    centerY,
+                    trackThickness,
+                    bounds.bottom - centerY,
+                ),
                 thumbCenterX = centerX,
                 thumbCenterY = centerY,
                 thumbRadius = thumbRadius,
@@ -100,15 +110,19 @@ internal fun rangeInputFractionAt(
     val geometry = rangeInputGeometry(input, bounds)
     val fraction = when (input.orientation) {
         RangeOrientation.HORIZONTAL -> {
-            val travel = geometry.trackBounds.width
+            val travel = (geometry.trackBounds.width - geometry.thumbRadius * 2f)
+                .coerceAtLeast(0f)
             if (travel == 0f) return input.fraction()
-            ((pointerX - geometry.trackBounds.left) / travel).coerceIn(0f, 1f)
+            val start = geometry.trackBounds.left + geometry.thumbRadius
+            ((pointerX - start) / travel).coerceIn(0f, 1f)
         }
 
         RangeOrientation.VERTICAL -> {
-            val travel = geometry.trackBounds.height
+            val travel = (geometry.trackBounds.height - geometry.thumbRadius * 2f)
+                .coerceAtLeast(0f)
             if (travel == 0f) return input.fraction()
-            ((geometry.trackBounds.bottom - pointerY) / travel).coerceIn(0f, 1f)
+            val end = geometry.trackBounds.bottom - geometry.thumbRadius
+            ((end - pointerY) / travel).coerceIn(0f, 1f)
         }
     }
     return fraction.toDouble()
