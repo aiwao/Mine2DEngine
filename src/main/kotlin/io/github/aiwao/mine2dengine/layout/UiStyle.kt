@@ -81,6 +81,7 @@ data class UiStyle(
     val dropShadow: UiDropShadow? = null,
     val borderRadius: UiBorderRadii? = null,
     val border: UiBorders? = null,
+    val rangeInputStyle: UiRangeInputStyle? = null,
 ) {
     companion object {
         const val DEFAULT_COLOR: Int = -1
@@ -166,6 +167,7 @@ internal data class ResolvedUiStyle(
     val boxShadow: UiBoxShadow?,
     val textShadow: UiTextShadow?,
     val dropShadow: UiDropShadow?,
+    val rangeInputStyle: ResolvedUiRangeInputStyle,
 )
 
 internal fun UiStyle.resolveDefaults(
@@ -216,6 +218,7 @@ internal fun UiStyle.resolveDefaults(
         boxShadow = boxShadow,
         textShadow = textShadow,
         dropShadow = dropShadow,
+        rangeInputStyle = rangeInputStyle.resolveDefaults(),
     )
 }
 
@@ -293,6 +296,7 @@ internal fun UiStyle.withOverrides(overrides: UiStyle): UiStyle = copy(
     boxShadow = overrides.boxShadow ?: boxShadow,
     textShadow = overrides.textShadow ?: textShadow,
     dropShadow = overrides.dropShadow ?: dropShadow,
+    rangeInputStyle = rangeInputStyle.withOverrides(overrides.rangeInputStyle),
 )
 
 /** Computed physical overflow values after the two axes have interacted. */

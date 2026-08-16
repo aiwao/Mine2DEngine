@@ -479,6 +479,16 @@ val root = div {
                 } else {
                     0xFF202428.toInt()
                 },
+                rangeInputStyle = UiRangeInputStyle(
+                    trackColor = 0xFF404850.toInt(),
+                    activeTrackColor = 0xFF4F8CFF.toInt(),
+                    thumbColor = if (input.focused) {
+                        0xFFFFFFFF.toInt()
+                    } else {
+                        0xFFE0E0E0.toInt()
+                    },
+                    focusColor = 0xFF80B0FF.toInt(),
+                ),
             )
         },
         onInput = { value -> previewVolume(value) },
@@ -493,7 +503,7 @@ val root = div {
 
 trackのclickとdrag中は、step整列後の値が実際に変わるたびに`onInput`を呼び、mouse releaseまたはfocus喪失時に`onChange`を一度呼びます。keyboardの各操作は単独で確定され、変更時に`onInput`と`onChange`を呼びます。左右または上下矢印で1 step、Page Up/Downで10 steps、Home/Endで最小／最大の許容値へ移動します。wheelはsliderでは消費せず、通常のscroll containerへ配送されます。
 
-`orientation = RangeOrientation.VERTICAL`では最小値が下、最大値が上になります。デフォルトのcontent sizeはhorizontalで`100 × 20`、verticalで`20 × 100`です。orientation変更後は`relayout()`が必要ですが、値や範囲の変更では不要です。track、active track、thumb、focus ringの色はそれぞれ`trackColor`、`activeTrackColor`、`thumbColor`、`focusColor`から変更できます。`RangeInput`はfocusとTab順へ参加しますが、platform text input / IMEは有効化しません。
+`orientation = RangeOrientation.VERTICAL`では最小値が下、最大値が上になります。デフォルトのcontent sizeはhorizontalで`100 × 20`、verticalで`20 × 100`です。orientation変更後は`relayout()`が必要ですが、値や範囲の変更では不要です。track、active track、thumb、focus ringの色は`UiStyle.rangeInputStyle`の`trackColor`、`activeTrackColor`、`thumbColor`、`focusColor`から変更できます。各プロパティは独立してcascadeされ、未指定の色にはデフォルト値が適用されます。`RangeInput`はfocusとTab順へ参加しますが、platform text input / IMEは有効化しません。
 
 ### Color input
 

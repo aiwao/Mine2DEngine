@@ -23,10 +23,12 @@ class RangeInputTest {
         root: UiElement,
         width: Float = 180f,
         height: Float = 160f,
+        styleSheets: Iterable<StyleSheet> = emptyList(),
     ): UiLayout = calculateLayout(
         root = root,
         viewport = UiRect(0f, 0f, width, height),
         textMeasurer = textMeasurer,
+        styleSheets = styleSheets,
     )
 
     private fun leftClick(x: Float, y: Float): MouseButtonEvent = MouseButtonEvent(
@@ -63,6 +65,69 @@ class RangeInputTest {
         assertEquals(7, tokenInt.value)
         assertSame(RangeNumberTypes.FLOAT, explicitFloat.numberType)
         assertEquals(0.25f, explicitFloat.value)
+    }
+
+    @Test
+    fun `range input style resolves defaults and cascades each internal part independently`() {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(
+                TargetClass("styled-range"),
+                UiStyle(
+                    rangeInputStyle = UiRangeInputStyle(
+                        trackColor = 0xFF102030.toInt(),
+                        thumbColor = 0xFF405060.toInt(),
+                    ),
+                ),
+            )
+        }
+        val input = rangeInput<Int>(
+            style = UiStyle(
+                rangeInputStyle = UiRangeInputStyle(
+                    thumbColor = 0xFF708090.toInt(),
+                    focusColor = 0xFFA0B0C0.toInt(),
+                ),
+            ),
+            className = setOf("styled-range"),
+        )
+
+        val resolved = layout(input, styleSheets = listOf(sheet)).root
+            .styleProvider()
+            .rangeInputStyle
+
+        assertEquals(0xFF102030.toInt(), resolved.trackColor)
+        assertEquals(0xFF4F8CFF.toInt(), resolved.activeTrackColor)
+        assertEquals(0xFF708090.toInt(), resolved.thumbColor)
+        assertEquals(0xFFA0B0C0.toInt(), resolved.focusColor)
+    }
+
+    @Test
+    fun `dynamic range input style follows interaction state without relayout`() {
+        lateinit var input: RangeInput<Int>
+        val root = div {
+            input = rangeInput<Int>(
+                style = { range ->
+                    UiStyle(
+                        rangeInputStyle = UiRangeInputStyle(
+                            thumbColor = if (range.focused) {
+                                0xFFFFFFFF.toInt()
+                            } else {
+                                0xFF808080.toInt()
+                            },
+                        ),
+                    )
+                },
+            )
+        }
+        val result = layout(root)
+        val node = result.nodeOf(input)!!
+
+        assertEquals(0xFF808080.toInt(), node.styleProvider().rangeInputStyle.thumbColor)
+
+        result.focus(input)
+
+        assertEquals(0xFFFFFFFF.toInt(), node.styleProvider().rangeInputStyle.thumbColor)
     }
 
     @Test

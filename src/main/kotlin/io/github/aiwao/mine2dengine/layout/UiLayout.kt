@@ -1846,7 +1846,12 @@ class UiLayout internal constructor(
                 )
 
                 is ColorInput -> drawColorInput(node, element, renderer)
-                is RangeInput<*> -> drawRangeInput(node, element, renderer)
+                is RangeInput<*> -> drawRangeInput(
+                    node,
+                    element,
+                    style.rangeInputStyle,
+                    renderer,
+                )
                 else -> Unit
             }
 
@@ -1948,6 +1953,7 @@ class UiLayout internal constructor(
     private fun drawRangeInput(
         node: UiLayoutNode,
         input: RangeInput<*>,
+        style: ResolvedUiRangeInputStyle,
         renderer: Mine2DEngine,
     ) {
         if (input.hovering) {
@@ -1959,8 +1965,8 @@ class UiLayout internal constructor(
         if (content.width <= 0f || content.height <= 0f) return
         val geometry = rangeInputGeometry(input, content)
 
-        geometry.trackBounds.drawRangePart(renderer, input.trackColor)
-        geometry.activeTrackBounds.drawRangePart(renderer, input.activeTrackColor)
+        geometry.trackBounds.drawRangePart(renderer, style.trackColor)
+        geometry.activeTrackBounds.drawRangePart(renderer, style.activeTrackColor)
 
         if (geometry.thumbRadius > 0f) {
             val thumbRadius = if (input.focused && geometry.thumbRadius > 1f) {
@@ -1968,7 +1974,7 @@ class UiLayout internal constructor(
                     geometry.thumbCenterX,
                     geometry.thumbCenterY,
                     geometry.thumbRadius,
-                    input.focusColor,
+                    style.focusColor,
                     RangeInput.THUMB_SEGMENTS,
                     Mine2DMaterials.COLOR,
                 )
@@ -1980,7 +1986,7 @@ class UiLayout internal constructor(
                 geometry.thumbCenterX,
                 geometry.thumbCenterY,
                 thumbRadius,
-                input.thumbColor,
+                style.thumbColor,
                 RangeInput.THUMB_SEGMENTS,
                 Mine2DMaterials.COLOR,
             )
