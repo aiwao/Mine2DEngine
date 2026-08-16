@@ -142,6 +142,8 @@ sealed interface UiFlexBasis {
 enum class UiLengthUnit {
     PX,
     PERCENT,
+    VW,
+    VH,
 }
 
 /**
@@ -167,15 +169,30 @@ val Float.px: UiLength
 val Float.percent: UiLength
     get() = UiLength(this, UiLengthUnit.PERCENT)
 
-internal fun UiLength.resolve(percentageBase: Float?): Float? {
-    val resolved = when (unit) {
-        UiLengthUnit.PX -> value
-        UiLengthUnit.PERCENT -> percentageBase?.let { it * value / 100f }
+/** Treats this value as a percentage of the layout viewport's width. */
+val Float.vw: UiLength
+    get() = UiLength(this, UiLengthUnit.VW)
+
+/** Treats this value as a percentage of the layout viewport's height. */
+val Float.vh: UiLength
+    get() = UiLength(this, UiLengthUnit.VH)
+
+/** Resolves CSS lengths against the viewport shared by one layout or rendering pass. */
+internal class UiLengthResolver(
+    private val viewport: UiSize,
+) {
+    fun resolve(length: UiLength, percentageBase: Float?): Float? {
+        val resolved = when (length.unit) {
+            UiLengthUnit.PX -> length.value
+            UiLengthUnit.PERCENT -> percentageBase?.let { it * length.value / 100f }
+            UiLengthUnit.VW -> viewport.width * length.value / 100f
+            UiLengthUnit.VH -> viewport.height * length.value / 100f
+        }
+        require(resolved == null || resolved.isFinite()) {
+            "Resolved length must be finite: $resolved"
+        }
+        return resolved
     }
-    require(resolved == null || resolved.isFinite()) {
-        "Resolved length must be finite: $resolved"
-    }
-    return resolved
 }
 
 /** Declaration accepted by the CSS margin longhands/shorthand. */
@@ -254,15 +271,19 @@ data class UiBorderSide(
     ) : this(width.px, style, color)
 
     init {
-        require(width.unit == UiLengthUnit.PX) {
+        require(width.unit != UiLengthUnit.PERCENT) {
             "Border width does not accept percentages: $width"
         }
         require(width.value >= 0f) { "Border width must be non-negative: $width" }
     }
 
     /** The layout width after `border-style: none` has been applied. */
-    internal val usedWidth: Float
-        get() = if (style == UiBorderStyle.NONE) 0f else width.value
+    internal fun usedWidth(lengthResolver: UiLengthResolver): Float =
+        if (style == UiBorderStyle.NONE) {
+            0f
+        } else {
+            checkNotNull(lengthResolver.resolve(width, percentageBase = null))
+        }
 
     companion object {
         @JvmField

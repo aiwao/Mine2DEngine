@@ -128,6 +128,7 @@ private data class UiControlPartMetrics(
 internal fun rangeInputGeometry(
     input: RangeInput<*>,
     bounds: UiRect,
+    lengthResolver: UiLengthResolver,
     partStyles: Map<UiControlPart, ResolvedUiStyle> = defaultRangeInputPartStyles(input),
 ): RangeInputGeometry {
     val trackStyle = partStyles.getValue(UiControlPart.RANGE_TRACK)
@@ -146,6 +147,7 @@ internal fun rangeInputGeometry(
         } else {
             bounds.height
         },
+        lengthResolver = lengthResolver,
     ).centeredIn(bounds)
     val interactionTrackBounds = if (trackStyle.display.box == null) bounds else track.borderBounds
     val thumbMetrics = resolveControlPartMetrics(
@@ -153,6 +155,7 @@ internal fun rangeInputGeometry(
         containingBlock = bounds,
         intrinsicWidth = RangeInput.THUMB_RADIUS * 2f,
         intrinsicHeight = RangeInput.THUMB_RADIUS * 2f,
+        lengthResolver = lengthResolver,
     )
     val fraction = input.fraction().toFloat()
     return when (input.orientation) {
@@ -178,6 +181,7 @@ internal fun rangeInputGeometry(
                 containingBlock = progressArea,
                 intrinsicWidth = progressArea.width,
                 intrinsicHeight = RangeInput.TRACK_THICKNESS,
+                lengthResolver = lengthResolver,
             ).centeredIn(progressArea)
             RangeInputGeometry(
                 track = track,
@@ -210,6 +214,7 @@ internal fun rangeInputGeometry(
                 containingBlock = progressArea,
                 intrinsicWidth = RangeInput.TRACK_THICKNESS,
                 intrinsicHeight = progressArea.height,
+                lengthResolver = lengthResolver,
             ).centeredIn(progressArea)
             RangeInputGeometry(
                 track = track,
@@ -236,6 +241,7 @@ private fun resolveControlPartMetrics(
     containingBlock: UiRect,
     intrinsicWidth: Float,
     intrinsicHeight: Float,
+    lengthResolver: UiLengthResolver,
 ): UiControlPartMetrics {
     if (style.display.box == null) {
         return UiControlPartMetrics(
@@ -249,7 +255,7 @@ private fun resolveControlPartMetrics(
 
     fun margin(value: UiMarginValue): Float = when (value) {
         UiMarginValue.Auto -> 0f
-        is UiLength -> value.resolve(containingBlock.width) ?: 0f
+        is UiLength -> lengthResolver.resolve(value, containingBlock.width) ?: 0f
     }
 
     val resolvedMargin = UsedEdges(
@@ -259,16 +265,16 @@ private fun resolveControlPartMetrics(
         left = margin(style.margin.left),
     )
     val border = UsedEdges(
-        top = style.border.top.usedWidth,
-        right = style.border.right.usedWidth,
-        bottom = style.border.bottom.usedWidth,
-        left = style.border.left.usedWidth,
+        top = style.border.top.usedWidth(lengthResolver),
+        right = style.border.right.usedWidth(lengthResolver),
+        bottom = style.border.bottom.usedWidth(lengthResolver),
+        left = style.border.left.usedWidth(lengthResolver),
     )
     val padding = UsedEdges(
-        top = style.padding.top.resolve(containingBlock.width) ?: 0f,
-        right = style.padding.right.resolve(containingBlock.width) ?: 0f,
-        bottom = style.padding.bottom.resolve(containingBlock.width) ?: 0f,
-        left = style.padding.left.resolve(containingBlock.width) ?: 0f,
+        top = lengthResolver.resolve(style.padding.top, containingBlock.width) ?: 0f,
+        right = lengthResolver.resolve(style.padding.right, containingBlock.width) ?: 0f,
+        bottom = lengthResolver.resolve(style.padding.bottom, containingBlock.width) ?: 0f,
+        left = lengthResolver.resolve(style.padding.left, containingBlock.width) ?: 0f,
     )
     val nonContent = border + padding
     val contentWidth = resolveControlPartContentSize(
@@ -279,6 +285,7 @@ private fun resolveControlPartMetrics(
         intrinsic = intrinsicWidth,
         nonContentSize = nonContent.horizontal,
         boxSizing = style.boxSizing,
+        lengthResolver = lengthResolver,
     )
     val contentHeight = resolveControlPartContentSize(
         preferred = style.height,
@@ -288,6 +295,7 @@ private fun resolveControlPartMetrics(
         intrinsic = intrinsicHeight,
         nonContentSize = nonContent.vertical,
         boxSizing = style.boxSizing,
+        lengthResolver = lengthResolver,
     )
     return UiControlPartMetrics(resolvedMargin, border, padding, contentWidth, contentHeight)
 }
@@ -300,6 +308,7 @@ private fun resolveControlPartContentSize(
     intrinsic: Float,
     nonContentSize: Float,
     boxSizing: UiBoxSizing,
+    lengthResolver: UiLengthResolver,
 ): Float {
     fun quantitative(value: Float): Float = when (boxSizing) {
         UiBoxSizing.CONTENT_BOX -> value.coerceAtLeast(0f)
@@ -311,12 +320,12 @@ private fun resolveControlPartContentSize(
         UiSizeValue.None -> null
         UiSizeValue.MinContent, UiSizeValue.MaxContent -> intrinsic
         is UiSizeValue.FitContent -> value.limit
-            ?.resolve(percentageBase)
+            ?.let { lengthResolver.resolve(it, percentageBase) }
             ?.let(::quantitative)
             ?.coerceAtMost(intrinsic)
             ?: intrinsic
 
-        is UiLength -> value.resolve(percentageBase)?.let(::quantitative)
+        is UiLength -> lengthResolver.resolve(value, percentageBase)?.let(::quantitative)
     }
 
     val resolvedMaximum = resolve(maximum, auto = null) ?: Float.POSITIVE_INFINITY
@@ -330,9 +339,10 @@ internal fun rangeInputFractionAt(
     bounds: UiRect,
     pointerX: Float,
     pointerY: Float,
+    lengthResolver: UiLengthResolver,
     partStyles: Map<UiControlPart, ResolvedUiStyle> = defaultRangeInputPartStyles(input),
 ): Double {
-    val geometry = rangeInputGeometry(input, bounds, partStyles)
+    val geometry = rangeInputGeometry(input, bounds, lengthResolver, partStyles)
     val fraction = when (input.orientation) {
         RangeOrientation.HORIZONTAL -> {
             val travel = geometry.thumbTravelEnd - geometry.thumbTravelStart
@@ -603,6 +613,8 @@ class UiLayout internal constructor(
     var viewport: UiRect = viewport
         private set
 
+    private var lengthResolver = UiLengthResolver(UiSize(viewport.width, viewport.height))
+
     var root: UiLayoutNode = snapshot.root
         private set
 
@@ -681,6 +693,7 @@ class UiLayout internal constructor(
         val snapshot = snapshotCalculator(viewport, emptyMap())
         applySnapshot(snapshot)
         this.viewport = viewport
+        lengthResolver = UiLengthResolver(UiSize(viewport.width, viewport.height))
     }
 
     /**
@@ -1496,6 +1509,7 @@ class UiLayout internal constructor(
                 bounds = node.contentBounds,
                 pointerX = pointerX,
                 pointerY = pointerY,
+                lengthResolver = lengthResolver,
                 partStyles = node.resolvedControlPartStyles(),
             ),
         )
@@ -1690,7 +1704,7 @@ class UiLayout internal constructor(
                 )
             }
 
-            val ownClip = node.overflowClip(visualOffsetX, visualOffsetY)
+            val ownClip = node.overflowClip(visualOffsetX, visualOffsetY, lengthResolver)
             val contentClip = when {
                 ownClip == null -> inheritedClip
                 inheritedClip == null -> ownClip
@@ -2007,7 +2021,7 @@ class UiLayout internal constructor(
         visualOffsetY: Float,
     ) {
         val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
-        val roundedBox = style.borderRadius.resolve(node.bounds)
+        val roundedBox = style.borderRadius.resolve(node.bounds, lengthResolver)
         style.boxShadow?.let { shadow ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
                 renderer.boxShadow(
@@ -2198,7 +2212,7 @@ class UiLayout internal constructor(
         val content = node.contentBounds
         if (content.width <= 0f || content.height <= 0f) return
         val partStyles = node.resolvedControlPartStyles()
-        val geometry = rangeInputGeometry(input, content, partStyles)
+        val geometry = rangeInputGeometry(input, content, lengthResolver, partStyles)
 
         drawControlPart(
             geometry.track,
@@ -2251,7 +2265,7 @@ class UiLayout internal constructor(
 
         fun drawBox() {
             val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
-            val roundedBox = style.borderRadius.resolve(box.borderBounds)
+            val roundedBox = style.borderRadius.resolve(box.borderBounds, lengthResolver)
             style.boxShadow?.let { shadow ->
                 renderer.boxShadow(
                     x = box.borderBounds.left,
@@ -2675,7 +2689,7 @@ class UiLayout internal constructor(
         visualOffsetY: Float,
     ) {
         val resolvedTextStyle = style.resolveTextStyle(inheritedTextStyle)
-        val roundedBox = style.borderRadius.resolve(node.bounds)
+        val roundedBox = style.borderRadius.resolve(node.bounds, lengthResolver)
         style.boxShadow?.let { shadow ->
             if (node.bounds.width > 0f && node.bounds.height > 0f) {
                 renderer.boxShadow(
@@ -3023,8 +3037,9 @@ private fun UiPseudoLayoutNode.scrollTarget(): UiScrollTarget = UiScrollTarget(
 private fun UiLayoutNode.overflowClip(
     visualOffsetX: Float,
     visualOffsetY: Float,
+    lengthResolver: UiLengthResolver,
 ): UiClipStack? {
-    val radii = styleProvider().borderRadius.resolve(bounds).radii
+    val radii = styleProvider().borderRadius.resolve(bounds, lengthResolver).radii
         .inset(bounds, paddingBounds)
     return overflow.overflowClip(
         paddingBounds.translated(visualOffsetX, visualOffsetY),

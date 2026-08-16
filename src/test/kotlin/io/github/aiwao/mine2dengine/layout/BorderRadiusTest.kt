@@ -9,6 +9,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BorderRadiusTest {
+    private fun UiBorderRadii.resolve(bounds: UiRect): UiRoundedBox =
+        resolve(bounds, UiLengthResolver(UiSize(bounds.width, bounds.height)))
+
     @Test
     fun `CSS corner percentages use border box width and height independently`() {
         val roundedBox = UiBorderRadii(
@@ -32,6 +35,19 @@ class BorderRadiusTest {
 
         assertEquals(Mine2DCornerRadius(50f, 6.25f), roundedBox.radii.topLeft)
         assertEquals(Mine2DCornerRadius(3.125f, 18.75f), roundedBox.radii.bottomRight)
+    }
+
+    @Test
+    fun `viewport corner units use the layout viewport dimensions`() {
+        val bounds = UiRect(0f, 0f, 100f, 80f)
+        val roundedBox = UiBorderRadii(
+            UiCornerRadius(horizontal = 10f.vw, vertical = 10f.vh),
+        ).resolve(
+            bounds,
+            UiLengthResolver(UiSize(width = 400f, height = 200f)),
+        )
+
+        assertEquals(Mine2DCornerRadius(40f, 20f), roundedBox.radii.topLeft)
     }
 
     @Test

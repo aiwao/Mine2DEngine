@@ -97,10 +97,13 @@ internal data class UiRoundedBox(
     }
 }
 
-internal fun UiBorderRadii.resolve(bounds: UiRect): UiRoundedBox {
+internal fun UiBorderRadii.resolve(
+    bounds: UiRect,
+    lengthResolver: UiLengthResolver,
+): UiRoundedBox {
     fun resolveCorner(value: UiCornerRadius): Mine2DCornerRadius = Mine2DCornerRadius(
-        horizontal = checkNotNull(value.horizontal.resolve(bounds.width)),
-        vertical = checkNotNull(value.vertical.resolve(bounds.height)),
+        horizontal = checkNotNull(lengthResolver.resolve(value.horizontal, bounds.width)),
+        vertical = checkNotNull(lengthResolver.resolve(value.vertical, bounds.height)),
     )
     return UiRoundedBox(
         bounds = bounds,

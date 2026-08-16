@@ -106,10 +106,12 @@ private data class BoxLayoutResult(
  */
 internal class CssLayoutAlgorithm(
     private val textMeasurer: (UiElement, Mine2DFont?) -> UiTextMeasurer,
+    private val viewport: UiRect,
 ) {
     private val intrinsicWidthCache = IdentityHashMap<CssBox, IntrinsicWidths>()
+    private val lengthResolver = UiLengthResolver(UiSize(viewport.width, viewport.height))
 
-    fun layout(root: CssBox, viewport: UiRect): CssFragment {
+    fun layout(root: CssBox): CssFragment {
         if (root.suppressed) {
             val empty = UiRect(viewport.left, viewport.top, 0f, 0f)
             return CssFragment(
@@ -336,10 +338,10 @@ internal class CssLayoutAlgorithm(
                 left = resolveMargin(style.margin.left, percentageWidth),
             ),
             border = UsedEdges(
-                top = style.border.top.usedWidth,
-                right = style.border.right.usedWidth,
-                bottom = style.border.bottom.usedWidth,
-                left = style.border.left.usedWidth,
+                top = style.border.top.usedWidth(lengthResolver),
+                right = style.border.right.usedWidth(lengthResolver),
+                bottom = style.border.bottom.usedWidth(lengthResolver),
+                left = style.border.left.usedWidth(lengthResolver),
             ),
             padding = UsedEdges(
                 top = style.padding.top.resolve(percentageWidth) ?: 0f,
@@ -353,6 +355,9 @@ internal class CssLayoutAlgorithm(
         UiMarginValue.Auto -> null
         is UiLength -> value.resolve(percentageWidth) ?: 0f
     }
+
+    private fun UiLength.resolve(percentageBase: Float?): Float? =
+        lengthResolver.resolve(this, percentageBase)
 
     /** Resolves a sizing value to the content-box size used internally by layout. */
     private fun resolveContentBoxSize(

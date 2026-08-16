@@ -7,11 +7,14 @@ import kotlin.test.assertFailsWith
 class BorderTest {
     @Test
     fun `border values validate widths and percentages`() {
+        val lengthResolver = UiLengthResolver(UiSize(200f, 100f))
         assertFailsWith<IllegalArgumentException> { UiBorderSide((-1f).px) }
         assertFailsWith<IllegalArgumentException> { UiBorderSide(10f.percent) }
         assertFailsWith<IllegalArgumentException> { UiBorderSide(Float.NaN) }
-        assertEquals(2f, UiBorderSide(2f).usedWidth)
-        assertEquals(0f, UiBorderSide(2f, UiBorderStyle.NONE).usedWidth)
+        assertEquals(2f, UiBorderSide(2f).usedWidth(lengthResolver))
+        assertEquals(0f, UiBorderSide(2f, UiBorderStyle.NONE).usedWidth(lengthResolver))
+        assertEquals(20f, UiBorderSide(10f.vw).usedWidth(lengthResolver))
+        assertEquals(10f, UiBorderSide(10f.vh).usedWidth(lengthResolver))
     }
 
     @Test
