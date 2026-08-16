@@ -15,6 +15,8 @@ class BorderTest {
         assertEquals(0f, UiBorderSide(2f, UiBorderStyle.NONE).usedWidth(lengthResolver))
         assertEquals(20f, UiBorderSide(10f.vw).usedWidth(lengthResolver))
         assertEquals(10f, UiBorderSide(10f.vh).usedWidth(lengthResolver))
+        assertEquals(10f, UiBorderSide(10f.vmin).usedWidth(lengthResolver))
+        assertEquals(20f, UiBorderSide(10f.vmax).usedWidth(lengthResolver))
     }
 
     @Test

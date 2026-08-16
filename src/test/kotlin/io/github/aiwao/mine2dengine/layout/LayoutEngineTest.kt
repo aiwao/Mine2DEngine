@@ -41,6 +41,8 @@ class LayoutEngineTest {
         assertEquals(UiLengthUnit.PERCENT, 25f.percent.unit)
         assertEquals(UiLengthUnit.VW, 30f.vw.unit)
         assertEquals(UiLengthUnit.VH, 40f.vh.unit)
+        assertEquals(UiLengthUnit.VMIN, 50f.vmin.unit)
+        assertEquals(UiLengthUnit.VMAX, 60f.vmax.unit)
         assertEquals(-4f, (-4f).px.value)
         assertFailsWith<IllegalArgumentException> { Float.NaN.px }
         assertFailsWith<IllegalArgumentException> { UiStyle(width = (-1f).px) }
@@ -77,6 +79,30 @@ class LayoutEngineTest {
         val viewportNode = result.nodeOf(viewportChild)!!
         assertEquals(UiRect(0f, 10f, 200f, 60f), viewportNode.bounds)
         assertEquals(UiRect(0f, 50f, 176f, 20f), viewportNode.contentBounds)
+    }
+
+    @Test
+    fun `viewport min and max units follow the shorter and longer dimensions`() {
+        lateinit var minimumChild: Div
+        lateinit var maximumChild: Div
+        val root = div {
+            minimumChild = div(UiStyle(width = 10f.vmin, height = 10f.px))
+            maximumChild = div(UiStyle(width = 10f.vmax, height = 10f.px))
+        }
+        val result = layout(root, width = 300f, height = 200f)
+
+        assertEquals(20f, result.nodeOf(minimumChild)!!.bounds.width)
+        assertEquals(30f, result.nodeOf(maximumChild)!!.bounds.width)
+
+        result.updateViewport(UiRect(0f, 0f, 100f, 400f))
+
+        assertEquals(10f, result.nodeOf(minimumChild)!!.bounds.width)
+        assertEquals(40f, result.nodeOf(maximumChild)!!.bounds.width)
+
+        result.updateViewport(UiRect(0f, 0f, 250f, 250f))
+
+        assertEquals(25f, result.nodeOf(minimumChild)!!.bounds.width)
+        assertEquals(25f, result.nodeOf(maximumChild)!!.bounds.width)
     }
 
     @Test

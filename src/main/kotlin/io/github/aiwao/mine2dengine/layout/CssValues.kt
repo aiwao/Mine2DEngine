@@ -144,6 +144,8 @@ enum class UiLengthUnit {
     PERCENT,
     VW,
     VH,
+    VMIN,
+    VMAX,
 }
 
 /**
@@ -177,6 +179,14 @@ val Float.vw: UiLength
 val Float.vh: UiLength
     get() = UiLength(this, UiLengthUnit.VH)
 
+/** Treats this value as a percentage of the layout viewport's shorter dimension. */
+val Float.vmin: UiLength
+    get() = UiLength(this, UiLengthUnit.VMIN)
+
+/** Treats this value as a percentage of the layout viewport's longer dimension. */
+val Float.vmax: UiLength
+    get() = UiLength(this, UiLengthUnit.VMAX)
+
 /** Resolves CSS lengths against the viewport shared by one layout or rendering pass. */
 internal class UiLengthResolver(
     private val viewport: UiSize,
@@ -187,6 +197,8 @@ internal class UiLengthResolver(
             UiLengthUnit.PERCENT -> percentageBase?.let { it * length.value / 100f }
             UiLengthUnit.VW -> viewport.width * length.value / 100f
             UiLengthUnit.VH -> viewport.height * length.value / 100f
+            UiLengthUnit.VMIN -> minOf(viewport.width, viewport.height) * length.value / 100f
+            UiLengthUnit.VMAX -> maxOf(viewport.width, viewport.height) * length.value / 100f
         }
         require(resolved == null || resolved.isFinite()) {
             "Resolved length must be finite: $resolved"

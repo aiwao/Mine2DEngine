@@ -198,7 +198,7 @@ Mine2DEngine は `Mine2DFont` が作成したグリフアトラスだけにリ�
 
 - `display: block | inline | flow-root | flex | inline-flex | none | contents`
 - block flow、inline textのline box、normal/pre/nowrapの空白処理、`text-align`
-- content-box / border-box、`px` / percentage / `vw` / `vh`、intrinsic size keyword、min/max制約
+- content-box / border-box、`px` / percentage / `vw` / `vh` / `vmin` / `vmax`、intrinsic size keyword、min/max制約
 - 物理margin / padding、横方向の`auto` margin、隣接block marginのcollapse
 - `position: static | relative | absolute`、length / percentage inset、両側inset間の自動stretch
 - Flexboxのrow / column、reverse、wrap、grow / shrink / basis、order、gap、auto margin、justify / align
@@ -263,6 +263,8 @@ import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.percent
 import io.github.aiwao.mine2dengine.layout.px
 import io.github.aiwao.mine2dengine.layout.vh
+import io.github.aiwao.mine2dengine.layout.vmax
+import io.github.aiwao.mine2dengine.layout.vmin
 import io.github.aiwao.mine2dengine.layout.vw
 
 val style = UiStyle(
@@ -284,10 +286,10 @@ val style = UiStyle(
 )
 ```
 
-`Float.px`、`Float.percent`、`Float.vw`、`Float.vh`でlength-percentageを作ります。`1vw`は現在のlayout viewport幅の1%、`1vh`は高さの1%で、包含blockやプロパティの軸には依存しません。負のlengthはmarginとinsetでは利用できますが、size、padding、gapでは拒否されます。CSSと同様に、padding percentageと物理margin percentageは包含blockの幅を基準にします。`updateViewport`でviewportの幅または高さを変えると、viewport相対lengthも再計算されます。
+`Float.px`、`Float.percent`、`Float.vw`、`Float.vh`、`Float.vmin`、`Float.vmax`でlength-percentageを作ります。`1vw`は現在のlayout viewport幅の1%、`1vh`は高さの1%、`1vmin`は短辺の1%、`1vmax`は長辺の1%です。viewport単位は包含blockやプロパティの軸には依存しません。負のlengthはmarginとinsetでは利用できますが、size、padding、gapでは拒否されます。CSSと同様に、padding percentageと物理margin percentageは包含blockの幅を基準にします。`updateViewport`でviewportの幅または高さを変えると、viewport相対lengthも再計算されます。
 
 `border`には物理top/right/bottom/leftを持つ`UiBorders`を指定します。各`UiBorderSide`で
-`NONE`と`SOLID`を利用でき、幅はpercentageを除く0以上の`px`、`vw`、`vh` lengthです。色がnullなら要素のcomputed
+`NONE`と`SOLID`を利用でき、幅はpercentageを除く0以上の`px`、`vw`、`vh`、`vmin`、`vmax` lengthです。色がnullなら要素のcomputed
 `color`（`currentColor`）を使い、`NONE`のused widthは0になります。cascadeでは1つの
 `UiBorders`値をatomicな宣言として扱い、`UiBorders.NONE`で明示的にリセットできます。
 borderはintrinsic size、flex、positioned layout、`box-sizing`の計算に含まれます。
