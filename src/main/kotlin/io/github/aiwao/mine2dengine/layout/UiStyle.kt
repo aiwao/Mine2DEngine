@@ -31,7 +31,7 @@ enum class UiPosition {
 }
 
 /**
- * Specified declarations for an element or generated pseudo-element.
+ * Specified declarations for an element, generated pseudo-element, or built-in control part.
  *
  * `null` always means “not declared”, never CSS `auto`. CSS keywords such as `auto`, `none`, and
  * `content` have explicit values in [UiSizeValue], [UiMarginValue], [UiInsetValue], and
@@ -322,4 +322,43 @@ internal fun userAgentStyleFor(element: UiElement): UiStyle {
         "section", "ul",
     )
     return UiStyle(display = if (element.tag.lowercase() in blockTags) UiDisplay.BLOCK else UiDisplay.INLINE)
+}
+
+/** Lowest-priority UA declaration for a built-in control part. */
+internal fun userAgentStyleFor(
+    element: UiElement,
+    part: UiControlPart,
+): UiStyle {
+    require(element is RangeInput<*>) { "$part is not available on ${element.javaClass.simpleName}" }
+    return when (part) {
+        UiControlPart.RANGE_TRACK -> UiStyle(
+            display = UiDisplay.BLOCK,
+            width = if (element.orientation == RangeOrientation.HORIZONTAL) 100f.percent else 4f.px,
+            height = if (element.orientation == RangeOrientation.HORIZONTAL) 4f.px else 100f.percent,
+            backgroundColor = 0xFF555555.toInt(),
+            borderRadius = UiBorderRadii(RangeInput.TRACK_THICKNESS / 2f),
+        )
+
+        UiControlPart.RANGE_PROGRESS -> UiStyle(
+            display = UiDisplay.BLOCK,
+            width = if (element.orientation == RangeOrientation.HORIZONTAL) 100f.percent else 4f.px,
+            height = if (element.orientation == RangeOrientation.HORIZONTAL) 4f.px else 100f.percent,
+            backgroundColor = 0xFF4F8CFF.toInt(),
+            borderRadius = UiBorderRadii(RangeInput.TRACK_THICKNESS / 2f),
+        )
+
+        UiControlPart.RANGE_THUMB -> UiStyle(
+            display = UiDisplay.BLOCK,
+            width = (RangeInput.THUMB_RADIUS * 2f).px,
+            height = (RangeInput.THUMB_RADIUS * 2f).px,
+            boxSizing = UiBoxSizing.BORDER_BOX,
+            backgroundColor = 0xFFE0E0E0.toInt(),
+            borderRadius = 50f.percent.let(::UiBorderRadii),
+            border = if (element.focused) {
+                UiBorders(1f, 0xFFFFFFFF.toInt())
+            } else {
+                UiBorders.NONE
+            },
+        )
+    }
 }

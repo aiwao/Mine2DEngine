@@ -167,6 +167,7 @@ private fun CssFragment.toLayoutNode(): UiLayoutNode {
         textFragments = textLayoutFragments,
     ).also { node ->
         node.styleProvider = box.styleProvider
+        node.controlPartStyleProviders = box.controlPartStyleProviders
         node.styledTextFragments = styledTextFragments
     }
 }

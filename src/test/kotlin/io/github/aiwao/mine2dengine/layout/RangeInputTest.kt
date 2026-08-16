@@ -23,10 +23,12 @@ class RangeInputTest {
         root: UiElement,
         width: Float = 180f,
         height: Float = 160f,
+        styleSheets: Iterable<StyleSheet> = emptyList(),
     ): UiLayout = calculateLayout(
         root = root,
         viewport = UiRect(0f, 0f, width, height),
         textMeasurer = textMeasurer,
+        styleSheets = styleSheets,
     )
 
     private fun leftClick(x: Float, y: Float): MouseButtonEvent = MouseButtonEvent(
@@ -63,6 +65,117 @@ class RangeInputTest {
         assertEquals(7, tokenInt.value)
         assertSame(RangeNumberTypes.FLOAT, explicitFloat.numberType)
         assertEquals(0.25f, explicitFloat.value)
+    }
+
+    @Test
+    fun `range control parts use independent stylesheet cascades over UA defaults`() {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(
+                TargetClass("styled-range").rangeTrack,
+                UiStyle(backgroundColor = 0xFF102030.toInt()),
+            )
+            newStyle(
+                TargetTag("input").rangeThumb,
+                UiStyle(
+                    width = 14f.px,
+                    backgroundColor = 0xFF405060.toInt(),
+                ),
+            )
+            newStyle(
+                TargetClass("styled-range").rangeThumb,
+                UiStyle(
+                    backgroundColor = 0xFF708090.toInt(),
+                    border = UiBorders(2f, 0xFFA0B0C0.toInt()),
+                ),
+            )
+        }
+        val input = rangeInput<Int>(
+            style = UiStyle(backgroundColor = 0xFF010203.toInt()),
+            className = setOf("styled-range"),
+        )
+
+        val node = layout(input, styleSheets = listOf(sheet)).root
+        val track = node.controlPartStyle(UiControlPart.RANGE_TRACK)
+        val progress = node.controlPartStyle(UiControlPart.RANGE_PROGRESS)
+        val thumb = node.controlPartStyle(UiControlPart.RANGE_THUMB)
+
+        assertEquals(0xFF010203.toInt(), node.styleProvider().backgroundColor)
+        assertEquals(0xFF102030.toInt(), track.backgroundColor)
+        assertEquals(0xFF4F8CFF.toInt(), progress.backgroundColor)
+        assertEquals(0xFF708090.toInt(), thumb.backgroundColor)
+        assertEquals(14f.px, thumb.width)
+        assertEquals(2f, thumb.border.top.usedWidth)
+        assertEquals(0xFFA0B0C0.toInt(), thumb.border.top.color)
+    }
+
+    @Test
+    fun `dynamic range thumb stylesheet follows owner state without relayout`() {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(TargetClass("dynamic-range").rangeThumb) { owner ->
+                owner as RangeInput<*>
+                UiStyle(
+                    backgroundColor = if (owner.focused) {
+                        0xFFFFFFFF.toInt()
+                    } else {
+                        0xFF808080.toInt()
+                    },
+                )
+            }
+        }
+        lateinit var input: RangeInput<Int>
+        val root = div(styleSheets = listOf(sheet)) {
+            input = rangeInput<Int>(
+                className = setOf("dynamic-range"),
+            )
+        }
+        val result = layout(root)
+        val node = result.nodeOf(input)!!
+
+        assertEquals(
+            0xFF808080.toInt(),
+            node.controlPartStyle(UiControlPart.RANGE_THUMB).backgroundColor,
+        )
+
+        result.focus(input)
+
+        assertEquals(
+            0xFFFFFFFF.toInt(),
+            node.controlPartStyle(UiControlPart.RANGE_THUMB).backgroundColor,
+        )
+    }
+
+    @Test
+    fun `thumb UiStyle box metrics determine geometry and pointer travel`() {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(
+                TargetId("wide-thumb").rangeThumb,
+                UiStyle(
+                    width = 20f.px,
+                    height = 12f.px,
+                    boxSizing = UiBoxSizing.BORDER_BOX,
+                    padding = UiPaddings(1f),
+                    border = UiBorders(2f, 0xFFFFFFFF.toInt()),
+                ),
+            )
+        }
+        val input = rangeInput(value = 50.0, id = "wide-thumb")
+        val result = layout(input, styleSheets = listOf(sheet))
+        val styles = UiControlPart.entries.associateWith(result.root::controlPartStyle)
+        val bounds = result.root.contentBounds
+        val geometry = rangeInputGeometry(input, bounds, styles)
+
+        assertEquals(20f, geometry.thumb.borderBounds.width)
+        assertEquals(12f, geometry.thumb.borderBounds.height)
+        assertEquals(bounds.left + 10f, geometry.thumbTravelStart)
+        assertEquals(bounds.right - 10f, geometry.thumbTravelEnd)
+        assertEquals(0.0, rangeInputFractionAt(input, bounds, bounds.left, 10f, styles))
+        assertEquals(1.0, rangeInputFractionAt(input, bounds, bounds.right, 10f, styles))
     }
 
     @Test
@@ -267,10 +380,48 @@ class RangeInputTest {
         val bounds = UiRect(0f, 0f, 20f, 100f)
         val geometry = rangeInputGeometry(input, bounds)
 
+        assertEquals(bounds.top, geometry.trackBounds.top)
+        assertEquals(bounds.height, geometry.trackBounds.height)
         assertEquals(10f, geometry.thumbCenterX)
         assertEquals(50f, geometry.thumbCenterY)
         assertEquals(1.0, rangeInputFractionAt(input, bounds, 10f, 5f))
         assertEquals(0.0, rangeInputFractionAt(input, bounds, 10f, 95f))
+    }
+
+    @Test
+    fun `horizontal track fills the content width without adding an internal inset`() {
+        val input = rangeInput(value = 50.0)
+        val bounds = UiRect(8f, 4f, 84f, 20f)
+        val geometry = rangeInputGeometry(input, bounds)
+
+        assertEquals(bounds.left, geometry.trackBounds.left)
+        assertEquals(bounds.width, geometry.trackBounds.width)
+        assertEquals(50f, geometry.thumbCenterX)
+        assertEquals(0.0, rangeInputFractionAt(input, bounds, bounds.left, 14f))
+        assertEquals(1.0, rangeInputFractionAt(input, bounds, bounds.right, 14f))
+    }
+
+    @Test
+    fun `default track and progress retain circular end caps instead of elliptical sides`() {
+        val input = rangeInput(value = 50.0)
+        val result = layout(input)
+        val styles = UiControlPart.entries.associateWith(result.root::controlPartStyle)
+        val geometry = rangeInputGeometry(input, result.root.contentBounds, styles)
+        val trackRadius = styles.getValue(UiControlPart.RANGE_TRACK)
+            .borderRadius
+            .resolve(geometry.track.borderBounds)
+            .radii
+            .topLeft
+        val progressRadius = styles.getValue(UiControlPart.RANGE_PROGRESS)
+            .borderRadius
+            .resolve(geometry.progress.borderBounds)
+            .radii
+            .topLeft
+
+        assertEquals(2f, trackRadius.horizontal)
+        assertEquals(2f, trackRadius.vertical)
+        assertEquals(2f, progressRadius.horizontal)
+        assertEquals(2f, progressRadius.vertical)
     }
 
     @Test

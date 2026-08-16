@@ -98,18 +98,6 @@ class RangeInput<T : Number>(
     var onInput: ((T) -> Unit)? = onInput
     var onChange: ((T) -> Unit)? = onChange
 
-    /** Color of the unfilled track. */
-    var trackColor: Int = 0xFF555555.toInt()
-
-    /** Color of the track between the minimum and the current value. */
-    var activeTrackColor: Int = 0xFF4F8CFF.toInt()
-
-    /** Color of the draggable thumb. */
-    var thumbColor: Int = 0xFFE0E0E0.toInt()
-
-    /** Color drawn around the thumb while this input owns keyboard focus. */
-    var focusColor: Int = 0xFFFFFFFF.toInt()
-
     override val usesPlatformTextInput: Boolean = false
 
     override fun intrinsicMetrics(textMeasurer: () -> UiTextMeasurer): InputIntrinsicMetrics =
@@ -250,7 +238,6 @@ class RangeInput<T : Number>(
         const val DEFAULT_THICKNESS: Float = 20f
         internal const val TRACK_THICKNESS: Float = 4f
         internal const val THUMB_RADIUS: Float = 5f
-        internal const val THUMB_SEGMENTS: Int = 20
     }
 }
 

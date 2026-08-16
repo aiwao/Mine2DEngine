@@ -3,6 +3,38 @@ package io.github.aiwao.mine2dengine.layout
 /** A selector that can decide whether a style-sheet rule applies to a [UiElement]. */
 sealed interface StyleSheetTarget
 
+/** A user-agent-managed visual part of a built-in control. */
+enum class UiControlPart(
+    val cssName: String,
+) {
+    RANGE_TRACK("::range-track"),
+    RANGE_PROGRESS("::range-progress"),
+    RANGE_THUMB("::range-thumb"),
+}
+
+/**
+ * Selects a [part] whose originating element matches [originatingTarget].
+ *
+ * A control part terminates its selector. It receives ordinary [UiStyle] declarations, but its
+ * position and interaction semantics remain owned by the originating control.
+ */
+data class TargetControlPart(
+    val originatingTarget: StyleSheetTarget,
+    val part: UiControlPart,
+)
+
+/** Selects the track painted by a matching [RangeInput]. */
+val StyleSheetTarget.rangeTrack: TargetControlPart
+    get() = TargetControlPart(this, UiControlPart.RANGE_TRACK)
+
+/** Selects the filled portion of the track painted by a matching [RangeInput]. */
+val StyleSheetTarget.rangeProgress: TargetControlPart
+    get() = TargetControlPart(this, UiControlPart.RANGE_PROGRESS)
+
+/** Selects the draggable thumb painted by a matching [RangeInput]. */
+val StyleSheetTarget.rangeThumb: TargetControlPart
+    get() = TargetControlPart(this, UiControlPart.RANGE_THUMB)
+
 /** A CSS-like generated pseudo-element owned by an author-created [UiElement]. */
 enum class UiPseudoElement(
     val cssName: String,
@@ -166,22 +198,25 @@ infix fun StyleSheetTarget.generalSibling(target: StyleSheetTarget): TargetCombi
 class StyleSheetObject private constructor(
     val target: StyleSheetTarget,
     val pseudoElement: UiPseudoElement?,
+    val controlPart: UiControlPart?,
     private val resolveStyle: (UiElement) -> UiStyle,
     private val resolvePseudoStyle: ((UiElement) -> UiPseudoStyle)?,
 ) {
     /** Creates a rule with a declaration that is shared by every matching element. */
-    constructor(target: StyleSheetTarget, style: UiStyle) : this(target, null, { style }, null)
+    constructor(target: StyleSheetTarget, style: UiStyle) :
+        this(target, null, null, { style }, null)
 
     /** Creates an element rule whose declaration is resolved from each matching element. */
     constructor(
         target: StyleSheetTarget,
         resolveStyle: (UiElement) -> UiStyle,
-    ) : this(target, null, resolveStyle, null)
+    ) : this(target, null, null, resolveStyle, null)
 
     /** Creates a pseudo-element rule with a declaration shared by every matching owner. */
     constructor(target: TargetPseudoElement, pseudoStyle: UiPseudoStyle) : this(
         target = target.originatingTarget,
         pseudoElement = target.pseudoElement,
+        controlPart = null,
         resolveStyle = { pseudoStyle.style },
         resolvePseudoStyle = { pseudoStyle },
     )
@@ -193,8 +228,30 @@ class StyleSheetObject private constructor(
     ) : this(
         target = target.originatingTarget,
         pseudoElement = target.pseudoElement,
+        controlPart = null,
         resolveStyle = { element -> resolvePseudoStyle(element).style },
         resolvePseudoStyle = resolvePseudoStyle,
+    )
+
+    /** Creates a control-part rule with a declaration shared by every matching owner. */
+    constructor(target: TargetControlPart, style: UiStyle) : this(
+        target = target.originatingTarget,
+        pseudoElement = null,
+        controlPart = target.part,
+        resolveStyle = { style },
+        resolvePseudoStyle = null,
+    )
+
+    /** Creates a control-part rule resolved from each matching originating element. */
+    constructor(
+        target: TargetControlPart,
+        resolveStyle: (UiElement) -> UiStyle,
+    ) : this(
+        target = target.originatingTarget,
+        pseudoElement = null,
+        controlPart = target.part,
+        resolveStyle = resolveStyle,
+        resolvePseudoStyle = null,
     )
 
     internal fun styleFor(element: UiElement): UiStyle = resolveStyle(element)
@@ -212,7 +269,8 @@ class StyleSheetObject private constructor(
  * supplied [UiElement.style] takes precedence over style-sheet declarations. Generated
  * pseudo-elements have their own cascade; the pseudo-element adds one tag-selector unit of
  * specificity and the originating element's inline style is inherited only through inheritable
- * text properties.
+ * text properties. Built-in control parts also have independent cascades with one added
+ * tag-selector unit, but deliberately have no inline-style source.
  */
 interface StyleSheet {
     val styles: MutableList<StyleSheetObject>
@@ -240,6 +298,18 @@ interface StyleSheet {
         target: TargetPseudoElement,
         resolvePseudoStyle: (UiElement) -> UiPseudoStyle,
     ): StyleSheetObject = StyleSheetObject(target, resolvePseudoStyle).also(styles::add)
+
+    /** Adds a rule for a built-in control part and returns the stored object. */
+    fun newStyle(
+        target: TargetControlPart,
+        style: UiStyle,
+    ): StyleSheetObject = StyleSheetObject(target, style).also(styles::add)
+
+    /** Adds a control-part rule resolved from each matching originating element. */
+    fun newStyle(
+        target: TargetControlPart,
+        resolveStyle: (UiElement) -> UiStyle,
+    ): StyleSheetObject = StyleSheetObject(target, resolveStyle).also(styles::add)
 }
 
 internal class StyleSheetElementContext(
@@ -260,7 +330,7 @@ internal fun Iterable<StyleSheet>.styleFor(context: StyleSheetElementContext): U
 
 /** Resolves declarations from multiple selector scopes as one ordered cascade. */
 internal fun Iterable<StyleSheetScopeContext>.scopedStyleFor(): UiStyle? =
-    scopedRulesFor(pseudoElement = null)
+    scopedRulesFor(pseudoElement = null, controlPart = null)
         .fold(null as UiStyle?) { resolved, matched ->
             val style = matched.rule.styleFor(matched.element)
             resolved?.withOverrides(style) ?: style
@@ -271,7 +341,7 @@ internal fun Iterable<StyleSheetScopeContext>.scopedPseudoStyleFor(
     pseudoElement: UiPseudoElement,
 ): (() -> UiPseudoStyle)? {
     val scopes = toList()
-    val matchedRules = scopes.scopedRulesFor(pseudoElement)
+    val matchedRules = scopes.scopedRulesFor(pseudoElement = pseudoElement, controlPart = null)
     if (matchedRules.isEmpty()) return null
 
     return {
@@ -287,14 +357,30 @@ internal fun Iterable<StyleSheetScopeContext>.scopedPseudoStyleFor(
     }
 }
 
+/** Resolves declarations for [controlPart] against its originating element. */
+internal fun Iterable<StyleSheetScopeContext>.scopedControlPartStyleFor(
+    controlPart: UiControlPart,
+): (() -> UiStyle)? {
+    val matchedRules = scopedRulesFor(pseudoElement = null, controlPart = controlPart)
+    if (matchedRules.isEmpty()) return null
+
+    return {
+        matchedRules.fold(null as UiStyle?) { resolved, matched ->
+            val declaration = matched.rule.styleFor(matched.element)
+            resolved?.withOverrides(declaration) ?: declaration
+        } ?: error("A control-part provider requires at least one matching rule")
+    }
+}
+
 private fun Iterable<StyleSheetScopeContext>.scopedRulesFor(
     pseudoElement: UiPseudoElement?,
+    controlPart: UiControlPart?,
 ): List<MatchedStyleSheetRule> =
     flatMap { scope ->
         scope.styleSheets.flatMap(StyleSheet::styles).map { rule -> rule to scope.context }
     }
         .mapIndexedNotNull { sourceOrder, (rule, context) ->
-            rule.matchSpecificity(context, pseudoElement)?.let { specificity ->
+            rule.matchSpecificity(context, pseudoElement, controlPart)?.let { specificity ->
                 MatchedStyleSheetRule(
                     specificity = specificity,
                     sourceOrder = sourceOrder,
@@ -338,10 +424,12 @@ private data class StyleSheetSpecificity(
 private fun StyleSheetObject.matchSpecificity(
     context: StyleSheetElementContext,
     pseudoElement: UiPseudoElement?,
+    controlPart: UiControlPart?,
 ): StyleSheetSpecificity? {
     if (this.pseudoElement != pseudoElement) return null
+    if (this.controlPart != controlPart) return null
     val specificity = target.matchSpecificity(context) ?: return null
-    return if (pseudoElement == null) {
+    return if (pseudoElement == null && controlPart == null) {
         specificity
     } else {
         specificity + StyleSheetSpecificity(tagCount = 1)
