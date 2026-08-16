@@ -1217,7 +1217,7 @@ internal class CssLayoutAlgorithm(
 
         val definiteCross = if (axis.isRow) specifiedContentHeight else contentWidth
         if (lines.size == 1 && definiteCross != null) {
-            lines.single().crossSize = max(lines.single().crossSize, definiteCross)
+            lines.single().crossSize = definiteCross
         }
         val naturalCross = lines.sumOf { it.crossSize.toDouble() }.toFloat() +
             crossGap * (lines.size - 1).coerceAtLeast(0)
