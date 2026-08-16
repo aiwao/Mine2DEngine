@@ -39,6 +39,10 @@ class LayoutEngineTest {
     fun `CSS value types validate property-specific ranges`() {
         assertEquals(UiLengthUnit.PX, 12f.px.unit)
         assertEquals(UiLengthUnit.PERCENT, 25f.percent.unit)
+        assertEquals(UiLengthUnit.VW, 30f.vw.unit)
+        assertEquals(UiLengthUnit.VH, 40f.vh.unit)
+        assertEquals(UiLengthUnit.VMIN, 50f.vmin.unit)
+        assertEquals(UiLengthUnit.VMAX, 60f.vmax.unit)
         assertEquals(-4f, (-4f).px.value)
         assertFailsWith<IllegalArgumentException> { Float.NaN.px }
         assertFailsWith<IllegalArgumentException> { UiStyle(width = (-1f).px) }
@@ -48,6 +52,101 @@ class LayoutEngineTest {
         assertFailsWith<IllegalArgumentException> { UiStyle(gap = (-1f).px) }
         assertFailsWith<IllegalArgumentException> { UiStyle(flexGrow = -1f) }
         assertFailsWith<IllegalArgumentException> { UiStyle(flexShrink = Float.NaN) }
+    }
+
+    @Test
+    fun `viewport units use the viewport instead of the containing block`() {
+        lateinit var percentageChild: Div
+        lateinit var viewportChild: Div
+        val root = div(UiStyle(width = 200f.px)) {
+            percentageChild = div(UiStyle(width = 50f.percent, height = 10f.px))
+            viewportChild = div(
+                UiStyle(
+                    width = 50f.vw,
+                    height = 25f.vh,
+                    padding = UiPaddings(
+                        top = 10f.vw,
+                        right = 10f.vh,
+                    ),
+                    boxSizing = UiBoxSizing.BORDER_BOX,
+                ),
+            )
+        }
+
+        val result = layout(root, width = 400f, height = 240f)
+
+        assertEquals(100f, result.nodeOf(percentageChild)!!.bounds.width)
+        val viewportNode = result.nodeOf(viewportChild)!!
+        assertEquals(UiRect(0f, 10f, 200f, 60f), viewportNode.bounds)
+        assertEquals(UiRect(0f, 50f, 176f, 20f), viewportNode.contentBounds)
+    }
+
+    @Test
+    fun `viewport min and max units follow the shorter and longer dimensions`() {
+        lateinit var minimumChild: Div
+        lateinit var maximumChild: Div
+        val root = div {
+            minimumChild = div(UiStyle(width = 10f.vmin, height = 10f.px))
+            maximumChild = div(UiStyle(width = 10f.vmax, height = 10f.px))
+        }
+        val result = layout(root, width = 300f, height = 200f)
+
+        assertEquals(20f, result.nodeOf(minimumChild)!!.bounds.width)
+        assertEquals(30f, result.nodeOf(maximumChild)!!.bounds.width)
+
+        result.updateViewport(UiRect(0f, 0f, 100f, 400f))
+
+        assertEquals(10f, result.nodeOf(minimumChild)!!.bounds.width)
+        assertEquals(40f, result.nodeOf(maximumChild)!!.bounds.width)
+
+        result.updateViewport(UiRect(0f, 0f, 250f, 250f))
+
+        assertEquals(25f, result.nodeOf(minimumChild)!!.bounds.width)
+        assertEquals(25f, result.nodeOf(maximumChild)!!.bounds.width)
+    }
+
+    @Test
+    fun `viewport gaps stay definite during intrinsic sizing`() {
+        val root = div(
+            UiStyle(
+                display = UiDisplay.FLEX,
+                width = UiSizeValue.MIN_CONTENT,
+                columnGap = 10f.vw,
+            ),
+        ) {
+            div(UiStyle(width = 20f.px, height = 10f.px))
+            div(UiStyle(width = 30f.px, height = 10f.px))
+        }
+
+        val result = layout(root, width = 200f, height = 100f)
+
+        assertEquals(70f, result.root.contentBounds.width)
+    }
+
+    @Test
+    fun `viewport units resolve absolute insets on their own axes`() {
+        lateinit var absolute: Div
+        val root = div(
+            UiStyle(
+                position = UiPosition.RELATIVE,
+                width = 200f.px,
+                height = 100f.px,
+            ),
+        ) {
+            absolute = div(
+                UiStyle(
+                    position = UiPosition.ABSOLUTE,
+                    left = 10f.vw,
+                    top = 10f.vh,
+                    width = 10f.px,
+                    height = 10f.px,
+                ),
+            )
+        }
+
+        val result = layout(root, width = 400f, height = 200f)
+
+        assertEquals(UiRect(40f, 20f, 10f, 10f), result.nodeOf(absolute)!!.bounds)
     }
 
     @Test
@@ -1530,6 +1629,17 @@ class LayoutEngineTest {
 
         assertEquals(100f, result.root.bounds.height)
         assertEquals(UiRect(0f, 90f, 10f, 10f), result.nodeOf(absolute)!!.bounds)
+    }
+
+    @Test
+    fun `updating viewport recomputes viewport relative sizes`() {
+        val root = div(UiStyle(width = 50f.vw, height = 25f.vh))
+        val result = layout(root, width = 100f, height = 80f)
+        assertEquals(UiRect(0f, 0f, 50f, 20f), result.root.bounds)
+
+        result.updateViewport(UiRect(7f, 9f, 200f, 120f))
+
+        assertEquals(UiRect(7f, 9f, 100f, 30f), result.root.bounds)
     }
 
     @Test

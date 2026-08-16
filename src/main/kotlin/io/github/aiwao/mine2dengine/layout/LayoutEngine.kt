@@ -111,7 +111,7 @@ private fun calculateLayout(
             displayStates = displayStates,
             evaluatedDisplays = evaluatedDisplays,
         ).build()
-        val fragment = CssLayoutAlgorithm(textMeasurer).layout(boxTree, currentViewport)
+        val fragment = CssLayoutAlgorithm(textMeasurer, currentViewport).layout(boxTree)
         return UiLayoutSnapshot(
             root = fragment.toLayoutNode(),
             rootFragment = fragment.toPublicFragment(),

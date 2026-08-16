@@ -198,7 +198,7 @@ The layout package builds an element tree from containers, paragraphs, and typed
 
 - `display: block | inline | flow-root | flex | inline-flex | none | contents`
 - Block flow, inline text line boxes, normal/pre/nowrap white-space processing, and `text-align`
-- Content-box and border-box sizing, pixel/percentage lengths, intrinsic size keywords, and min/max constraints
+- Content-box and border-box sizing, `px`/percentage/`vw`/`vh`/`vmin`/`vmax` lengths, intrinsic size keywords, and min/max constraints
 - Physical margins and padding, horizontal `auto` margins, and adjacent block margin collapsing
 - `position: static | relative | absolute`, length/percentage insets, and automatic stretching between paired insets
 - Flexbox rows and columns, reverse directions, wrapping, grow/shrink/basis, order, gaps, auto margins, and the justify/align properties
@@ -267,9 +267,14 @@ import io.github.aiwao.mine2dengine.layout.UiSizeValue
 import io.github.aiwao.mine2dengine.layout.UiStyle
 import io.github.aiwao.mine2dengine.layout.percent
 import io.github.aiwao.mine2dengine.layout.px
+import io.github.aiwao.mine2dengine.layout.vh
+import io.github.aiwao.mine2dengine.layout.vmax
+import io.github.aiwao.mine2dengine.layout.vmin
+import io.github.aiwao.mine2dengine.layout.vw
 
 val style = UiStyle(
     width = 50f.percent,
+    height = 25f.vh,
     minWidth = 80f.px,
     maxWidth = UiSizeValue.MAX_CONTENT,
     margin = UiMargins(
@@ -286,10 +291,10 @@ val style = UiStyle(
 )
 ```
 
-`Float.px` and `Float.percent` create length-percentage values. Negative lengths are accepted by margins and insets; sizes, padding, and gaps reject them. Padding percentages and physical margin percentages use the containing block's width, as in CSS.
+`Float.px`, `Float.percent`, `Float.vw`, `Float.vh`, `Float.vmin`, and `Float.vmax` create length-percentage values. `1vw` is one percent of the current layout viewport's width, `1vh` is one percent of its height, `1vmin` is one percent of its shorter dimension, and `1vmax` is one percent of its longer dimension. Viewport units are independent of the containing block and the property axis. Negative lengths are accepted by margins and insets; sizes, padding, and gaps reject them. Padding percentages and physical margin percentages use the containing block's width, as in CSS. Changing the viewport width or height through `updateViewport` recomputes viewport-relative lengths.
 
 `border` accepts `UiBorders` with physical top/right/bottom/left sides. Each `UiBorderSide`
-supports `NONE` and `SOLID`; widths are non-negative pixel lengths and a null color means the
+supports `NONE` and `SOLID`; widths are non-negative `px`, `vw`, `vh`, `vmin`, or `vmax` lengths (not percentages), and a null color means the
 element's computed `color` (`currentColor`). `NONE` has zero used width. A `UiBorders` value is one
 atomic declaration during cascade, and `UiBorders.NONE` explicitly resets it. Borders participate
 in intrinsic, flex, positioned, and `box-sizing` layout.

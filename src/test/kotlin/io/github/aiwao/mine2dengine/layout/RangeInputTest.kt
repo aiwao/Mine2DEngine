@@ -37,6 +37,9 @@ class RangeInputTest {
         MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0),
     )
 
+    private fun lengthResolver(viewport: UiRect): UiLengthResolver =
+        UiLengthResolver(UiSize(viewport.width, viewport.height))
+
     @Test
     fun `Double remains the default and aligns midpoint ties upward`() {
         val defaultInput: RangeInput<Double> = rangeInput()
@@ -96,7 +99,8 @@ class RangeInputTest {
             className = setOf("styled-range"),
         )
 
-        val node = layout(input, styleSheets = listOf(sheet)).root
+        val result = layout(input, styleSheets = listOf(sheet))
+        val node = result.root
         val track = node.controlPartStyle(UiControlPart.RANGE_TRACK)
         val progress = node.controlPartStyle(UiControlPart.RANGE_PROGRESS)
         val thumb = node.controlPartStyle(UiControlPart.RANGE_THUMB)
@@ -106,7 +110,7 @@ class RangeInputTest {
         assertEquals(0xFF4F8CFF.toInt(), progress.backgroundColor)
         assertEquals(0xFF708090.toInt(), thumb.backgroundColor)
         assertEquals(14f.px, thumb.width)
-        assertEquals(2f, thumb.border.top.usedWidth)
+        assertEquals(2f, thumb.border.top.usedWidth(lengthResolver(result.viewport)))
         assertEquals(0xFFA0B0C0.toInt(), thumb.border.top.color)
     }
 
@@ -168,14 +172,46 @@ class RangeInputTest {
         val result = layout(input, styleSheets = listOf(sheet))
         val styles = UiControlPart.entries.associateWith(result.root::controlPartStyle)
         val bounds = result.root.contentBounds
-        val geometry = rangeInputGeometry(input, bounds, styles)
+        val resolver = lengthResolver(result.viewport)
+        val geometry = rangeInputGeometry(input, bounds, resolver, styles)
 
         assertEquals(20f, geometry.thumb.borderBounds.width)
         assertEquals(12f, geometry.thumb.borderBounds.height)
         assertEquals(bounds.left + 10f, geometry.thumbTravelStart)
         assertEquals(bounds.right - 10f, geometry.thumbTravelEnd)
-        assertEquals(0.0, rangeInputFractionAt(input, bounds, bounds.left, 10f, styles))
-        assertEquals(1.0, rangeInputFractionAt(input, bounds, bounds.right, 10f, styles))
+        assertEquals(0.0, rangeInputFractionAt(input, bounds, bounds.left, 10f, resolver, styles))
+        assertEquals(1.0, rangeInputFractionAt(input, bounds, bounds.right, 10f, resolver, styles))
+    }
+
+    @Test
+    fun `control part geometry resolves viewport units against the layout viewport`() {
+        val sheet = object : StyleSheet {
+            override val styles = mutableListOf<StyleSheetObject>()
+        }.apply {
+            newStyle(
+                TargetId("viewport-thumb").rangeThumb,
+                UiStyle(
+                    width = 10f.vw,
+                    height = 10f.vh,
+                    border = UiBorders(1f.vw),
+                    boxSizing = UiBoxSizing.BORDER_BOX,
+                ),
+            )
+        }
+        val input = rangeInput(value = 50.0, id = "viewport-thumb")
+        val result = layout(input, width = 200f, height = 100f, styleSheets = listOf(sheet))
+        val styles = UiControlPart.entries.associateWith(result.root::controlPartStyle)
+
+        val geometry = rangeInputGeometry(
+            input,
+            result.root.contentBounds,
+            lengthResolver(result.viewport),
+            styles,
+        )
+
+        assertEquals(20f, geometry.thumb.borderBounds.width)
+        assertEquals(10f, geometry.thumb.borderBounds.height)
+        assertEquals(2f, geometry.thumb.paddingBounds.left - geometry.thumb.borderBounds.left)
     }
 
     @Test
@@ -378,27 +414,29 @@ class RangeInputTest {
             orientation = RangeOrientation.VERTICAL,
         )
         val bounds = UiRect(0f, 0f, 20f, 100f)
-        val geometry = rangeInputGeometry(input, bounds)
+        val resolver = lengthResolver(bounds)
+        val geometry = rangeInputGeometry(input, bounds, resolver)
 
         assertEquals(bounds.top, geometry.trackBounds.top)
         assertEquals(bounds.height, geometry.trackBounds.height)
         assertEquals(10f, geometry.thumbCenterX)
         assertEquals(50f, geometry.thumbCenterY)
-        assertEquals(1.0, rangeInputFractionAt(input, bounds, 10f, 5f))
-        assertEquals(0.0, rangeInputFractionAt(input, bounds, 10f, 95f))
+        assertEquals(1.0, rangeInputFractionAt(input, bounds, 10f, 5f, resolver))
+        assertEquals(0.0, rangeInputFractionAt(input, bounds, 10f, 95f, resolver))
     }
 
     @Test
     fun `horizontal track fills the content width without adding an internal inset`() {
         val input = rangeInput(value = 50.0)
         val bounds = UiRect(8f, 4f, 84f, 20f)
-        val geometry = rangeInputGeometry(input, bounds)
+        val resolver = lengthResolver(bounds)
+        val geometry = rangeInputGeometry(input, bounds, resolver)
 
         assertEquals(bounds.left, geometry.trackBounds.left)
         assertEquals(bounds.width, geometry.trackBounds.width)
         assertEquals(50f, geometry.thumbCenterX)
-        assertEquals(0.0, rangeInputFractionAt(input, bounds, bounds.left, 14f))
-        assertEquals(1.0, rangeInputFractionAt(input, bounds, bounds.right, 14f))
+        assertEquals(0.0, rangeInputFractionAt(input, bounds, bounds.left, 14f, resolver))
+        assertEquals(1.0, rangeInputFractionAt(input, bounds, bounds.right, 14f, resolver))
     }
 
     @Test
@@ -406,15 +444,16 @@ class RangeInputTest {
         val input = rangeInput(value = 50.0)
         val result = layout(input)
         val styles = UiControlPart.entries.associateWith(result.root::controlPartStyle)
-        val geometry = rangeInputGeometry(input, result.root.contentBounds, styles)
+        val resolver = lengthResolver(result.viewport)
+        val geometry = rangeInputGeometry(input, result.root.contentBounds, resolver, styles)
         val trackRadius = styles.getValue(UiControlPart.RANGE_TRACK)
             .borderRadius
-            .resolve(geometry.track.borderBounds)
+            .resolve(geometry.track.borderBounds, resolver)
             .radii
             .topLeft
         val progressRadius = styles.getValue(UiControlPart.RANGE_PROGRESS)
             .borderRadius
-            .resolve(geometry.progress.borderBounds)
+            .resolve(geometry.progress.borderBounds, resolver)
             .radii
             .topLeft
 
@@ -465,11 +504,12 @@ class RangeInputTest {
     fun `tiny geometry keeps the thumb centered and pointer fraction stable`() {
         val input = rangeInput(value = 4.0, min = 0.0, max = 10.0)
         val bounds = UiRect(5f, 6f, 4f, 4f)
-        val geometry = rangeInputGeometry(input, bounds)
+        val resolver = lengthResolver(bounds)
+        val geometry = rangeInputGeometry(input, bounds, resolver)
 
         assertEquals(7f, geometry.thumbCenterX)
         assertEquals(8f, geometry.thumbCenterY)
-        assertEquals(0.4, rangeInputFractionAt(input, bounds, 100f, 100f))
+        assertEquals(0.4, rangeInputFractionAt(input, bounds, 100f, 100f, resolver))
     }
 
     @Test
