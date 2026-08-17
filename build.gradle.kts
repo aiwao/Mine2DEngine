@@ -46,10 +46,14 @@ repositories {
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft("com.mojang:minecraft:$minecraftVersion")
-    implementation("net.fabricmc:fabric-loader:$loaderVersion")
-    implementation("net.fabricmc:fabric-language-kotlin:$kotlinLoaderVersion")
 
-    implementation("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
+    compileOnly("net.fabricmc:fabric-loader:$loaderVersion")
+    compileOnly("net.fabricmc:fabric-language-kotlin:$kotlinLoaderVersion")
+    compileOnly("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
+
+    localRuntime("net.fabricmc:fabric-loader:$loaderVersion")
+    localRuntime("net.fabricmc:fabric-language-kotlin:$kotlinLoaderVersion")
+    localRuntime("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
 
     testImplementation(kotlin("test"))
 }
