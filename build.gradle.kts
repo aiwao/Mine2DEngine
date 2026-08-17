@@ -55,6 +55,7 @@ dependencies {
     localRuntime("net.fabricmc:fabric-language-kotlin:$kotlinLoaderVersion")
     localRuntime("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
 
+    testImplementation("net.fabricmc.fabric-api:fabric-api:${fabricVersion}")
     testImplementation(kotlin("test"))
 }
 
